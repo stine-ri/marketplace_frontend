@@ -32,7 +32,7 @@ export function NewRequestModal({ isOpen, onClose, onSubmit }: NewRequestModalPr
 
     const fetchServices = async () => {
       try {
-        const res = await axios.get<Service[]>('http://localhost:3000/api/services');
+        const res = await axios.get<Service[]>('https://mkt-backend-sz2s.onrender.com/api/services');
         setServices(res.data);
       } catch (error) {
         console.error('Failed to fetch services:', error);
