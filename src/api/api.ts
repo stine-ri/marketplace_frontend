@@ -3,7 +3,7 @@ import axios from 'axios';
 import { isTokenExpired } from '../utilis/token';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000',
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com',
 });
 
 // REQUEST interceptor
