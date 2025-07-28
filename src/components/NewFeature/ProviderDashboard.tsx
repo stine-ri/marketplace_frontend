@@ -86,13 +86,14 @@ export default function ProviderDashboard() {
   }, [socket, provider?.isProfileComplete]);
 
   // Check if request is relevant to provider
-  const isRequestRelevant = (request: Request): boolean => {
-    if (!provider) return false;
-    if (request.serviceId === undefined) return false;
-    
-    return provider.services.some(s => s.id === request.serviceId) &&
-           (!request.collegeFilterId || request.collegeFilterId === provider.collegeId);
-  };
+const isRequestRelevant = (request: Request): boolean => {
+  if (!provider || !Array.isArray(provider.services)) return false;
+  if (request.serviceId === undefined) return false;
+
+  return provider.services.some(s => s.id === request.serviceId) &&
+         (!request.collegeFilterId || request.collegeFilterId === provider.collegeId);
+};
+
 
   const placeBid = async (requestId: number, price: number, message: string) => {
     try {
