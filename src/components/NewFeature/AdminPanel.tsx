@@ -4,7 +4,8 @@ import axios from 'axios';
 import { Service, College } from '../../types/types';
 import { FiSearch, FiTrash2, FiDownload } from 'react-icons/fi';
 
-const baseURL = import.meta.env.VITE_API_BASE_URL;
+
+const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com';
 
 export default function AdminPanel() {
   const [services, setServices] = useState<Service[]>([]);

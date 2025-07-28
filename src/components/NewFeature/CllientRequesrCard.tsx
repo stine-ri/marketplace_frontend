@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import axios from 'axios';
 import { Request, Bid } from '../../types/types';
-const baseURL = import.meta.env.VITE_API_BASE_URL;
+const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com';
 
 interface ClientRequestCardProps {
   request: Request;
