@@ -9,14 +9,48 @@ type Role = 'admin' | 'service_provider' | 'client';
 export type UserType = {
   userId: number;
   email: string;
-  role: Role;
+  role: 'admin' | 'service_provider' | 'client';
   full_name?: string;
+  contact_phone?: string;
+  address?: string;
   collegeId?: number;
   latitude?: number;
   longitude?: number;
   services?: number[];
+  providerId?: number; // ✅ Add this
+  providerProfile?: ProviderProfile; // ✅ Optional if needed
 };
 
+export interface ProviderProfile {
+  id: number;
+  userId: number;
+  firstName: string;
+  lastName: string;
+  phoneNumber: string;
+  collegeId: number;
+  latitude: number | null;  // Change to null instead of undefined
+  longitude: number | null; // Change to null instead of undefined
+  address: string;
+  bio: string;
+  isProfileComplete: boolean;
+  rating: number | null;
+  completedRequests: number;
+  createdAt: string;
+  updatedAt: string;
+  college: College | null;
+  services: Service[];      // Array of Service objects
+}
+export type Service = {
+  id: number;
+  name: string;
+  category?: string;
+};
+
+export type College = {
+  id: number;
+  name: string;
+  location?: string;
+};
 interface AuthContextType {
   user: UserType | null;
   login: (email: string, password: string) => Promise<UserType>;

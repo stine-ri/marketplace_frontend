@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Service, College } from '../../types/types';
-import { FiSearch, FiTrash2, FiDownload } from 'react-icons/fi';
+import { FiSearch, FiTrash2, FiDownload,FiAlertCircle,FiPackage,FiHome} from 'react-icons/fi';
 
 
 const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com';
@@ -158,51 +158,55 @@ export default function AdminPanel() {
     (college.location && college.location.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  return (
-    <div className="container mx-auto p-6">
-      <h1 className="text-2xl font-bold mb-6">Admin Dashboard</h1>
+return (
+  <div className="container mx-auto p-4 md:p-6">
+    <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-4">
+      <h1 className="text-2xl font-bold text-gray-800">Admin Dashboard</h1>
       
       {error && (
-        <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">
+        <div className="w-full md:w-auto p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg flex items-center">
+          <FiAlertCircle className="mr-2" />
           {error}
         </div>
       )}
-
-      <div className="mb-4 flex flex-col md:flex-row gap-4">
-        <div className="relative flex-1">
-          <FiSearch className="absolute left-3 top-3 text-gray-400" />
-          <input
-            type="text"
-            placeholder={`Search ${activeTab}...`}
-            className="w-full pl-10 pr-4 py-2 border rounded"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-        <div className="flex gap-2">
-          {selectedItems.length > 0 && (
-            <button
-              onClick={handleBulkDelete}
-              className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
-            >
-              <FiTrash2 /> Delete Selected
-            </button>
-          )}
-          <button
-            onClick={handleExport}
-            className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
-          >
-            <FiDownload /> Export
-          </button>
-        </div>
+    </div>
+    
+    <div className="mb-6 flex flex-col md:flex-row gap-4">
+      <div className="relative flex-1">
+        <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+        <input
+          type="text"
+          placeholder={`Search ${activeTab}...`}
+          className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
       </div>
-
-      <div className="flex border-b mb-6">
+      <div className="flex gap-2">
+        {selectedItems.length > 0 && (
+          <button
+            onClick={handleBulkDelete}
+            className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition shadow-sm"
+          >
+            <FiTrash2 size={16} /> Delete Selected
+          </button>
+        )}
         <button
-          className={`py-2 px-4 font-medium ${
+          onClick={handleExport}
+          className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition shadow-sm"
+        >
+          <FiDownload size={16} /> Export
+        </button>
+      </div>
+    </div>
+
+    <div className="flex border-b mb-6 overflow-x-auto">
+      <div className="flex space-x-1">
+        <button
+          className={`py-2 px-4 font-medium text-sm md:text-base rounded-t-lg transition ${
             activeTab === 'services' 
-              ? 'border-b-2 border-blue-500 text-blue-600' 
-              : 'text-gray-500 hover:text-gray-700'
+              ? 'border-b-2 border-blue-500 text-blue-600 bg-blue-50' 
+              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
           }`}
           onClick={() => {
             setActiveTab('services');
@@ -212,10 +216,10 @@ export default function AdminPanel() {
           Services
         </button>
         <button
-          className={`py-2 px-4 font-medium ${
+          className={`py-2 px-4 font-medium text-sm md:text-base rounded-t-lg transition ${
             activeTab === 'colleges' 
-              ? 'border-b-2 border-blue-500 text-blue-600' 
-              : 'text-gray-500 hover:text-gray-700'
+              ? 'border-b-2 border-blue-500 text-blue-600 bg-blue-50' 
+              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
           }`}
           onClick={() => {
             setActiveTab('colleges');
@@ -225,210 +229,221 @@ export default function AdminPanel() {
           Colleges
         </button>
       </div>
+    </div>
 
-      {isLoading ? (
-        <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-        </div>
-      ) : activeTab === 'services' ? (
-        <div className="space-y-6">
-          <div>
-            <h2 className="text-xl font-semibold mb-4">Add New Service</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Service Name</label>
-                <input
-                  type="text"
-                  placeholder="Enter service name"
-                  className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500"
-                  value={newService}
-                  onChange={(e) => setNewService(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                <input
-                  type="text"
-                  placeholder="Enter category"
-                  className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500"
-                  value={newServiceCategory}
-                  onChange={(e) => setNewServiceCategory(e.target.value)}
-                />
-              </div>
-            </div>
-            <button
-              onClick={handleAddService}
-              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-            >
-              Add Service
-            </button>
-          </div>
-
-          <div>
-            <h2 className="text-xl font-semibold mb-4">Current Services</h2>
-            {filteredServices.length === 0 ? (
-              <p className="text-gray-500">No services available</p>
-            ) : (
-              <div className="bg-white shadow rounded-lg overflow-hidden">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        <input
-                          type="checkbox"
-                          checked={selectedItems.length === filteredServices.length && filteredServices.length > 0}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedItems(filteredServices.map(s => s.id));
-                            } else {
-                              setSelectedItems([]);
-                            }
-                          }}
-                        />
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Name
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Category
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredServices.map(service => (
-                      <tr key={service.id}>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <input
-                            type="checkbox"
-                            checked={selectedItems.includes(service.id)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedItems([...selectedItems, service.id]);
-                              } else {
-                                setSelectedItems(selectedItems.filter(id => id !== service.id));
-                              }
-                            }}
-                          />
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {service.name}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {service.category || '-'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          <button
-                            onClick={() => handleDeleteService(service.id)}
-                            className="text-red-600 hover:text-red-900 px-2 py-1 rounded hover:bg-red-50"
-                          >
-                            Delete
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          <div>
-            <h2 className="text-xl font-semibold mb-4">Add New College</h2>
-            <div className="flex gap-2">
+    {isLoading ? (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    ) : activeTab === 'services' ? (
+      <div className="space-y-6">
+        <div className="bg-white p-4 md:p-6 rounded-lg shadow-sm border">
+          <h2 className="text-xl font-semibold mb-4 text-gray-800">Add New Service</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Service Name</label>
               <input
                 type="text"
-                placeholder="Enter college name"
-                className="flex-1 p-2 border rounded focus:ring-2 focus:ring-blue-500"
-                value={newCollege}
-                onChange={(e) => setNewCollege(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleAddCollege()}
+                placeholder="Enter service name"
+                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                value={newService}
+                onChange={(e) => setNewService(e.target.value)}
               />
-              <button
-                onClick={handleAddCollege}
-                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-              >
-                Add College
-              </button>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+              <input
+                type="text"
+                placeholder="Enter category"
+                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                value={newServiceCategory}
+                onChange={(e) => setNewServiceCategory(e.target.value)}
+              />
             </div>
           </div>
+          <button
+            onClick={handleAddService}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition shadow-sm"
+          >
+            Add Service
+          </button>
+        </div>
 
-          <div>
-            <h2 className="text-xl font-semibold mb-4">Current Colleges</h2>
-            {filteredColleges.length === 0 ? (
-              <p className="text-gray-500">No colleges available</p>
-            ) : (
-              <div className="bg-white shadow rounded-lg overflow-hidden">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+        <div className="bg-white p-4 md:p-6 rounded-lg shadow-sm border">
+          <h2 className="text-xl font-semibold mb-4 text-gray-800">Current Services</h2>
+          {filteredServices.length === 0 ? (
+            <div className="text-center py-8">
+              <FiPackage className="mx-auto text-gray-400 text-4xl mb-2" />
+              <p className="text-gray-500">No services available</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-10">
+                      <input
+                        type="checkbox"
+                        className="rounded focus:ring-blue-500"
+                        checked={selectedItems.length === filteredServices.length && filteredServices.length > 0}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedItems(filteredServices.map(s => s.id));
+                          } else {
+                            setSelectedItems([]);
+                          }
+                        }}
+                      />
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Name
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Category
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredServices.map(service => (
+                    <tr key={service.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-4 whitespace-nowrap">
                         <input
                           type="checkbox"
-                          checked={selectedItems.length === filteredColleges.length && filteredColleges.length > 0}
+                          className="rounded focus:ring-blue-500"
+                          checked={selectedItems.includes(service.id)}
                           onChange={(e) => {
                             if (e.target.checked) {
-                              setSelectedItems(filteredColleges.map(c => c.id));
+                              setSelectedItems([...selectedItems, service.id]);
                             } else {
-                              setSelectedItems([]);
+                              setSelectedItems(selectedItems.filter(id => id !== service.id));
                             }
                           }}
                         />
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Name
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Location
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Actions
-                      </th>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {service.name}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {service.category || '-'}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <button
+                          onClick={() => handleDeleteService(service.id)}
+                          className="flex items-center text-red-600 hover:text-red-900 px-2 py-1 rounded-lg hover:bg-red-50 transition"
+                        >
+                          <FiTrash2 className="mr-1" size={14} /> Delete
+                        </button>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredColleges.map(college => (
-                      <tr key={college.id}>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <input
-                            type="checkbox"
-                            checked={selectedItems.includes(college.id)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedItems([...selectedItems, college.id]);
-                              } else {
-                                setSelectedItems(selectedItems.filter(id => id !== college.id));
-                              }
-                            }}
-                          />
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {college.name}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {college.location || '-'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          <button
-                            onClick={() => handleDeleteCollege(college.id)}
-                            className="text-red-600 hover:text-red-900 px-2 py-1 rounded hover:bg-red-50"
-                          >
-                            Delete
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    ) : (
+      <div className="space-y-6">
+        <div className="bg-white p-4 md:p-6 rounded-lg shadow-sm border">
+          <h2 className="text-xl font-semibold mb-4 text-gray-800">Add New College</h2>
+          <div className="flex flex-col md:flex-row gap-2">
+            <input
+              type="text"
+              placeholder="Enter college name"
+              className="flex-1 p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+              value={newCollege}
+              onChange={(e) => setNewCollege(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleAddCollege()}
+            />
+            <button
+              onClick={handleAddCollege}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition shadow-sm"
+            >
+              Add College
+            </button>
           </div>
         </div>
-      )}
-    </div>
-  );
+
+        <div className="bg-white p-4 md:p-6 rounded-lg shadow-sm border">
+          <h2 className="text-xl font-semibold mb-4 text-gray-800">Current Colleges</h2>
+          {filteredColleges.length === 0 ? (
+            <div className="text-center py-8">
+              <FiHome className="mx-auto text-gray-400 text-4xl mb-2" />
+              <p className="text-gray-500">No colleges available</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-10">
+                      <input
+                        type="checkbox"
+                        className="rounded focus:ring-blue-500"
+                        checked={selectedItems.length === filteredColleges.length && filteredColleges.length > 0}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedItems(filteredColleges.map(c => c.id));
+                          } else {
+                            setSelectedItems([]);
+                          }
+                        }}
+                      />
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Name
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Location
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredColleges.map(college => (
+                    <tr key={college.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <input
+                          type="checkbox"
+                          className="rounded focus:ring-blue-500"
+                          checked={selectedItems.includes(college.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedItems([...selectedItems, college.id]);
+                            } else {
+                              setSelectedItems(selectedItems.filter(id => id !== college.id));
+                            }
+                          }}
+                        />
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {college.name}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {college.location || '-'}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <button
+                          onClick={() => handleDeleteCollege(college.id)}
+                          className="flex items-center text-red-600 hover:text-red-900 px-2 py-1 rounded-lg hover:bg-red-50 transition"
+                        >
+                          <FiTrash2 className="mr-1" size={14} /> Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    )}
+  </div>
+);
 }

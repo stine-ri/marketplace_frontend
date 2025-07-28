@@ -1,4 +1,5 @@
 // src/types/types.ts
+import { Location } from '../utilis/location'; 
 export type Service = {
   id: number;
   name: string;
@@ -19,7 +20,10 @@ export interface Request {
   isService: boolean;
   description?: string;
   desiredPrice: number;
-  location: string;
+  title: string;
+  budget: number; // ✅ Add this
+  category: string; // ✅ Add this
+  location: string | Location;
   latitude?: number;
   longitude?: number;
   collegeFilterId?: number;
@@ -32,6 +36,7 @@ export interface Request {
   };
 }
 
+
 export interface Bid {
   id: number;
   requestId: number;
@@ -39,7 +44,8 @@ export interface Bid {
   price: number;
   message?: string;
   isGraduateOfRequestedCollege: boolean;
-  status: 'pending' | 'accepted' | 'rejected';
+  status: 'pending' | 'accepted' | 'rejected' | 'countered' | 'withdrawn';
+
   createdAt: string;
   provider?: {
     id: number;
@@ -85,9 +91,10 @@ export interface ProviderProfile {
 export type User = {
   id: number;
   email: string;
-  role: 'student' | 'provider' | 'admin';
+  role: 'admin' | 'client' | 'service_provider';
   isVerified: boolean;
   createdAt: string;
+  providerId?: number;
   providerProfile?: ProviderProfile; // Optional nested provider profile
 };
 
@@ -103,3 +110,9 @@ export type ProviderProfileUpdateResponse = {
   profile: ProviderProfile;
   message: string;
 };
+export interface CreateBidPayload {
+  providerId: number;
+  requestId: number;
+  price: number;
+  message?: string;
+}

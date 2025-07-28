@@ -2,7 +2,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Navbar } from './components/layout/Navbar';
 import { Footer } from './components/layout/Footer';
 import { Home } from './pages/Home';
-import ProviderDashboard from './components/NewFeature/ProviderDashboard';
+import {ProviderDashboard} from './components/NewFeature/ProviderDashboard';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
 import { WebSocketProvider } from './context/WebSocketContext';

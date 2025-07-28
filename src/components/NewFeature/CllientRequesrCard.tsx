@@ -1,60 +1,104 @@
-import { useState } from 'react';
-import axios from 'axios';
+import { useState, useEffect } from 'react';
+import { getLocationString, parseLocation } from '../../utilis/location';
 import { Request, Bid } from '../../types/types';
-const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com';
+import api from '../../api/api';
 
 interface ClientRequestCardProps {
-  request: Request;
+  request: {
+    request: Request;
+    bidsCount: string;
+    bids: Bid[];
+    status: string;
+  };
   onAcceptBid: (requestId: number, bidId: number) => Promise<void>;
+   onRejectBid: (requestId: number, bidId: number) => Promise<void>;
 }
 
-export function ClientRequestCard({ request, onAcceptBid }: ClientRequestCardProps) {
+export function ClientRequestCard({ request: requestData, onAcceptBid }: ClientRequestCardProps) {
+  // First, declare all hooks at the top - this is required by React rules
   const [showBids, setShowBids] = useState(false);
-  const [bids, setBids] = useState<Bid[]>(request.bids || []);
+  const [bids, setBids] = useState<Bid[]>([]);
   const [loadingBids, setLoadingBids] = useState(false);
   const [mapVisible, setMapVisible] = useState(false);
-
-const fetchBids = async () => {
-  setLoadingBids(true);
-  try {
-    const token = localStorage.getItem('token');
-
-    const response = await fetch(`${baseURL}/api/client/requests/${request.id}/bids`, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to fetch bids');
+  useEffect(() => {
+    if (requestData.bids && requestData.bids.length > 0) {
+      setBids(requestData.bids);
     }
-
-    const data = await response.json();
-    setBids(data);
-  } catch (error) {
-    console.error('Error fetching bids:', error);
-  } finally {
-    setLoadingBids(false);
+  }, [requestData.bids]);
+  
+  // Then do your validation
+  if (!requestData || !requestData.request) {
+    console.error('Invalid request data:', requestData);
+    return <div className="bg-white p-6 rounded-lg shadow-md mb-4 text-red-500">Invalid request data</div>;
   }
-};
+
+
+
+
+  // Destructure the request object
+  const { request } = requestData;
+  
+  const fetchBids = async () => {
+    console.log('✅ Valid request ID found:', request.id);
+    setLoadingBids(true);
+    try {
+      console.log('📡 Making API call to:', `/api/client/requests/${request.id}/bids`);
+      const response = await api.get(`/api/client/requests/${request.id}/bids`);
+      console.log('📥 API response received:', response.data);
+      
+      const validBids = response.data.map((bid: any) => ({
+        ...bid,
+        status: bid.status || 'pending',
+        price: bid.price || 0,
+        createdAt: bid.createdAt || new Date().toISOString()
+      }));
+      console.log('✅ Processed bids:', validBids);
+      setBids(validBids);
+    } catch (error) {
+      console.error('❌ Error fetching bids:', error);
+      console.error('Request ID that failed:', request.id);
+
+      if (error instanceof Error) {
+        console.error('Full error details:', {
+          message: error.message,
+        });
+      } else {
+        console.error('Full error details (unknown type):', error);
+      }
+    } finally {
+      setLoadingBids(false);
+    }
+  };
 
 
   const toggleBids = () => {
-    if (!showBids && bids.length === 0) {
+    console.log('🔄 Toggle bids called, showBids:', showBids);
+    console.log('Current request ID:', request.id);
+    
+    if (!showBids) {
       fetchBids();
     }
     setShowBids(!showBids);
   };
 
   const handleAcceptBid = async (bidId: number) => {
+    console.log('🎯 Accept bid called');
+    console.log('Request ID:', request.id);
+    console.log('Bid ID:', bidId);
+    
     try {
       await onAcceptBid(request.id, bidId);
-      fetchBids(); // Refresh bids after acceptance
+      console.log('✅ Bid accepted successfully');
+      await fetchBids(); // refresh
     } catch (error) {
-      console.error('Error accepting bid:', error);
+      console.error('❌ Error accepting bid:', error);
+      console.error('Failed request ID:', request.id);
+      console.error('Failed bid ID:', bidId);
     }
   };
+
+  const location = parseLocation(request.location);
+  const locationString = getLocationString(request.location);
 
   const statusColors = {
     open: 'bg-blue-100 text-blue-800',
@@ -76,11 +120,11 @@ const fetchBids = async () => {
       <div className="flex justify-between items-start">
         <div className="flex-1">
           <h2 className="text-xl font-semibold">
-            {request.isService 
-              ? `Service Request: ${request.serviceId ? `#${request.serviceId}` : ''}` 
+            {request.isService
+              ? `Service Request: ${request.serviceId ? `#${request.serviceId}` : ''}`
               : `Product: ${request.productName || 'Unspecified'}`}
           </h2>
-          
+
           <div className="mt-2 space-y-2">
             <div>
               <span className="font-medium">Status:</span>
@@ -90,17 +134,17 @@ const fetchBids = async () => {
                 {request.status}
               </span>
             </div>
-            
+
             <p>
-              <span className="font-medium">Price:</span> ${request.desiredPrice.toFixed(2)}
+              <span className="font-medium">Price:</span> ${Number(request.desiredPrice || 0).toFixed(2)}
             </p>
-            
+
             <div className="flex items-start">
               <span className="font-medium">Location:</span>
               <div className="ml-2">
-                <p>{request.location}</p>
-                {request.latitude && request.longitude && (
-                  <button 
+                <p>{locationString}</p>
+                {location && (
+                  <button
                     onClick={() => setMapVisible(!mapVisible)}
                     className="text-blue-600 text-sm mt-1 hover:underline"
                   >
@@ -110,11 +154,10 @@ const fetchBids = async () => {
               </div>
             </div>
 
-            {mapVisible && request.latitude && request.longitude && (
+            {mapVisible && location && (
               <div className="mt-2 bg-gray-100 p-2 rounded">
-                {/* Map placeholder - you would integrate your actual map component here */}
                 <div className="h-40 bg-blue-50 flex items-center justify-center text-gray-500">
-                  Map View: {request.latitude}, {request.longitude}
+                  Map View: {location.lat}, {location.lng}
                 </div>
               </div>
             )}
@@ -135,9 +178,7 @@ const fetchBids = async () => {
         </div>
 
         <div className="text-right ml-4">
-          <span className="text-sm text-gray-500">
-            {formatDate(request.createdAt)}
-          </span>
+          <span className="text-sm text-gray-500">{formatDate(request.createdAt)}</span>
           <button
             onClick={toggleBids}
             disabled={loadingBids}
@@ -145,7 +186,7 @@ const fetchBids = async () => {
               loadingBids ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700 text-white'
             }`}
           >
-            {showBids ? 'Hide Bids' : 'View Bids'} ({bids.length})
+            {showBids ? 'Hide Bids' : 'View Bids'} ({requestData.bidsCount})
           </button>
         </div>
       </div>
@@ -162,12 +203,12 @@ const fetchBids = async () => {
             </div>
           ) : (
             <div className="space-y-3">
-              {bids.map(bid => (
-                <div 
-                  key={bid.id} 
+              {bids.map((bid, index) => (
+                <div
+                  key={bid.id ?? `bid-${index}`}
                   className={`p-3 rounded-lg ${
-                    bid.status === 'accepted' 
-                      ? 'bg-green-50 border border-green-200' 
+                    bid.status === 'accepted'
+                      ? 'bg-green-50 border border-green-200'
                       : 'bg-gray-50 border border-gray-200'
                   }`}
                 >

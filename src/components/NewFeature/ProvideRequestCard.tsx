@@ -1,7 +1,7 @@
 // ProviderRequestCard.tsx
 import { useState } from 'react';
 import { Request } from '../../types/types';
-
+import { getLocationString } from '../../utilis/location';
 interface ProviderRequestCardProps {
   request: Request;
   onPlaceBid: (requestId: number, price: number, message: string) => Promise<void>;
@@ -34,7 +34,7 @@ export function ProviderRequestCard({ request, onPlaceBid }: ProviderRequestCard
               <span className="font-medium">Client's Price:</span> ${request.desiredPrice.toFixed(2)}
             </p>
             <p>
-              <span className="font-medium">Location:</span> {request.location}
+              <span className="font-medium">Location:</span> {getLocationString(request.location)}
             </p>
           </div>
         </div>
