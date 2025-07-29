@@ -9,6 +9,7 @@ import { BellIcon, ArrowPathIcon, CurrencyDollarIcon, ClockIcon, PencilIcon, Tra
 import { useAuth } from '../../context/AuthContext';
 import { Request, Bid, ProviderProfile, ProviderProfileFormData } from '../../types/types';
 import { ProviderRequestCard } from './ProvideRequestCard';
+import { toast } from 'react-toastify';
 
 interface ClientRequest extends Request {
   client?: {
@@ -407,13 +408,17 @@ const providerId = user?.providerId;
 return (
   <div className="min-h-screen bg-gray-50">
     {/* Profile Completion Modal */}
-    {showProfileModal && (
-      <ProfileCompletionModal
-        isOpen={showProfileModal}
-        onComplete={handleProfileComplete}
-        onClose={() => setShowProfileModal(false)}
-      />
-    )}
+ {showProfileModal && (
+  <ProfileCompletionModal
+    isOpen={showProfileModal}
+    onComplete={async (profile) => {
+      toast.success("✅ Profile updated successfully");
+      await handleProfileComplete(profile); // assuming this does any further logic
+    }}
+    onClose={() => setShowProfileModal(false)}
+  />
+)}
+
 
     {/* Header */}
     <header className="bg-white shadow">

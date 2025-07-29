@@ -13,6 +13,8 @@ import ProtectedRoute from './components/ProtectedRoute';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import { ClientDashboard } from './components/NewFeature/ClientDashboard';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 export function App() {
   return (
     <Router>
@@ -23,6 +25,7 @@ export function App() {
           </WebSocketProvider>
         </DataProvider>
       </AuthProvider>
+      <ToastContainer />
     </Router>
   );
 }
