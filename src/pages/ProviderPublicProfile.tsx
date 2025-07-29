@@ -5,6 +5,7 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import ProviderProfile from '../components/NewFeature/ProviderProfile';
 import { ProviderProfileFormData, Service, College } from '../types/types';
+import { AxiosError } from 'axios';
 
 const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com';
 
@@ -18,18 +19,53 @@ export default function ProviderPublicProfile() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
- useEffect(() => {
+useEffect(() => {
+  // Log initial state
+  console.log('🔍 useEffect triggered with:', {
+    id,
+    idType: typeof id,
+    idValue: JSON.stringify(id),
+    userProviderId: user?.providerId,
+    idIsNull: id === null,
+    idIsUndefined: id === undefined,
+    idLength: id?.length
+  });
+
   const isValidId = /^\d+$/.test(id ?? '');
+  
+  console.log('✅ ID validation result:', {
+    id,
+    defaultedId: id ?? '',
+    isValidId,
+    regexTest: /^\d+$/.test(id ?? ''),
+    failureReason: !isValidId ? (
+      !id ? 'ID is null/undefined' : 
+      typeof id !== 'string' ? 'ID is not a string' :
+      id.trim() === '' ? 'ID is empty string' :
+      'ID contains non-numeric characters'
+    ) : 'Valid'
+  });
+
   if (!isValidId) {
+    console.error('❌ Invalid provider ID detected:', {
+      providedId: id,
+      expectedFormat: 'numeric string (e.g., "123")',
+      actualFormat: typeof id,
+      actualValue: JSON.stringify(id)
+    });
     setError('Invalid provider ID');
     setLoading(false);
     return;
   }
 
+  console.log('✅ ID validation passed, proceeding with fetch');
+
   const fetchData = async () => {
     try {
       setLoading(true);
       setError(null);
+
+      console.log('🚀 Starting API calls for ID:', id);
 
       const [profileRes, servicesRes, collegesRes] = await Promise.all([
         axios.get(`${baseURL}/api/provider/profiles/public/${id}`),
@@ -37,20 +73,48 @@ export default function ProviderPublicProfile() {
         axios.get(`${baseURL}/api/colleges`)
       ]);
 
+      console.log('📦 API responses received:', {
+        profileId: profileRes.data?.id,
+        profileIdType: typeof profileRes.data?.id,
+        profileIdString: profileRes.data?.id?.toString(),
+        requestedId: id,
+        idsMatch: profileRes.data?.id?.toString() === id,
+        servicesCount: servicesRes.data?.length,
+        collegesCount: collegesRes.data?.length
+      });
+
       if (profileRes.data?.id?.toString() !== id) {
+        console.error('❌ Profile ID mismatch:', {
+          responseId: profileRes.data?.id,
+          responseIdString: profileRes.data?.id?.toString(),
+          requestedId: id,
+          responseIdType: typeof profileRes.data?.id,
+          requestedIdType: typeof id
+        });
         throw new Error('Profile ID mismatch');
       }
 
+      console.log('✅ All data fetched successfully');
       setProfile(profileRes.data);
       setServices(servicesRes.data);
       setColleges(collegesRes.data);
     } catch (err) {
-      console.error('Error fetching profile:', err);
-      setError('Failed to load profile data');
-      navigate('/providers', { replace: true });
-    } finally {
-      setLoading(false);
-    }
+  if (axios.isAxiosError(err)) {
+    console.error('💥 Axios error fetching profile:', {
+      errorMessage: err.message,
+      errorStack: err.stack,
+      id,
+      isAxiosError: true,
+      responseStatus: err.response?.status,
+      responseData: err.response?.data
+    });
+  } else {
+    console.error('💥 Unknown error fetching profile:', err);
+  }
+
+  setError('Failed to load profile data');
+  navigate('/providers', { replace: true });
+}
   };
 
   fetchData();
