@@ -10,6 +10,7 @@ import { useAuth } from '../../context/AuthContext';
 import { Request, Bid, ProviderProfile, ProviderProfileFormData } from '../../types/types';
 import { ProviderRequestCard } from './ProvideRequestCard';
 import { toast } from 'react-toastify';
+import { AxiosError } from 'axios';
 
 interface ClientRequest extends Request {
   client?: {
@@ -135,25 +136,44 @@ const providerId = user?.providerId;
   }, []);
 
   // Fetch requests for second implementation compatibility
-  const fetchRequests = useCallback(async () => {
-    if (!provider?.isProfileComplete) return;
+const fetchRequests = useCallback(async () => {
+  if (!provider?.isProfileComplete) return;
+  
+  try {
+    setIsLoading(true);
+    const res = await api.get('/api/provider/requests', {
+      params: {
+        lat: provider?.latitude,
+        lng: provider?.longitude,
+        range: 50
+      }
+    });
     
-    try {
-      setIsLoading(true);
-      const res = await api.get('/api/provider/requests', {
-        params: {
-          lat: provider?.latitude,
-          lng: provider?.longitude,
-          range: 50
-        }
-      });
-      setRequests(res.data.filter(isRequestRelevant));
-    } catch (error) {
-      console.error('Error fetching requests:', error);
-    } finally {
-      setIsLoading(false);
+    // Validate response data
+    if (!Array.isArray(res.data)) {
+      throw new Error('Invalid response format from server');
     }
-  }, [provider?.isProfileComplete]);
+    
+    setRequests(res.data.filter(isRequestRelevant));
+  } catch (error: unknown) {
+    console.error('Error fetching requests:', error);
+    
+    let errorMessage = 'Failed to load requests';
+    if (error instanceof AxiosError) {
+      if (error.response?.status === 500) {
+        errorMessage = 'Server error occurred while loading requests';
+      } else if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      }
+    } else if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+    
+    toast.error(errorMessage);
+  } finally {
+    setIsLoading(false);
+  }
+}, [provider?.isProfileComplete, provider?.latitude, provider?.longitude]);
 
   // Initial load
   useEffect(() => {
