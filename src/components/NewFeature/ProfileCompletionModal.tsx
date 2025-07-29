@@ -543,6 +543,13 @@ const [showPreview, setShowPreview] = useState(false);
                 >
                   Cancel
                 </button>
+                 <button
+    type="button"
+    onClick={() => setShowPreview(true)}
+    className="px-4 py-2 text-blue-600 bg-blue-100 rounded hover:bg-blue-200"
+  >
+    Preview Profile
+  </button>
                 <button
                   type="submit"
                   className="px-4 py-2 text-white bg-blue-600 rounded hover:bg-blue-700"
