@@ -37,7 +37,122 @@ interface ExtendedBid extends Bid {
   canEdit?: boolean;
   canWithdraw?: boolean;
 }
+interface Location {
+  lat: number;
+  lng: number;
+}
+const LocationControls = ({
+  useLocationFilter,
+  enableLocationFilter,
+  disableLocationFilter,
+  locationError,
+  userLocation,
+  searchRadius,
+  setSearchRadius,
+  isLocationLoading,
+  refreshWithLocation,
+  fetchAvailableRequests
+}: {
+  useLocationFilter: boolean;
+  enableLocationFilter: () => Promise<void>;
+  disableLocationFilter: () => void;
+  locationError: string | null;
+  userLocation: Location | null;
+  searchRadius: number;
+  setSearchRadius: (radius: number) => void;
+  isLocationLoading: boolean;
+  refreshWithLocation: () => Promise<void>;
+  fetchAvailableRequests: () => Promise<void>;
+}) => (
+  <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+    <div className="flex items-center justify-between mb-4">
+      <h3 className="text-lg font-semibold">Location-Based Search</h3>
+      <div className="flex items-center space-x-2">
+        <label className="flex items-center">
+          <input
+            type="checkbox"
+            checked={useLocationFilter}
+            onChange={(e) => {
+              if (e.target.checked) {
+                enableLocationFilter();
+              } else {
+                disableLocationFilter();
+              }
+            }}
+            className="mr-2"
+          />
+          Use my location
+        </label>
+      </div>
+    </div>
 
+    {locationError && (
+      <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+        <p>{locationError}</p>
+        <button
+          onClick={enableLocationFilter}
+          className="mt-2 text-sm underline hover:no-underline"
+        >
+          Try again
+        </button>
+      </div>
+    )}
+
+    {useLocationFilter && (
+      <div className="space-y-4">
+        {userLocation && (
+          <div className="text-sm text-gray-600">
+            📍 Current location: {userLocation.lat.toFixed(4)}, {userLocation.lng.toFixed(4)}
+          </div>
+        )}
+
+        <div className="flex items-center space-x-4">
+          <label className="flex items-center space-x-2">
+            <span>Search radius:</span>
+            <select
+              value={searchRadius}
+              onChange={(e) => setSearchRadius(Number(e.target.value))}
+              className="border rounded px-2 py-1"
+            >
+              <option value={5}>5 km</option>
+              <option value={10}>10 km</option>
+              <option value={25}>25 km</option>
+              <option value={50}>50 km</option>
+              <option value={100}>100 km</option>
+              <option value={200}>200 km</option>
+            </select>
+          </label>
+
+          <button
+            onClick={refreshWithLocation}
+            disabled={isLocationLoading}
+            className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+          >
+            {isLocationLoading ? 'Getting location...' : 'Refresh location'}
+          </button>
+        </div>
+      </div>
+    )}
+
+    <div className="mt-4 flex space-x-2">
+      <button
+        onClick={fetchAvailableRequests}
+        className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
+      >
+        Search Requests
+      </button>
+      
+      {useLocationFilter && (
+        <button
+          onClick={disableLocationFilter}
+          className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+        >
+          Show All Requests
+        </button>
+      )}
+    </div>
+  </div>
+);
 export function ProviderDashboard() {
   // State from first implementation
   const [availableRequests, setAvailableRequests] = useState<ClientRequest[]>([]);
@@ -46,7 +161,12 @@ export function ProviderDashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'available' | 'mybids' | 'requests'>('available');
   const [showNotifications, setShowNotifications] = useState(false);
-  
+ const [userLocation, setUserLocation] = useState<Location | null>(null);
+const [searchRadius, setSearchRadius] = useState<number>(50);
+const [locationError, setLocationError] = useState<string | null>(null);
+const [isLocationLoading, setIsLocationLoading] = useState<boolean>(false);
+const [useLocationFilter, setUseLocationFilter] = useState<boolean>(false);
+
   // New Bid Modal state
   const [showNewBidModal, setShowNewBidModal] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<ClientRequest | null>(null);
@@ -95,22 +215,124 @@ const providerId = user?.providerId;
   }, []);
 
   // Fetch available client requests
-  const fetchAvailableRequests = useCallback(async () => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-
-      const response = await api.get('/api/provider/requests', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      if (response.data && Array.isArray(response.data)) {
-        setAvailableRequests(response.data);
-      }
-    } catch (error) {
-      console.error('Error fetching available requests:', error);
+// Get user's current location
+const getCurrentLocation = useCallback((): Promise<Location> => {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error('Geolocation is not supported by this browser'));
+      return;
     }
-  }, []);
+
+    setIsLocationLoading(true);
+    setLocationError(null);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const location: Location = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        };
+        setUserLocation(location);
+        setIsLocationLoading(false);
+        resolve(location);
+      },
+      (error: GeolocationPositionError) => {
+        let errorMessage = 'Unable to get your location';
+        
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage = 'Location access denied. Please enable location permissions.';
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = 'Location information unavailable.';
+            break;
+          case error.TIMEOUT:
+            errorMessage = 'Location request timed out.';
+            break;
+        }
+        
+        setLocationError(errorMessage);
+        setIsLocationLoading(false);
+        reject(new Error(errorMessage));
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 300000
+      }
+    );
+  });
+}, []);
+
+// Updated fetch function with location support
+const fetchAvailableRequests = useCallback(async () => {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    let url = '/api/provider/requests';
+    const params = new URLSearchParams();
+
+    if (useLocationFilter && userLocation) {
+      params.append('lat', userLocation.lat.toString());
+      params.append('lng', userLocation.lng.toString());
+      params.append('range', searchRadius.toString());
+    }
+
+    if (params.toString()) {
+      url += `?${params.toString()}`;
+    }
+
+    const response = await api.get(url, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    if (response.data && Array.isArray(response.data)) {
+      setAvailableRequests(response.data);
+    }
+  } catch (error) {
+    console.error('Error fetching available requests:', error);
+  }
+}, [userLocation, searchRadius, useLocationFilter]);
+
+
+const enableLocationFilter = useCallback(async () => {
+  try {
+    const location = await getCurrentLocation();
+    setUserLocation(location);
+    setUseLocationFilter(true);
+    await fetchAvailableRequests();
+  } catch (error) {
+    console.error('Failed to get location:', error);
+    setLocationError(error instanceof Error ? error.message : 'Unknown error');
+  }
+}, [getCurrentLocation, fetchAvailableRequests]);
+
+const disableLocationFilter = useCallback(() => {
+  setUseLocationFilter(false);
+  setUserLocation(null);
+  setLocationError(null);
+  fetchAvailableRequests();
+}, [fetchAvailableRequests]);
+
+const refreshWithLocation = useCallback(async () => {
+  try {
+    const location = await getCurrentLocation();
+    setUserLocation(location);
+    await fetchAvailableRequests();
+  } catch (error) {
+    console.error('Failed to refresh location:', error);
+    setLocationError(error instanceof Error ? error.message : 'Unknown error');
+  }
+}, [getCurrentLocation, fetchAvailableRequests]);
+
+
+
+
+// Auto-fetch when location or filters change
+useEffect(() => {
+  fetchAvailableRequests();
+}, [fetchAvailableRequests]);
 
   // Enhanced fetch for provider's bids with detailed information
   const fetchMyBids = useCallback(async () => {
@@ -428,17 +650,16 @@ const fetchRequests = useCallback(async () => {
 return (
   <div className="min-h-screen bg-gray-50">
     {/* Profile Completion Modal */}
- {showProfileModal && (
-  <ProfileCompletionModal
-    isOpen={showProfileModal}
-    onComplete={async (profile) => {
-      toast.success("✅ Profile updated successfully");
-      await handleProfileComplete(profile); // assuming this does any further logic
-    }}
-    onClose={() => setShowProfileModal(false)}
-  />
-)}
-
+    {showProfileModal && (
+      <ProfileCompletionModal
+        isOpen={showProfileModal}
+        onComplete={async (profile) => {
+          toast.success("✅ Profile updated successfully");
+          await handleProfileComplete(profile);
+        }}
+        onClose={() => setShowProfileModal(false)}
+      />
+    )}
 
     {/* Header */}
     <header className="bg-white shadow">
@@ -561,6 +782,20 @@ return (
               {/* Available Requests Tab */}
               {activeTab === 'available' && (
                 <div className="space-y-3 sm:space-y-4">
+                 <LocationControls
+      useLocationFilter={useLocationFilter}
+      enableLocationFilter={enableLocationFilter}
+      disableLocationFilter={disableLocationFilter}
+      locationError={locationError}
+      userLocation={userLocation}
+      searchRadius={searchRadius}
+      setSearchRadius={setSearchRadius}
+      isLocationLoading={isLocationLoading}
+      refreshWithLocation={refreshWithLocation}
+      fetchAvailableRequests={fetchAvailableRequests}
+    />
+
+
                   {availableRequests.length === 0 ? (
                     <div className="text-center py-8 sm:py-12 bg-white rounded-lg shadow">
                       <ClockIcon className="mx-auto h-8 w-8 sm:h-10 sm:w-10 text-gray-400" />
