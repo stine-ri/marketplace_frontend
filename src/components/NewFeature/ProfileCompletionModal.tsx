@@ -268,10 +268,11 @@ export default function ProfileCompletionModal({
       if (profileImage) {
         const formData = new FormData();
         formData.append('image', profileImage);
-        
+        const token = localStorage.getItem('token');
         const uploadResponse = await axios.post(`${baseURL}/api/provider/upload`, formData, {
           headers: {
             'Content-Type': 'multipart/form-data',
+             Authorization: `Bearer ${token}`,
           },
         });
         
