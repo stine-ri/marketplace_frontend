@@ -20,7 +20,7 @@ export default function ProviderPublicProfile() {
       try {
         setLoading(true);
         const [profileRes, servicesRes, collegesRes] = await Promise.all([
-          axios.get(`${baseURL}/api/provider/profiles/${id}`),
+          axios.get(`${baseURL}/api/provider/profiles/public/${id}`),
           axios.get(`${baseURL}/api/services`),
           axios.get(`${baseURL}/api/colleges`)
         ]);

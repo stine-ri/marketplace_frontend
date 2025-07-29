@@ -29,7 +29,7 @@ export default function ProvidersList() {
         if (filters.searchQuery) params.append('search', filters.searchQuery);
 
         const [providersRes, servicesRes, collegesRes] = await Promise.all([
-          axios.get(`${baseURL}/api/provider/all?${params.toString()}`),
+          axios.get(`${baseURL}/api/provider/public/all?${params.toString()}`),
           axios.get(`${baseURL}/api/services`),
           axios.get(`${baseURL}/api/colleges`)
         ]);
