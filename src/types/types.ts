@@ -74,17 +74,18 @@ export interface ProviderProfile {
   lastName: string;
   phoneNumber: string;
   collegeId: number;
-  latitude: number | null;  // Change to null instead of undefined
-  longitude: number | null; // Change to null instead of undefined
+  latitude: number | null;
+  longitude: number | null;
   address: string;
   bio: string;
   isProfileComplete: boolean;
   rating: number | null;
   completedRequests: number;
+  profileImageUrl?: string; // ✅ Add this if it's optional
   createdAt: string;
   updatedAt: string;
   college: College | null;
-  services: Service[];      // Array of Service objects
+  services: Service[];
 }
 
 

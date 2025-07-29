@@ -297,24 +297,24 @@ export function ClientDashboard() {
                 </div>
               </div>
             ) : (
-              <div className="space-y-4">
-                {filteredRequests.map((request, index) => (
-                  <ClientRequestCard 
-                    key={request.id || `request-${index}`}  
-                    request={{
-                      request: {
-                        ...request,
-                        createdAt: request.createdAt || new Date().toISOString()
-                      },
-                      bidsCount: request.bids?.length?.toString() || '0',
-                      bids: request.bids || [],
-                      status: request.status || 'open',
-                    }}
-                    onAcceptBid={handleAcceptBid}
-                    onRejectBid={handleRejectBid}
-                  />
-                ))}
-              </div>
+             <div className="space-y-4">
+  {filteredRequests.map((request, index) => (
+    <ClientRequestCard
+      key={request.id || `request-${index}`}
+      request={{
+        ...request,
+        createdAt: request.createdAt || new Date().toISOString(),
+      }}
+      bidsCount={request.bids?.length?.toString() || '0'}
+      bids={request.bids || []}
+      status={request.status || 'open'}
+      onAcceptBid={handleAcceptBid}
+      onRejectBid={handleRejectBid}
+    />
+  ))}
+</div>
+
+
             )}
           </>
         )}

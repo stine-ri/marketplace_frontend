@@ -4,96 +4,64 @@ import { Request, Bid } from '../../types/types';
 import api from '../../api/api';
 
 interface ClientRequestCardProps {
-  request: {
-    request: Request;
-    bidsCount: string;
-    bids: Bid[];
-    status: string;
-  };
+  request: Request;
+  bidsCount: string;
+  bids: Bid[];
+  status: string;
   onAcceptBid: (requestId: number, bidId: number) => Promise<void>;
-   onRejectBid: (requestId: number, bidId: number) => Promise<void>;
+  onRejectBid: (requestId: number, bidId: number) => Promise<void>;
 }
 
-export function ClientRequestCard({ request: requestData, onAcceptBid }: ClientRequestCardProps) {
-  // First, declare all hooks at the top - this is required by React rules
+export function ClientRequestCard({
+  request,
+  bidsCount,
+  bids: initialBids,
+  status,
+  onAcceptBid,
+  onRejectBid,
+}: ClientRequestCardProps) {
   const [showBids, setShowBids] = useState(false);
   const [bids, setBids] = useState<Bid[]>([]);
   const [loadingBids, setLoadingBids] = useState(false);
   const [mapVisible, setMapVisible] = useState(false);
+
   useEffect(() => {
-    if (requestData.bids && requestData.bids.length > 0) {
-      setBids(requestData.bids);
+    if (initialBids && initialBids.length > 0) {
+      setBids(initialBids);
     }
-  }, [requestData.bids]);
-  
-  // Then do your validation
-  if (!requestData || !requestData.request) {
-    console.error('Invalid request data:', requestData);
-    return <div className="bg-white p-6 rounded-lg shadow-md mb-4 text-red-500">Invalid request data</div>;
-  }
+  }, [initialBids]);
 
-
-
-
-  // Destructure the request object
-  const { request } = requestData;
-  
   const fetchBids = async () => {
-    console.log('✅ Valid request ID found:', request.id);
+    if (!request.id) return;
     setLoadingBids(true);
     try {
-      console.log('📡 Making API call to:', `/api/client/requests/${request.id}/bids`);
       const response = await api.get(`/api/client/requests/${request.id}/bids`);
-      console.log('📥 API response received:', response.data);
-      
-      const validBids = response.data.map((bid: any) => ({
-        ...bid,
-        status: bid.status || 'pending',
-        price: bid.price || 0,
-        createdAt: bid.createdAt || new Date().toISOString()
-      }));
-      console.log('✅ Processed bids:', validBids);
-      setBids(validBids);
+      setBids(
+        response.data.map((bid: any) => ({
+          ...bid,
+          status: bid.status || 'pending',
+          price: bid.price || 0,
+          createdAt: bid.createdAt || new Date().toISOString(),
+        }))
+      );
     } catch (error) {
       console.error('❌ Error fetching bids:', error);
-      console.error('Request ID that failed:', request.id);
-
-      if (error instanceof Error) {
-        console.error('Full error details:', {
-          message: error.message,
-        });
-      } else {
-        console.error('Full error details (unknown type):', error);
-      }
     } finally {
       setLoadingBids(false);
     }
   };
 
-
   const toggleBids = () => {
-    console.log('🔄 Toggle bids called, showBids:', showBids);
-    console.log('Current request ID:', request.id);
-    
-    if (!showBids) {
-      fetchBids();
-    }
+    if (!showBids) fetchBids();
     setShowBids(!showBids);
   };
 
   const handleAcceptBid = async (bidId: number) => {
-    console.log('🎯 Accept bid called');
-    console.log('Request ID:', request.id);
-    console.log('Bid ID:', bidId);
-    
     try {
       await onAcceptBid(request.id, bidId);
-      console.log('✅ Bid accepted successfully');
-      await fetchBids(); // refresh
+      await fetchBids();
     } catch (error) {
       console.error('❌ Error accepting bid:', error);
-      console.error('Failed request ID:', request.id);
-      console.error('Failed bid ID:', bidId);
     }
   };
 
@@ -104,16 +72,15 @@ export function ClientRequestCard({ request: requestData, onAcceptBid }: ClientR
     open: 'bg-blue-100 text-blue-800',
     accepted: 'bg-green-100 text-green-800',
     closed: 'bg-gray-100 text-gray-800',
-    pending: 'bg-yellow-100 text-yellow-800'
+    pending: 'bg-yellow-100 text-yellow-800',
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+  const formatDate = (dateString: string) =>
+    new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
-      day: 'numeric'
+      day: 'numeric',
     });
-  };
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-md mb-4">
@@ -128,9 +95,11 @@ export function ClientRequestCard({ request: requestData, onAcceptBid }: ClientR
           <div className="mt-2 space-y-2">
             <div>
               <span className="font-medium">Status:</span>
-              <span className={`ml-2 px-2 py-1 text-xs rounded-full ${
-                statusColors[request.status.toLowerCase() as keyof typeof statusColors] || 'bg-gray-100'
-              }`}>
+              <span
+                className={`ml-2 px-2 py-1 text-xs rounded-full ${
+                  statusColors[request.status.toLowerCase() as keyof typeof statusColors] || 'bg-gray-100'
+                }`}
+              >
                 {request.status}
               </span>
             </div>
@@ -164,7 +133,8 @@ export function ClientRequestCard({ request: requestData, onAcceptBid }: ClientR
 
             {request.collegeFilterId && (
               <p>
-                <span className="font-medium">College:</span> {request.college?.name || `ID: ${request.collegeFilterId}`}
+                <span className="font-medium">College:</span>{' '}
+                {request.college?.name || `ID: ${request.collegeFilterId}`}
               </p>
             )}
 
@@ -186,7 +156,7 @@ export function ClientRequestCard({ request: requestData, onAcceptBid }: ClientR
               loadingBids ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700 text-white'
             }`}
           >
-            {showBids ? 'Hide Bids' : 'View Bids'} ({requestData.bidsCount})
+            {showBids ? 'Hide Bids' : 'View Bids'} ({bidsCount})
           </button>
         </div>
       </div>
@@ -198,14 +168,12 @@ export function ClientRequestCard({ request: requestData, onAcceptBid }: ClientR
               <span className="animate-pulse">Loading bids...</span>
             </div>
           ) : bids.length === 0 ? (
-            <div className="text-center py-2 text-gray-500">
-              No bids received yet
-            </div>
+            <div className="text-center py-2 text-gray-500">No bids received yet</div>
           ) : (
             <div className="space-y-3">
-              {bids.map((bid, index) => (
+              {bids.map((bid) => (
                 <div
-                  key={bid.id ?? `bid-${index}`}
+                  key={bid.id}
                   className={`p-3 rounded-lg ${
                     bid.status === 'accepted'
                       ? 'bg-green-50 border border-green-200'
@@ -218,9 +186,7 @@ export function ClientRequestCard({ request: requestData, onAcceptBid }: ClientR
                       <p className="text-sm text-gray-600 mt-1">
                         From: {bid.provider?.firstName} {bid.provider?.lastName}
                       </p>
-                      {bid.message && (
-                        <p className="mt-2 text-sm">{bid.message}</p>
-                      )}
+                      {bid.message && <p className="mt-2 text-sm">{bid.message}</p>}
                       {bid.isGraduateOfRequestedCollege && (
                         <span className="inline-block mt-2 px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded-full">
                           Graduate of requested college
@@ -240,9 +206,7 @@ export function ClientRequestCard({ request: requestData, onAcceptBid }: ClientR
                         </button>
                       )}
                       {bid.status === 'accepted' && (
-                        <div className="mt-2 text-sm text-green-600 font-medium">
-                          ✓ Accepted
-                        </div>
+                        <div className="mt-2 text-sm text-green-600 font-medium">✓ Accepted</div>
                       )}
                     </div>
                   </div>

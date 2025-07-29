@@ -22,7 +22,7 @@ export function NewBidModal({ isOpen, onClose, providerId, requestId, onBidCreat
     setError('');
 
     try {
-      const response = await api.post('/bids', {
+      const response = await api.post('/api/provider/bids', {
         providerId,
         requestId,
         price: parseFloat(price),
