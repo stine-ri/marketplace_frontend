@@ -12,6 +12,8 @@ import NotificationBell from './components/NewFeature/NotificationBell';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
+import ProvidersList from './pages/ProviderPublicProfile';
+import ProviderPublicProfile from './pages/ProviderPublicProfile';
 import { ClientDashboard } from './components/NewFeature/ClientDashboard';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -45,6 +47,8 @@ function AppContent() {
           {/* <Route path="/request" element={<RequestForm />} /> */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/providers" element={<ProvidersList />} />
+          <Route path="/providers/:id" element={<ProviderPublicProfile />} />
           
           {/* Provider Dashboard Route */}
           <Route
