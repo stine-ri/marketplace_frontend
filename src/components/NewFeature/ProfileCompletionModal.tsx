@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { ProviderProfileFormData, Service, College } from '../../types/types';
+import ProviderProfile from './ProviderProfile';
 
 const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com';
 
@@ -44,7 +45,7 @@ export default function ProfileCompletionModal({
     completedRequests: 0,
     profileImageUrl: '',
   });
-
+const [showPreview, setShowPreview] = useState(false);
   // Fetch services and colleges on component mount
   useEffect(() => {
     const fetchData = async () => {
@@ -549,6 +550,44 @@ export default function ProfileCompletionModal({
                   Save Profile
                 </button>
               </div>
+              // Add this preview modal right before the final return statement's closing tag
+{showPreview && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+    <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+      <div className="p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-2xl font-bold">Profile Preview</h2>
+          <button
+            onClick={() => setShowPreview(false)}
+            className="text-gray-500 hover:text-gray-700"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        
+        <ProviderProfile 
+          profile={{
+            ...formData,
+            profileImageUrl: imagePreview || formData.profileImageUrl || ''
+          }} 
+          colleges={colleges} 
+          services={services} 
+        />
+        
+        <div className="flex justify-end mt-4">
+          <button
+            onClick={() => setShowPreview(false)}
+            className="px-4 py-2 text-white bg-blue-600 rounded hover:bg-blue-700"
+          >
+            Back to Editing
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
             </form>
           )}
         </div>
