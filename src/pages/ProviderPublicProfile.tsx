@@ -18,47 +18,44 @@ export default function ProviderPublicProfile() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    // Validate ID before making requests
-    if (!id || isNaN(Number(id))) {
-      setError('Invalid provider ID');
-      setLoading(false);
-      return;
-    }
+ useEffect(() => {
+  const isValidId = /^\d+$/.test(id ?? '');
+  if (!isValidId) {
+    setError('Invalid provider ID');
+    setLoading(false);
+    return;
+  }
 
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-        // Check if user is viewing their own profile
-        const isOwnProfile = user?.providerId?.toString() === id;
+      const [profileRes, servicesRes, collegesRes] = await Promise.all([
+        axios.get(`${baseURL}/api/provider/profiles/public/${id}`),
+        axios.get(`${baseURL}/api/services`),
+        axios.get(`${baseURL}/api/colleges`)
+      ]);
 
-        const [profileRes, servicesRes, collegesRes] = await Promise.all([
-          axios.get(`${baseURL}/api/provider/profiles/public/${id}`),
-          axios.get(`${baseURL}/api/services`),
-          axios.get(`${baseURL}/api/colleges`)
-        ]);
-        
-        // Verify the profile data matches the requested ID
-        if (profileRes.data?.id?.toString() !== id) {
-          throw new Error('Profile ID mismatch');
-        }
-
-        setProfile(profileRes.data);
-        setServices(servicesRes.data);
-        setColleges(collegesRes.data);
-      } catch (err) {
-        console.error('Error fetching profile:', err);
-        setError('Failed to load profile data');
-        navigate('/providers', { replace: true }); // Redirect if error occurs
-      } finally {
-        setLoading(false);
+      if (profileRes.data?.id?.toString() !== id) {
+        throw new Error('Profile ID mismatch');
       }
-    };
 
-    fetchData();
-  }, [id, user?.providerId, navigate]);
+      setProfile(profileRes.data);
+      setServices(servicesRes.data);
+      setColleges(collegesRes.data);
+    } catch (err) {
+      console.error('Error fetching profile:', err);
+      setError('Failed to load profile data');
+      navigate('/providers', { replace: true });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  fetchData();
+}, [id, user?.providerId, navigate]);
+
 
   if (loading) {
     return (
