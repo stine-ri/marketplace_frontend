@@ -15,7 +15,7 @@ import Register from './components/auth/Register';
 import ProvidersList from './pages/ProviderList';
 import ProviderPublicProfile from './pages/ProviderPublicProfile';
 import { ClientDashboard } from './components/NewFeature/ClientDashboard';
-import Services from './pages/services'
+import ServicesProductsComponent  from './components/Services'
 import Product from './pages/Product'
 import Help from './pages/Help'
 import Seller from './pages/Seller'
@@ -54,7 +54,7 @@ function AppContent() {
           <Route path="/register" element={<Register />} />
           <Route path="/providers" element={<ProvidersList />} />
           <Route path="/provider/public/:id" element={<ProviderPublicProfile />} />
-          <Route path="/services" element={<Services/>} />
+          <Route path="/services" element={<ServicesProductsComponent />} />
           <Route path="/products" element={<Product/>} />
           <Route path="/help" element={<Help/>} />
           <Route path="/become-seller" element={<Seller/>} />
