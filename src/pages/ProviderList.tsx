@@ -187,12 +187,12 @@ export default function ProvidersList() {
 
   if (error) {
     return (
-      <div className="container mx-auto py-8 px-4">
+      <div className="container mx-auto px-4 py-8">
         <div className="p-4 bg-red-100 text-red-700 rounded-lg">
           {error}
           <button 
             onClick={() => window.location.reload()}
-            className="ml-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+            className="mt-2 w-full sm:w-auto sm:ml-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
           >
             Try Again
           </button>
@@ -202,22 +202,24 @@ export default function ProvidersList() {
   }
 
   return (
-    <div className="container mx-auto py-8 px-4">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold">Available Service Providers</h1>
+    <div className="container mx-auto px-4 py-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <h1 className="text-2xl sm:text-3xl font-bold">Available Service Providers</h1>
         {user?.role === 'service_provider' && (
           <Link 
             to="/provider/dashboard" 
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-center"
           >
             My Dashboard
           </Link>
         )}
       </div>
       
-      <div className="bg-white p-6 rounded-lg shadow-md mb-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="md:col-span-2">
+      {/* Filters Section */}
+      <div className="bg-white p-4 sm:p-6 rounded-lg shadow-md mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Search - Full width on mobile */}
+          <div className="sm:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
             <input
               type="text"
@@ -228,6 +230,7 @@ export default function ProvidersList() {
             />
           </div>
           
+          {/* Service Filter */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Service</label>
             <select
@@ -244,6 +247,7 @@ export default function ProvidersList() {
             </select>
           </div>
           
+          {/* College Filter */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">College</label>
             <select
@@ -260,15 +264,16 @@ export default function ProvidersList() {
             </select>
           </div>
           
-          <div className="md:col-span-2">
+          {/* Price Range - Full width on mobile */}
+          <div className="sm:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-1">Price Range</label>
-            <div className="flex space-x-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <input
                 type="number"
                 value={filters.minPrice}
                 onChange={(e) => setFilters({...filters, minPrice: e.target.value})}
                 placeholder="Min price"
-                className="flex-1 p-2 border border-gray-300 rounded-lg"
+                className="w-full p-2 border border-gray-300 rounded-lg"
                 min="0"
               />
               <input
@@ -276,12 +281,13 @@ export default function ProvidersList() {
                 value={filters.maxPrice}
                 onChange={(e) => setFilters({...filters, maxPrice: e.target.value})}
                 placeholder="Max price"
-                className="flex-1 p-2 border border-gray-300 rounded-lg"
+                className="w-full p-2 border border-gray-300 rounded-lg"
                 min="0"
               />
             </div>
           </div>
           
+          {/* Sort By */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Sort By</label>
             <select
@@ -296,20 +302,21 @@ export default function ProvidersList() {
             </select>
           </div>
           
-          <div>
+          {/* Location Filter */}
+          <div className="sm:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-            <div className="flex">
+            <div className="flex flex-col sm:flex-row">
               <input
                 type="text"
                 value={filters.location}
                 onChange={(e) => setFilters({...filters, location: e.target.value})}
                 placeholder="Zip code or address"
-                className="flex-1 p-2 border border-gray-300 rounded-l-lg"
+                className="flex-1 p-2 border border-gray-300 rounded-t-lg sm:rounded-tr-none sm:rounded-l-lg"
               />
               <select
                 value={filters.radius}
                 onChange={(e) => setFilters({...filters, radius: Number(e.target.value)})}
-                className="p-2 border border-gray-300 rounded-r-lg"
+                className="p-2 border border-gray-300 rounded-b-lg sm:rounded-bl-none sm:rounded-r-lg"
               >
                 <option value="5">5 mi</option>
                 <option value="10">10 mi</option>
@@ -320,6 +327,7 @@ export default function ProvidersList() {
           </div>
         </div>
         
+        {/* Availability Filter */}
         <div className="mt-4">
           <label className="block text-sm font-medium text-gray-700 mb-1">Availability</label>
           <select
@@ -335,34 +343,37 @@ export default function ProvidersList() {
           </select>
         </div>
         
+        {/* Reset Filters Button */}
         <div className="mt-4 flex justify-end">
           <button
             onClick={handleResetFilters}
-            className="px-4 py-2 text-gray-600 hover:text-gray-800"
+            className="px-4 py-2 text-gray-600 hover:text-gray-800 text-sm sm:text-base"
           >
             Reset All Filters
           </button>
         </div>
       </div>
 
+      {/* Providers Grid */}
       {filteredProviders.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-lg shadow-md">
-          <h3 className="text-xl font-medium text-gray-900">No providers found</h3>
+        <div className="text-center py-8 sm:py-12 bg-white rounded-lg shadow-md">
+          <h3 className="text-lg sm:text-xl font-medium text-gray-900">No providers found</h3>
           <p className="mt-2 text-gray-600">Try adjusting your search filters</p>
           <button
             onClick={handleResetFilters}
-            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm sm:text-base"
           >
             Clear Filters
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           {filteredProviders.map(provider => (
             <div key={provider.id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
-              <div className="p-6">
-                <div className="flex items-start">
-                  <div className="w-20 h-20 rounded-full overflow-hidden mr-4 flex-shrink-0">
+              <div className="p-4 sm:p-6">
+                <div className="flex items-start gap-3">
+                  {/* Profile Image */}
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden flex-shrink-0">
                     {provider.profileImageUrl ? (
                       <img 
                         src={provider.profileImageUrl} 
@@ -371,32 +382,34 @@ export default function ProvidersList() {
                       />
                     ) : (
                       <div className="w-full h-full bg-gray-200 flex items-center justify-center">
-                        <span className="text-2xl font-bold text-gray-500">
+                        <span className="text-xl sm:text-2xl font-bold text-gray-500">
                           {provider.firstName?.charAt(0)}{provider.lastName?.charAt(0)}
                         </span>
                       </div>
                     )}
                   </div>
                   
+                  {/* Provider Info */}
                   <div className="flex-1">
                     <Link to={`/providers/public/${provider.id}`}>
-                      <h3 className="font-bold text-xl hover:text-blue-600">
+                      <h3 className="font-bold text-lg sm:text-xl hover:text-blue-600">
                         {provider.firstName} {provider.lastName}
                       </h3>
                     </Link>
                     
                     {provider.college && (
-                      <p className="text-sm text-gray-600 mt-1">
+                      <p className="text-xs sm:text-sm text-gray-600 mt-1">
                         {provider.college.name}
                       </p>
                     )}
                     
-                    <div className="mt-2 flex items-center">
-                      <div className="flex text-yellow-400 mr-2">
+                    {/* Rating and Requests */}
+                    <div className="mt-2 flex items-center flex-wrap gap-1">
+                      <div className="flex text-yellow-400">
                         {[...Array(5)].map((_, i) => (
                           <svg
                             key={i}
-                            className={`w-5 h-5 ${i < (provider.rating || 0) ? 'text-yellow-400' : 'text-gray-300'}`}
+                            className={`w-4 h-4 sm:w-5 sm:h-5 ${i < (provider.rating || 0) ? 'text-yellow-400' : 'text-gray-300'}`}
                             fill="currentColor"
                             viewBox="0 0 20 20"
                           >
@@ -404,14 +417,15 @@ export default function ProvidersList() {
                           </svg>
                         ))}
                       </div>
-                      <span className="text-sm text-gray-600">
+                      <span className="text-xs sm:text-sm text-gray-600">
                         ({provider.completedRequests || 0} requests)
                       </span>
                     </div>
                     
+                    {/* Price Range */}
                     {provider.services && provider.services.length > 0 && (
                       <div className="mt-1">
-                        <span className="text-sm font-medium">
+                        <span className="text-xs sm:text-sm font-medium">
                           {(() => {
                             const prices = provider.services
                               .map(s => s.price)
@@ -430,26 +444,28 @@ export default function ProvidersList() {
                       </div>
                     )}
                     
+                    {/* Bio */}
                     {provider.bio && (
-                      <p className="mt-4 text-gray-700 line-clamp-3">
+                      <p className="mt-3 text-gray-700 text-xs sm:text-sm line-clamp-2 sm:line-clamp-3">
                         {provider.bio}
                       </p>
                     )}
                     
+                    {/* Services Offered */}
                     {provider.services && provider.services.length > 0 && (
-                      <div className="mt-4">
-                        <h4 className="text-sm font-medium text-gray-700 mb-2">Services Offered</h4>
-                        <div className="flex flex-wrap gap-2">
+                      <div className="mt-3 sm:mt-4">
+                        <h4 className="text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Services Offered</h4>
+                        <div className="flex flex-wrap gap-1 sm:gap-2">
                           {provider.services.slice(0, 3).map(service => (
                             <span 
                               key={service.id}
-                              className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
+                              className="px-2 py-1 text-xs sm:text-sm bg-blue-100 text-blue-800 rounded-full"
                             >
                               {service.name} (${service.price ?? '?'})
                             </span>
                           ))}
                           {provider.services.length > 3 && (
-                            <span className="px-3 py-1 bg-gray-100 text-gray-800 rounded-full text-sm">
+                            <span className="px-2 py-1 text-xs sm:text-sm bg-gray-100 text-gray-800 rounded-full">
                               +{provider.services.length - 3} more
                             </span>
                           )}
@@ -457,10 +473,11 @@ export default function ProvidersList() {
                       </div>
                     )}
                     
-                    <div className="mt-6 flex justify-between items-center">
+                    {/* Action Buttons */}
+                    <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row justify-between gap-2">
                       <Link 
                         to={`/providers/public/${provider.id}`}
-                        className="px-4 py-2 text-blue-600 hover:text-blue-800 font-medium"
+                        className="px-3 py-1 sm:px-4 sm:py-2 text-blue-600 hover:text-blue-800 font-medium text-sm sm:text-base text-center"
                       >
                         View Profile
                       </Link>
@@ -469,7 +486,7 @@ export default function ProvidersList() {
                         <button
                           onClick={() => handleContactProvider(provider)}
                           disabled={!provider.phoneNumber}
-                          className={`px-4 py-2 rounded-lg font-medium ${
+                          className={`px-3 py-1 sm:px-4 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${
                             provider.phoneNumber 
                               ? 'bg-green-600 text-white hover:bg-green-700' 
                               : 'bg-gray-200 text-gray-500 cursor-not-allowed'
