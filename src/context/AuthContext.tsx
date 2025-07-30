@@ -162,10 +162,32 @@ const verifyToken = (): boolean => {
   );
 }
 
-export function useAuth() {
+
+
+export function useAuth(): AuthContextType & { isPublic: boolean } {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    return {
+      user: null,
+      login: async () => {
+        throw new Error('Login not available in public mode');
+      },
+      register: async () => {
+        throw new Error('Register not available in public mode');
+      },
+      logout: () => {
+  // No-op in public mode
+},
+
+      loading: false,
+      error: null,
+      isPublic: true,
+    };
   }
-  return context;
+
+  return {
+    ...context,
+    isPublic: false,
+  };
 }
+

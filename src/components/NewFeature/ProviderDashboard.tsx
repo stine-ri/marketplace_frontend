@@ -5,7 +5,7 @@ import { NewBidModal } from '../NewFeature/NewBidModal';
 import ProfileCompletionModal from '../NewFeature/ProfileCompletionModal';
 import useWebSocket from '../../hooks/useWebSocket';
 import { useWebSocketContext } from '../../context/WebSocketContext';
-import { BellIcon, ArrowPathIcon, CurrencyDollarIcon, ClockIcon, PencilIcon, TrashIcon, EyeIcon } from '@heroicons/react/24/outline';
+import { BellIcon, ArrowPathIcon, CurrencyDollarIcon, ClockIcon, PencilIcon, TrashIcon, EyeIcon, MapPinIcon, CalendarIcon, TagIcon} from '@heroicons/react/24/outline';
 import { useAuth } from '../../context/AuthContext';
 import { Request, Bid, ProviderProfile, ProviderProfileFormData } from '../../types/types';
 import { ProviderRequestCard } from './ProvideRequestCard';
@@ -153,6 +153,49 @@ const LocationControls = ({
     </div>
   </div>
 );
+// Format location (handles string, empty object, or JSON string)
+// Format location (handles string, empty object, or JSON string)
+function formatLocation(location: any): string {
+  if (!location) return 'Not specified';
+  
+  try {
+    // Handle case where location is a JSON string
+    if (typeof location === 'string') {
+      const parsed = JSON.parse(location);
+      if (typeof parsed === 'object' && Object.keys(parsed).length === 0) {
+        return 'Not specified';
+      }
+      return parsed.address || parsed.name || location;
+    }
+    
+    // Handle case where location is an empty object
+    if (typeof location === 'object' && Object.keys(location).length === 0) {
+      return 'Not specified';
+    }
+    
+    return location.address || location.name || 'Not specified';
+  } catch {
+    return location || 'Not specified';
+  }
+}
+
+// Format date from backend
+function formatDate(dateString: string): string {
+  if (!dateString) return 'Unknown date';
+  
+  try {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch {
+    return 'Unknown date';
+  }
+}
 export function ProviderDashboard() {
   // State from first implementation
   const [availableRequests, setAvailableRequests] = useState<ClientRequest[]>([]);
@@ -351,6 +394,7 @@ useEffect(() => {
           canWithdraw: ['pending', 'accepted'].includes(bid.status) && !bid.request?.status?.includes('closed')
         }));
         setMyBids(enhancedBids);
+        setBids(response.data);
       }
     } catch (error) {
       console.error('Error fetching my bids:', error);
@@ -782,71 +826,94 @@ return (
               {/* Available Requests Tab */}
               {activeTab === 'available' && (
                 <div className="space-y-3 sm:space-y-4">
-                 <LocationControls
-      useLocationFilter={useLocationFilter}
-      enableLocationFilter={enableLocationFilter}
-      disableLocationFilter={disableLocationFilter}
-      locationError={locationError}
-      userLocation={userLocation}
-      searchRadius={searchRadius}
-      setSearchRadius={setSearchRadius}
-      isLocationLoading={isLocationLoading}
-      refreshWithLocation={refreshWithLocation}
-      fetchAvailableRequests={fetchAvailableRequests}
-    />
-
-
+                  <LocationControls
+                    useLocationFilter={useLocationFilter}
+                    enableLocationFilter={enableLocationFilter}
+                    disableLocationFilter={disableLocationFilter}
+                    locationError={locationError}
+                    userLocation={userLocation}
+                    searchRadius={searchRadius}
+                    setSearchRadius={setSearchRadius}
+                    isLocationLoading={isLocationLoading}
+                    refreshWithLocation={refreshWithLocation}
+                    fetchAvailableRequests={fetchAvailableRequests}
+                  />
                   {availableRequests.length === 0 ? (
                     <div className="text-center py-8 sm:py-12 bg-white rounded-lg shadow">
                       <ClockIcon className="mx-auto h-8 w-8 sm:h-10 sm:w-10 text-gray-400" />
-                      <h3 className="mt-2 text-sm sm:text-base md:text-lg font-medium text-gray-900">No available requests</h3>
-                      <p className="mt-1 text-xs sm:text-sm text-gray-500">Check back later for new service requests.</p>
+                      <h3 className="mt-2 text-sm sm:text-base md:text-lg font-medium text-gray-900">
+                        No available requests
+                      </h3>
+                      <p className="mt-1 text-xs sm:text-sm text-gray-500">
+                        Check back later for new service requests.
+                      </p>
                     </div>
                   ) : (
                     availableRequests.map((request) => (
-                      <div key={request.id} className="bg-white rounded-lg shadow p-3 sm:p-4 md:p-6">
-                        <div className="flex flex-col sm:flex-row justify-between items-start gap-3 sm:gap-4">
+                      <div key={request.id} className="bg-white rounded-lg shadow p-4 mb-4">
+                        <div className="flex flex-col sm:flex-row justify-between gap-4">
+                          {/* Request Details */}
                           <div className="flex-1">
-                            <h3 className="text-sm sm:text-base md:text-lg font-medium text-gray-900">{request.title}</h3>
-                            <p className="mt-1 text-xs sm:text-sm text-gray-600">{request.description}</p>
-                            <div className="mt-2 sm:mt-3 flex flex-wrap items-center gap-1 sm:gap-2 text-xs sm:text-sm text-gray-500">
-                              <span>Budget: ${request.budget}</span>
-                              <span>•</span>
-                              <span>Category: {request.category}</span>
-                              <span>•</span>
-                              <span>Posted: {new Date(request.createdAt).toLocaleDateString()}</span>
-                            </div>
-                            {request.location && (
-                              <p className="mt-1 text-xs sm:text-sm text-gray-500">
-                                Location:{' '}
-                                {(() => {
-                                  try {
-                                    const loc = typeof request.location === 'string'
-                                      ? JSON.parse(request.location)
-                                      : request.location;
+                            <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                              {request.serviceName || 'Service Request'}
+                            </h3>
 
-                                    return loc?.address || loc?.name || 'Unknown';
-                                  } catch (error) {
-                                    return request.location;
-                                  }
-                                })()}
-                              </p>
+                            <p className="text-gray-600 mb-3">{request.description}</p>
+
+                            <div className="grid grid-cols-2 gap-2 text-sm">
+                              <div className="flex items-center">
+                                <CurrencyDollarIcon className="h-4 w-4 mr-1 text-gray-500" />
+                                <span>
+                                  Budget: KSh {request.desired_price?.toLocaleString() || 'Negotiable'}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center">
+                                <MapPinIcon className="h-4 w-4 mr-1 text-gray-500" />
+                                <span>Location: {formatLocation(request.location)}</span>
+                              </div>
+
+                              <div className="flex items-center">
+                                <CalendarIcon className="h-4 w-4 mr-1 text-gray-500" />
+                                <span>Posted: {formatDate(request.created_at)}</span>
+                              </div>
+
+                              <div className="flex items-center">
+                                <TagIcon className="h-4 w-4 mr-1 text-gray-500" />
+                                <span>Status: {request.status || 'Open'}</span>
+                              </div>
+                            </div>
+
+                            {/* Bids Count */}
+                            {request.bids && request.bids.length > 0 && (
+                              <div className="mt-3 text-sm text-blue-600">
+                                {request.bids.length} {request.bids.length === 1 ? 'bid' : 'bids'} placed
+                              </div>
                             )}
                           </div>
-                          <div className="w-full sm:w-auto flex justify-end">
-                            {hasAlreadyBid(request.id) ? (
-                              <span className="inline-flex items-center px-2 py-1 sm:px-3 sm:py-2 rounded-md text-xs sm:text-sm font-medium bg-gray-100 text-gray-800">
-                                Already Bid
-                              </span>
-                            ) : (
-                              <button
-                                onClick={() => handleBidOnRequest(request)}
-                                className="inline-flex items-center px-2 py-1 sm:px-3 sm:py-1.5 md:px-4 md:py-2 border border-transparent rounded-md shadow-sm text-xs sm:text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                              >
-                                <CurrencyDollarIcon className="-ml-0.5 mr-1 h-3 w-3 sm:h-4 sm:w-4" />
-                                Place Bid
-                              </button>
-                            )}
+
+                          {/* Action Buttons */}
+                          <div className="flex flex-col gap-2 min-w-[120px]">
+                            <button
+                              onClick={() => handleBidOnRequest(request)}
+                              disabled={hasAlreadyBid(request.id)}
+                              className={`flex items-center justify-center px-3 py-2 rounded-md text-sm font-medium ${
+                                hasAlreadyBid(request.id)
+                                  ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
+                                  : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                              }`}
+                            >
+                              <CurrencyDollarIcon className="h-4 w-4 mr-1" />
+                              {hasAlreadyBid(request.id) ? 'Bid Placed' : 'Place Bid'}
+                            </button>
+                            
+                            <button
+                              onClick={() => setSelectedRequest(request)}
+                              className="flex items-center justify-center px-3 py-2 bg-gray-100 text-gray-700 rounded-md text-sm font-medium hover:bg-gray-200"
+                            >
+                              <EyeIcon className="h-4 w-4 mr-1" />
+                              View Details
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -917,6 +984,19 @@ return (
                       filteredAndSortedBids.map((bid) => (
                         <div key={bid.id} className="bg-white rounded-lg shadow p-3 sm:p-4 md:p-6">
                           <div className="flex flex-col sm:flex-row justify-between items-start gap-3 sm:gap-4">
+                            <BidCard 
+    key={bid.id} 
+    bid={bid}
+    onView={() => {
+      setSelectedBid(bid);
+      setShowBidDetailsModal(true);
+    }}
+    onEdit={() => {
+      setSelectedBid(bid);
+      setShowEditBidModal(true);
+    }}
+    onWithdraw={() => handleWithdrawBid(bid.id)}
+  />
                             <div className="flex-1">
                               <div className="flex flex-wrap items-center gap-1 sm:gap-2 mb-1 sm:mb-2">
                                 <h3 className="text-sm sm:text-base md:text-lg font-medium text-gray-900">
@@ -1043,6 +1123,7 @@ return (
     {selectedBid && showBidDetailsModal && (
       <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-start justify-center p-2 sm:p-4">
         <div className="relative top-2 sm:top-4 md:top-10 lg:top-20 mx-auto p-3 sm:p-4 md:p-5 border w-full sm:w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
+        <BidCard bid={selectedBid} />
           <div className="flex justify-between items-center mb-3 sm:mb-4">
             <h3 className="text-base sm:text-lg md:text-xl font-bold text-gray-900">Bid Details</h3>
             <button
@@ -1133,9 +1214,13 @@ return (
   </div>
 );
 }
-
 // Enhanced Bid Card Component
-function BidCard({ bid }: { bid: Bid }) {
+function BidCard({ bid, onEdit, onWithdraw, onView }: { 
+  bid: Bid | ExtendedBid;
+  onEdit?: () => void;
+  onWithdraw?: () => void;
+  onView?: () => void;
+}) {
   return (
     <div className="bg-white p-6 rounded-lg shadow-md">
       <div className="flex justify-between items-start">
@@ -1145,7 +1230,7 @@ function BidCard({ bid }: { bid: Bid }) {
           {bid.message && (
             <p className="text-gray-600 mt-2">Your message: {bid.message}</p>
           )}
-          {bid.isGraduateOfRequestedCollege && (
+          {('isGraduateOfRequestedCollege' in bid && bid.isGraduateOfRequestedCollege) && (
             <span className="inline-block mt-2 px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">
               Meets college requirement
             </span>
@@ -1156,6 +1241,34 @@ function BidCard({ bid }: { bid: Bid }) {
             {new Date(bid.createdAt).toLocaleDateString()}
           </span>
         </div>
+      </div>
+      
+      {/* Action buttons */}
+      <div className="mt-4 flex space-x-2">
+        {onView && (
+          <button
+            onClick={onView}
+            className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+          >
+            View Details
+          </button>
+        )}
+        {onEdit && ('canEdit' in bid && bid.canEdit) && (
+          <button
+            onClick={onEdit}
+            className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+          >
+            Edit Bid
+          </button>
+        )}
+        {onWithdraw && ('canWithdraw' in bid && bid.canWithdraw) && (
+          <button
+            onClick={onWithdraw}
+            className="px-3 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
+          >
+            Withdraw
+          </button>
+        )}
       </div>
     </div>
   );

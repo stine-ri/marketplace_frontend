@@ -12,10 +12,15 @@ import NotificationBell from './components/NewFeature/NotificationBell';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
-import ProvidersList from './pages/ProviderPublicProfile';
+import ProvidersList from './pages/ProviderList';
 import ProviderPublicProfile from './pages/ProviderPublicProfile';
 import { ClientDashboard } from './components/NewFeature/ClientDashboard';
+import Services from './pages/services'
+import Product from './pages/Product'
+import Help from './pages/Help'
+import Seller from './pages/Seller'
 import { ToastContainer } from 'react-toastify';
+
 import 'react-toastify/dist/ReactToastify.css';
 export function App() {
   return (
@@ -48,8 +53,12 @@ function AppContent() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/providers" element={<ProvidersList />} />
-          <Route path="/providers/:id" element={<ProviderPublicProfile />} />
-          
+          <Route path="/provider/public/:id" element={<ProviderPublicProfile />} />
+          <Route path="/services" element={<Services/>} />
+          <Route path="/products" element={<Product/>} />
+          <Route path="/help" element={<Help/>} />
+          <Route path="/become-seller" element={<Seller/>} />
+
           {/* Provider Dashboard Route */}
           <Route
             path="/provider/dashboard"

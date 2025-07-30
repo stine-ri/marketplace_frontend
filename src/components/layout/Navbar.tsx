@@ -75,8 +75,9 @@ export function Navbar({ children }: NavbarProps) {
                 {(user as any)?.id && <NotificationBell userId={(user as any).id} />}
                 <div className="flex items-center space-x-3">
                   <span className="text-gray-700 font-medium">
-                    Hi, {(user as any)?.name || (user as any)?.username || 'User'}
+                       Hi, {user?.full_name || 'User'}
                   </span>
+
                   <button 
                     onClick={logout}
                     className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
@@ -176,7 +177,7 @@ export function Navbar({ children }: NavbarProps) {
                 <div className="space-y-3">
                   <div className="flex items-center justify-between p-2">
                     <span className="text-gray-700 font-medium">
-                      Welcome, {(user as any)?.name || (user as any)?.username || 'User'}
+                     Welcome, {user?.full_name || 'User'}
                     </span>
                     {(user as any)?.id && (
                       <div className="sm:hidden">

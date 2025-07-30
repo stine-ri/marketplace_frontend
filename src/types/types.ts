@@ -4,6 +4,7 @@ export type Service = {
   id: number;
   name: string;
   category?: string;
+  price?: number; 
   lat: number;
   lng: number;
 };
@@ -28,9 +29,16 @@ export interface Request {
   location: string | Location;
   latitude?: number;
   longitude?: number;
+  serviceName: string; 
+  desired_price: number;
+  subcategory?: string;
+  urgency?: 'low' | 'medium' | 'high';
+  preferredTime?: string; // or use Date if you're storing date objects
+  specialRequirements?: string;
+  notes?: string;
   collegeFilterId?: number;
   status: 'open' | 'closed' | 'pending' | 'accepted';
-  createdAt: string;
+  created_at: string;
   bids?: Bid[];
   college?: {
     id: number;
@@ -38,7 +46,10 @@ export interface Request {
   };
 }
 
-
+// Only used where backend sends snake_case fields
+export interface ClientRequest extends Request {
+  desired_price: number; // override for use in components that consume backend directly
+}
 export interface Bid {
   id: number;
   requestId: number;

@@ -38,12 +38,28 @@ export function ClientDashboard() {
       });
 
       if (response.data && Array.isArray(response.data)) {
-        // Ensure each request has bids array and proper status
-        const normalizedRequests = response.data.map(request => ({
-          ...request,
-          bids: Array.isArray(request.bids) ? request.bids : [],
-          status: request.status || 'open'
-        }));
+        // Preserve the original data structure as much as possible
+        const normalizedRequests = response.data.map(request => {
+          // Parse location if it's a string, but preserve original structure
+          let parsedLocation = request.location;
+          if (typeof request.location === 'string') {
+            try {
+              parsedLocation = JSON.parse(request.location);
+            } catch (error) {
+              // Keep as string if parsing fails
+              parsedLocation = request.location;
+            }
+          }
+
+          return {
+            ...request, // Keep all original fields exactly as they are
+            location: parsedLocation,
+            bids: Array.isArray(request.bids) ? request.bids : [],
+            status: request.status || 'open',
+            createdAt: request.createdAt || new Date().toISOString()
+          };
+        });
+        
         setRequests(normalizedRequests);
       } else {
         console.error('Invalid response format');
@@ -75,7 +91,7 @@ export function ClientDashboard() {
         // Provider submitted a bid to client's request
         setRequests(prev => prev.map(req => 
           req.id === data.requestId ? { 
-            ...req, 
+            ...req, // Keep all original request data
             bids: [...(req.bids || []), data.bid],
             status: req.status // Maintain existing status
           } : req
@@ -100,7 +116,7 @@ export function ClientDashboard() {
         prev.map(req =>
           req.id === requestId
             ? {
-                ...req,
+                ...req, // Preserve all original request data
                 status: 'closed',
                 bids: req.bids?.map((bid: Bid) =>
                   bid.id === bidId
@@ -125,7 +141,7 @@ export function ClientDashboard() {
         prev.map(req =>
           req.id === requestId
             ? {
-                ...req,
+                ...req, // Preserve all original request data
                 bids: req.bids?.map((bid: Bid) =>
                   bid.id === bidId
                     ? { ...bid, status: 'rejected' }
@@ -142,22 +158,24 @@ export function ClientDashboard() {
 
   const createNewRequest = async (requestData: any) => {
     try {
-      // Stringify location for backend
+      // Prepare request data exactly as user entered it
       const requestPayload = {
         ...requestData,
-        location: JSON.stringify({
-          address: requestData.address,
-          lat: requestData.lat,
-          lng: requestData.lng
-        })
+        // Only stringify location for backend if it's an object
+        location: typeof requestData.location === 'object' 
+          ? JSON.stringify(requestData.location)
+          : requestData.location
       };
 
       const response = await api.post('/api/client/requests', requestPayload);
       
+      // Add new request to the list, preserving all original data
       setRequests(prev => [{
         ...response.data,
         bids: [],
-        location: requestData.location // Keep object format in frontend
+        // Keep location in its original format for frontend display
+        location: requestData.location,
+        createdAt: response.data.createdAt || new Date().toISOString()
       }, ...prev]);
       
       setShowNewRequestModal(false);
@@ -234,15 +252,15 @@ export function ClientDashboard() {
           </div>
         </div>
        
-<Link 
-  to="/providers"
-  className="flex items-center px-4 py-2 text-gray-700 hover:bg-gray-100 rounded"
->
-  <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-  </svg>
-  Find Providers
-</Link>
+        <Link 
+          to="/providers"
+          className="flex items-center px-4 py-2 text-gray-700 hover:bg-gray-100 rounded"
+        >
+          <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+          </svg>
+          Find Providers
+        </Link>
       </header>
 
       {/* Main Content */}
@@ -308,24 +326,19 @@ export function ClientDashboard() {
                 </div>
               </div>
             ) : (
-             <div className="space-y-4">
-  {filteredRequests.map((request, index) => (
-    <ClientRequestCard
-      key={request.id || `request-${index}`}
-      request={{
-        ...request,
-        createdAt: request.createdAt || new Date().toISOString(),
-      }}
-      bidsCount={request.bids?.length?.toString() || '0'}
-      bids={request.bids || []}
-      status={request.status || 'open'}
-      onAcceptBid={handleAcceptBid}
-      onRejectBid={handleRejectBid}
-    />
-  ))}
-</div>
-
-
+              <div className="space-y-4">
+                {filteredRequests.map((request, index) => (
+                  <ClientRequestCard
+                    key={request.id || `request-${index}`}
+                    request={request} // Pass the complete request object without modifications
+                    bidsCount={request.bids?.length?.toString() || '0'}
+                    bids={request.bids || []}
+                    status={request.status || 'open'}
+                    onAcceptBid={handleAcceptBid}
+                    onRejectBid={handleRejectBid}
+                  />
+                ))}
+              </div>
             )}
           </>
         )}
