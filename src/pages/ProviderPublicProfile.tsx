@@ -164,7 +164,7 @@ export default function ProviderPublicProfile() {
           <p className="mt-1">{error}</p>
           <div className="mt-2 text-sm">
             <p><strong>Current URL:</strong> {window.location.href}</p>
-            <p><strong>Expected format:</strong> /provider/public/[number]</p>
+            <p><strong>Expected format:</strong> /providers/public/[number]</p>
           </div>
         </div>
         <ProvidersList />
