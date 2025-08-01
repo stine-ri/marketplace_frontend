@@ -28,7 +28,7 @@ export const TestimonialsSection = () => {
               <Star size={16} fill="currentColor" />
             </div>
             <p className="text-gray-600 mb-2">
-              "I found an amazing graphic designer on MarketHub who perfectly
+              "I found an amazing graphic designer on Quisells who perfectly
               captured my brand vision. The entire process from booking to
               delivery was seamless."
             </p>
@@ -54,7 +54,7 @@ export const TestimonialsSection = () => {
               <Star size={16} className="text-gray-300" />
             </div>
             <p className="text-gray-600 mb-2">
-              "As a plumber, MarketHub has transformed my business. I've gained
+              "As a plumber, Quisells has transformed my business. I've gained
               steady clients and the booking system makes scheduling jobs so
               much easier."
             </p>
@@ -80,7 +80,7 @@ export const TestimonialsSection = () => {
               <Star size={16} fill="currentColor" />
             </div>
             <p className="text-gray-600 mb-2">
-              "I started selling my handmade jewelry on MarketHub last year and
+              "I started selling my handmade jewelry on Quisells last year and
               my sales have tripled! The platform makes it easy to showcase my
               products and connect with customers."
             </p>

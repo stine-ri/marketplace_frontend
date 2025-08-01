@@ -6,7 +6,7 @@ export const Footer = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           {/* Company Info */}
           <div>
-            <h3 className="text-xl font-bold mb-4">MarketHub</h3>
+            <h3 className="text-xl font-bold mb-4">Quisells</h3>
             <p className="text-gray-300 mb-4">
               Your one-stop marketplace for services and products. Find what you
               need or sell what you offer.
@@ -104,14 +104,14 @@ export const Footer = () => {
               </div>
               <div className="flex items-center">
                 <Mail size={20} className="mr-2 flex-shrink-0" />
-                <span className="text-gray-300">support@markethub.com</span>
+                <span className="text-gray-300">support@Quisells.com</span>
               </div>
             </div>
           </div>
         </div>
         <div className="border-t border-gray-700 mt-8 pt-6 text-center text-gray-400">
           <p>
-            &copy; {new Date().getFullYear()} MarketHub. All rights reserved.
+            &copy; {new Date().getFullYear()} Quisells. All rights reserved.
           </p>
         </div>
       </div>

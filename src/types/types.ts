@@ -15,6 +15,8 @@ export type College = {
   location?: string;
 };
 
+
+
 export interface Request {
   id: number;
   userId: number;
@@ -55,6 +57,7 @@ export interface Bid {
   requestId: number;
   providerId: number;
   price: number;
+  updatedAt: string; // 
   message?: string;
   isGraduateOfRequestedCollege: boolean;
   status: 'pending' | 'accepted' | 'rejected' | 'countered' | 'withdrawn';
@@ -107,10 +110,65 @@ export type User = {
   email: string;
   role: 'admin' | 'client' | 'service_provider';
   isVerified: boolean;
-  createdAt: string;
+  createdAt: string;        // Frontend/existing components use this
+  name: string;             // Frontend/existing components use this
+  updatedAt: string;
+  isActive?: boolean;
   providerId?: number;
-  providerProfile?: ProviderProfile; // Optional nested provider profile
+  providerProfile?: ProviderProfile;
+  
+  // Backend compatibility fields (optional)
+  created_at?: string;      // Backend uses this
+  updated_at?: string;      // Backend might use this
+  full_name?: string;       // Backend uses this
 };
+
+export type CreateUserData = {
+  name: string;
+  email: string;
+  password: string;
+  role: 'admin' | 'client' | 'service_provider';
+};
+
+export type UpdateUserData = {
+  name?: string;
+  email?: string;
+  role?: 'admin' | 'client' | 'service_provider';
+  isActive?: boolean;
+};
+
+// Helper type for raw backend response
+export type BackendUser = {
+  id: number;
+  email: string;
+  role: 'admin' | 'client' | 'service_provider';
+  isVerified: boolean;
+  created_at: string;       // Backend format
+  full_name: string;        // Backend format
+  updated_at: string;       // Backend format
+  isActive?: boolean;
+  providerId?: number;
+  providerProfile?: ProviderProfile;
+};
+
+// Utility functions to convert between formats
+export const normalizeUser = (backendUser: BackendUser): User => ({
+  ...backendUser,
+  name: backendUser.full_name,           // Map full_name to name
+  createdAt: backendUser.created_at,     // Map created_at to createdAt
+  updatedAt: backendUser.updated_at,     // Map updated_at to updatedAt
+  full_name: backendUser.full_name,      // Keep original for compatibility
+  created_at: backendUser.created_at,    // Keep original for compatibility
+});
+
+export const denormalizeUser = (user: User): Partial<BackendUser> => ({
+  id: user.id,
+  email: user.email,
+  role: user.role,
+  full_name: user.name,                  // Map name to full_name for backend
+  isActive: user.isActive,
+});
+
 
 // You might also want these additional types for forms and API responses
 export type ProviderProfileFormData = Omit<ProviderProfile, 
