@@ -1,4 +1,3 @@
-import React from 'react';
 import { Store, User, TrendingUp, Users, Award, Shield, BarChart3, Settings, Eye, Clock, CheckCircle, DollarSign, Globe, Zap, Heart, Star, Briefcase, Smile } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
