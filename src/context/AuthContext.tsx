@@ -83,18 +83,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [hydrated, setHydrated] = useState(false);
 
   // Helper: Validate token
-  const verifyToken = (): boolean => {
-    const storedToken = localStorage.getItem('token');
-    if (!storedToken) return false;
+const verifyToken = (): boolean => {
+  const storedToken = localStorage.getItem('token');
+  if (!storedToken) {
+    logout(); // This clears storage and sets user to null
+    navigate('/login'); // Force redirect
+    return false;
+  }
 
-    const decoded = decodeToken(storedToken);
-    if (!decoded || (decoded.exp && decoded.exp < Date.now() / 1000)) {
-      logout();
-      return false;
-    }
+  const decoded = decodeToken(storedToken);
+  if (!decoded || (decoded.exp && decoded.exp < Date.now() / 1000)) {
+    logout();
+    navigate('/login'); // Force redirect
+    return false;
+  }
 
-    return true;
-  };
+  return true;
+};
 
   // Load user from storage
   useEffect(() => {
@@ -106,61 +111,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Login
-  const login = async (email: string, password: string): Promise<UserType> => {
-    setLoading(true);
-    setError(null);
-    try {
-      const { data } = await api.post('/api/login', { email, password });
+const login = async (email: string, password: string): Promise<UserType> => {
+  setLoading(true);
+  setError(null);
 
-      if (data.user.role === 'service_provider') {
-        try {
-          const providerRes = await api.get('/api/provider/profile');
+  try {
+    const response = await api.post('/api/login', { email, password });
+    const { token, user } = response.data;
 
-          const updatedUser: UserType = {
-            ...data.user,
-            providerId: providerRes.data?.id ?? null,
-            providerProfile: providerRes.data || null,
-          };
+    let finalUser: UserType = {
+      ...user,
+      providerId: null,
+      providerProfile: null,
+    };
 
-          setUser(updatedUser);
-          setToken(data.token);
-          localStorage.setItem('token', data.token);
-          localStorage.setItem('user', JSON.stringify(updatedUser));
-          return updatedUser;
-        } catch (err) {
-          console.error("Failed to fetch provider profile:", err);
+    if (user.role === 'service_provider') {
+      const defaultProviderId = user.userId;
 
-          const fallbackUser: UserType = {
-            ...data.user,
-            providerId: null,
-            providerProfile: null,
-          };
+      try {
+        const providerRes = await api.get('/api/provider/profile', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
 
-          setUser(fallbackUser);
-          setToken(data.token);
-          localStorage.setItem('token', data.token);
-          localStorage.setItem('user', JSON.stringify(fallbackUser));
-          return fallbackUser;
-        }
+        finalUser = {
+          ...user,
+          providerId: providerRes.data?.id ?? defaultProviderId,
+          providerProfile: providerRes.data || null,
+        };
+      } catch (err) {
+        console.error('Failed to fetch provider profile:', err);
+        finalUser = {
+          ...user,
+          providerId: defaultProviderId,
+          providerProfile: null,
+        };
       }
-
-      // For non-provider users
-      setUser(data.user);
-      setToken(data.token);
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
-      return data.user;
-    } catch (err) {
-      if (err instanceof AxiosError) {
-        setError(err.response?.data?.message || 'Login failed');
-      } else {
-        setError('Login failed');
-      }
-      throw err;
-    } finally {
-      setLoading(false);
     }
-  };
+
+    setUser(finalUser);
+    setToken(token);
+    localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify(finalUser));
+    return finalUser;
+  } catch (err) {
+    if (err instanceof AxiosError) {
+      setError(err.response?.data?.message || 'Login failed');
+    } else {
+      setError('Login failed');
+    }
+    throw err;
+  } finally {
+    setLoading(false);
+  }
+};
 
   // Register
   const register = async (formData: {

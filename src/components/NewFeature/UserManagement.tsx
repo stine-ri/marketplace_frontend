@@ -33,6 +33,8 @@ export default function UserManagement() {
     name: '',
     email: '',
     password: '',
+    contact_phone:'',
+    address:'',
     role: 'client'
   });
 
@@ -119,24 +121,45 @@ export default function UserManagement() {
   };
 
   const handleCreateUser = async () => {
-    if (!createForm.name || !createForm.email || !createForm.password) {
-      setError('All fields are required');
-      return;
-    }
+  // Validate required fields
+  if (!createForm.name || !createForm.email || !createForm.password || !createForm.contact_phone || !createForm.address) {
+    setError('All fields are required');
+    return;
+  }
 
-    try {
-      const response = await axios.post<User>(`${baseURL}/api/users`, createForm, {
-        headers: getAuthHeaders()
-      });
-      setUsers([...users, response.data]);
-      setCreateForm({ name: '', email: '', password: '', role: 'client' });
-      setShowCreateModal(false);
-      setError(null);
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to create user');
-      console.error('Error creating user:', err);
-    }
-  };
+  try {
+    // Prepare the data in the format the backend expects
+    const userData = {
+      full_name: createForm.name,
+      email: createForm.email,
+      password: createForm.password,
+      contact_phone: createForm.contact_phone,
+      address: createForm.address,
+      role: createForm.role
+    };
+
+    console.log('Sending user data:', userData); // Debug log
+
+    const response = await axios.post(`${baseURL}/api/users`, userData, {
+      headers: getAuthHeaders()
+    });
+    
+    setUsers([...users, response.data]);
+    setCreateForm({ 
+      name: '', 
+      email: '', 
+      password: '', 
+      contact_phone: '',
+      address: '', 
+      role: 'client' 
+    });
+    setShowCreateModal(false);
+    setError(null);
+  } catch (err: any) {
+    console.error('Full error response:', err.response); // Debug log
+    setError(err.response?.data?.message || 'Failed to create user');
+  }
+};
 
   const handleUpdateUser = async () => {
     if (!editingUser) return;
@@ -353,7 +376,7 @@ export default function UserManagement() {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {filteredUsers.map(user => (
-                    <tr key={user.id} className="hover:bg-gray-50">
+                    <tr  key={user.id || `${user.email}-${user.role}`} className="hover:bg-gray-50">
                       <td className="px-4 py-4 whitespace-nowrap">
                         <input
                           type="checkbox"
@@ -435,7 +458,7 @@ export default function UserManagement() {
             
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">full_name*</label>
                 <input
                   type="text"
                   className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -466,7 +489,26 @@ export default function UserManagement() {
                   placeholder="Enter password"
                 />
               </div>
-              
+                <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">contact_phone *</label>
+                <input
+                  type="password"
+                  className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={createForm.contact_phone}
+                  onChange={(e) => setCreateForm({...createForm, contact_phone: e.target.value})}
+                  placeholder="Enter contact_phone"
+                />
+              </div>
+                <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">address *</label>
+                <input
+                  type="password"
+                  className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={createForm.address}
+                  onChange={(e) => setCreateForm({...createForm, address: e.target.value})}
+                  placeholder="Enter address"
+                />
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
                 <select

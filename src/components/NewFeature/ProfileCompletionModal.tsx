@@ -1,7 +1,7 @@
 // src/components/ProfileCompletionModal.tsx
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { ProviderProfileFormData, Service, College } from '../../types/types';
+import { ProviderProfileFormData, Service, College, PastWork } from '../../types/types';
 import ProviderProfile from './ProviderProfile';
 
 const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com';
@@ -29,6 +29,13 @@ export default function ProfileCompletionModal({
   const [profileImage, setProfileImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [pastWorks, setPastWorks] = useState<PastWork[]>(initialProfile?.pastWorks || []);
+const [newPastWork, setNewPastWork] = useState<{ description: string; image: File | null }>({
+  description: '',
+  image: null
+});
+const [pastWorkImagePreview, setPastWorkImagePreview] = useState<string | null>(null);
+const pastWorkFileInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState<ProviderProfileFormData>(initialProfile || {
     firstName: '',
@@ -44,6 +51,7 @@ export default function ProfileCompletionModal({
     rating: 0,
     completedRequests: 0,
     profileImageUrl: '',
+    pastWorks: [], 
   });
 const [showPreview, setShowPreview] = useState(false);
   // Fetch services and colleges on component mount
@@ -287,6 +295,7 @@ const [showPreview, setShowPreview] = useState(false);
     const completeProfile = {
       ...formData,
       profileImageUrl: imageUrl,
+      pastWorks: pastWorks
     };
 
     await onComplete(completeProfile);
@@ -305,6 +314,45 @@ const [showPreview, setShowPreview] = useState(false);
 
   if (!isOpen) return null;
 
+// Add these handler functions
+const handlePastWorkImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  if (e.target.files && e.target.files[0]) {
+    const file = e.target.files[0];
+    setNewPastWork(prev => ({ ...prev, image: file }));
+    
+    // Create preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setPastWorkImagePreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  }
+};
+
+const handleAddPastWork = () => {
+  if (!newPastWork.description || !newPastWork.image) {
+    setError('Please add both an image and description for your past work');
+    return;
+  }
+
+  // In a real implementation, you would upload the image first
+  // For now, we'll just add it to the local state
+  const newWork: PastWork = {
+    imageUrl: pastWorkImagePreview || '',
+    description: newPastWork.description
+  };
+
+  setPastWorks(prev => [...prev, newWork]);
+  setNewPastWork({ description: '', image: null });
+  setPastWorkImagePreview(null);
+  if (pastWorkFileInputRef.current) {
+    pastWorkFileInputRef.current.value = '';
+  }
+};
+
+const handleRemovePastWork = (index: number) => {
+  setPastWorks(prev => prev.filter((_, i) => i !== index));
+};
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -534,7 +582,95 @@ const [showPreview, setShowPreview] = useState(false);
                   className="w-full p-2 border border-gray-300 rounded"
                 />
               </div>
+<label className="block text-sm font-medium text-gray-700 mb-2">
+    Past Works (Showcase your previous projects)
+  </label>
+  
+  {/* Current past works */}
+  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-4">
+    {pastWorks.map((work, index) => (
+      <div key={index} className="relative group">
+        <div className="aspect-square overflow-hidden rounded-lg bg-gray-100">
+          <img 
+            src={work.imageUrl} 
+            alt={`Past work ${index + 1}`}
+            className="w-full h-full object-cover"
+          />
+        </div>
+        <p className="mt-2 text-sm text-gray-600 line-clamp-2">{work.description}</p>
+        <button
+          type="button"
+          onClick={() => handleRemovePastWork(index)}
+          className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+    ))}
+  </div>
 
+  {/* Add new past work */}
+  <div className="border border-dashed border-gray-300 rounded-lg p-4">
+    <h3 className="text-sm font-medium text-gray-700 mb-2">Add New Past Work</h3>
+    
+    <div className="flex flex-col sm:flex-row gap-4">
+      {/* Image upload */}
+      <div className="flex-1">
+        <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
+          {pastWorkImagePreview ? (
+            <img 
+              src={pastWorkImagePreview} 
+              alt="Past work preview" 
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-gray-400">
+              <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </div>
+          )}
+        </div>
+        <input
+          type="file"
+          ref={pastWorkFileInputRef}
+          onChange={handlePastWorkImageUpload}
+          accept="image/*"
+          className="hidden"
+        />
+        <button
+          type="button"
+          onClick={() => pastWorkFileInputRef.current?.click()}
+          className="mt-2 w-full px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded"
+        >
+          {pastWorkImagePreview ? 'Change Image' : 'Upload Image'}
+        </button>
+      </div>
+      
+      {/* Description */}
+      <div className="flex-1">
+        <label className="block text-sm text-gray-700 mb-1">Description</label>
+        <textarea
+          value={newPastWork.description}
+          onChange={(e) => setNewPastWork(prev => ({ ...prev, description: e.target.value }))}
+          rows={3}
+          className="w-full p-2 border border-gray-300 rounded text-sm"
+          placeholder="Describe this work (what you did, results, etc.)"
+        />
+        
+        <button
+          type="button"
+          onClick={handleAddPastWork}
+          disabled={!newPastWork.description || !newPastWork.image}
+          className="mt-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-blue-300 text-sm"
+        >
+          Add to Portfolio
+        </button>
+      </div>
+    </div>
+  </div>
               <div className="flex justify-end space-x-4">
                 <button
                   type="button"

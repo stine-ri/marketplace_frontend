@@ -129,6 +129,7 @@ export interface ProviderProfile {
     fullName: string;
     avatar?: string;
   };
+  pastWorks: PastWork[];
 }
 
 
@@ -154,6 +155,8 @@ export type CreateUserData = {
   name: string;
   email: string;
   password: string;
+  contact_phone:string,
+  address:string,
   role: 'admin' | 'client' | 'service_provider';
 };
 
@@ -196,6 +199,11 @@ export const denormalizeUser = (user: User): Partial<BackendUser> => ({
   isActive: user.isActive,
 });
 
+export interface PastWork {
+  id?: number;
+  imageUrl: string;
+  description: string;
+}
 
 // You might also want these additional types for forms and API responses
 export type ProviderProfileFormData = Omit<ProviderProfile, 
@@ -203,6 +211,7 @@ export type ProviderProfileFormData = Omit<ProviderProfile,
 > & {
   college?: College; // For form selection
   servicesDetails?: Service[]; // For displaying selected services
+   pastWorks?: PastWork[];
 };
 
 export type ProviderProfileUpdateResponse = {

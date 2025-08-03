@@ -472,7 +472,26 @@ export default function ProvidersList() {
                         </div>
                       </div>
                     )}
-                    
+                    {/* Add Past Works Preview */}
+      {provider.pastWorks?.length > 0 && (
+        <div className="mt-4">
+          <h4 className="text-xs sm:text-sm font-medium text-gray-700 mb-2">Sample Work</h4>
+          <div className="flex gap-2 overflow-x-auto pb-2">
+            {provider.pastWorks.slice(0, 2).map((work, index) => (
+              <div key={index} className="flex-shrink-0 w-16 h-16 relative">
+                <img
+                  src={work.imageUrl}
+                  alt={`Past work ${index + 1}`}
+                  className="w-full h-full object-cover rounded"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = '/default-work.png';
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
                     {/* Action Buttons */}
                     <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row justify-between gap-2">
                       <Link 

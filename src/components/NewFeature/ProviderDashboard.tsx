@@ -7,7 +7,8 @@ import useWebSocket from '../../hooks/useWebSocket';
 import { useWebSocketContext } from '../../context/WebSocketContext';
 import { BellIcon, ArrowPathIcon, CurrencyDollarIcon, ClockIcon, PencilIcon, TrashIcon, EyeIcon, MapPinIcon, CalendarIcon, TagIcon, HandThumbUpIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../../context/AuthContext';
-import { Request, Bid, ProviderProfile, ProviderProfileFormData, Interest } from '../../types/types';
+import type { ProviderProfile } from '../../types/types';
+import { Request, Bid,  ProviderProfileFormData, Interest, PastWork , College, Service} from '../../types/types';
 import { ProviderRequestCard } from './ProvideRequestCard';
 import { toast } from 'react-toastify';
 import { AxiosError } from 'axios';
@@ -44,6 +45,93 @@ interface ExtendedBid extends Bid {
   canEdit?: boolean;
   canWithdraw?: boolean;
 }
+interface ProviderProfileProps {
+  profile: ProviderProfileFormData;
+  colleges: College[];
+  services: Service[];
+}
+
+const ProviderProfile: React.FC<ProviderProfileProps> = ({ profile, colleges, services }) => {
+  // Destructure pastWorks from profile
+  const { pastWorks } = profile;
+return (
+    <div className="max-w-4xl mx-auto p-4">
+      {/* Profile Header */}
+      <div className="flex items-start gap-6 mb-8">
+        <div className="flex-shrink-0">
+          {profile.profileImageUrl ? (
+            <img
+              className="w-32 h-32 rounded-full object-cover"
+              src={profile.profileImageUrl}
+              alt={`${profile.firstName} ${profile.lastName}`}
+            />
+          ) : (
+            <div className="w-32 h-32 rounded-full bg-gray-200 flex items-center justify-center">
+              <span className="text-2xl font-medium text-gray-500">
+                {profile.firstName.charAt(0)}{profile.lastName.charAt(0)}
+              </span>
+            </div>
+          )}
+        </div>
+        <div>
+          <h1 className="text-3xl font-bold">
+            {profile.firstName} {profile.lastName}
+          </h1>
+          {profile.collegeId && (
+            <p className="text-lg text-gray-600 mt-1">
+              {colleges.find(c => c.id === profile.collegeId)?.name}
+            </p>
+          )}
+          {profile.bio && <p className="mt-4 text-gray-700">{profile.bio}</p>}
+        </div>
+      </div>
+
+      {/* Services Section */}
+      <section className="mb-8">
+        <h2 className="text-2xl font-semibold mb-4">Services Offered</h2>
+        <div className="flex flex-wrap gap-2">
+          {services.map(service => (
+            <span
+              key={service.id}
+              className="px-4 py-2 bg-blue-100 text-blue-800 rounded-full"
+            >
+              {service.name}
+            </span>
+          ))}
+        </div>
+      </section>
+
+      {/* Past Works Section */}
+      {pastWorks && pastWorks.length > 0 && (
+        <section className="mb-8">
+          <h2 className="text-2xl font-semibold mb-4">Past Works</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {pastWorks.map((work, index) => (
+              <div
+                key={index}
+                className="border rounded-lg overflow-hidden hover:shadow-lg transition-shadow"
+              >
+                <div className="aspect-video bg-gray-100 relative">
+                  <img
+                    src={work.imageUrl}
+                    alt={`Past work ${index + 1}`}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = '/default-work.png';
+                    }}
+                  />
+                </div>
+                <div className="p-4">
+                  <p className="text-gray-700">{work.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+};
 
 interface Location {
   lat: number;
@@ -164,25 +252,39 @@ const LocationControls = ({
 );
 
 function formatLocation(location: any): string {
-  if (!location) return 'Not specified';
+  // Handle null/undefined/empty cases
+  if (!location) return 'Location not provided';
   
-  try {
-    if (typeof location === 'string') {
-      const parsed = JSON.parse(location);
-      if (typeof parsed === 'object' && Object.keys(parsed).length === 0) {
-        return 'Not specified';
-      }
-      return parsed.address || parsed.name || location;
+  // Handle the object format from your API
+  if (typeof location === 'object') {
+    // Check for valid label first
+    if (location.label && location.label !== '{}' && location.label.trim() !== '') {
+      return location.label.trim();
     }
     
-    if (typeof location === 'object' && Object.keys(location).length === 0) {
-      return 'Not specified';
+    // Then check for valid coordinates
+    if (location.lat !== 0 && location.lng !== 0) {
+      return `${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}`;
     }
     
-    return location.address || location.name || 'Not specified';
-  } catch {
-    return location || 'Not specified';
+    // Handle empty label cases
+    if (location.label === '{}') {
+      return 'Location not provided';
+    }
   }
+  
+  // Handle stringified JSON
+  if (typeof location === 'string') {
+    try {
+      const parsed = JSON.parse(location);
+      return formatLocation(parsed);
+    } catch {
+      return location !== '{}' ? location : 'Location not provided';
+    }
+  }
+  
+  // Default fallback
+  return 'Location not provided';
 }
 
 function formatDate(dateString: string): string {
@@ -316,6 +418,9 @@ const fetchAvailableRequests = useCallback(async () => {
       return;
     }
 
+    // console.log('⌛ Fetching requests...');
+    const startTime = Date.now();
+    
     const response = await api.get('/api/provider/requests', {
       headers: { 
         Authorization: `Bearer ${token}`,
@@ -323,16 +428,38 @@ const fetchAvailableRequests = useCallback(async () => {
       }
     });
 
-    // Ensure each request has allowBids and allowInterests properties
-    const requestsWithDefaults = response.data.map((request: any) => ({
-      ...request,
-      allowBids: request.allowBids !== false, // Default to true if not specified
-      allowInterests: request.allowInterests !== false // Default to true if not specified
-    }));
+    console.log(`✅ Requests fetched in ${Date.now() - startTime}ms`);
+    // console.log('Raw API response:', response.data);
+
+    const requestsWithDefaults = response.data.map((request: any) => {
+      // console.log('Request location:', request.location);
+      
+      let location = request.location;
+      if (typeof location === 'string') {
+        try {
+          location = JSON.parse(location);
+        } catch {
+          console.warn('Failed to parse location string:', location);
+          location = null;
+        }
+      }
+      
+      return {
+        ...request,
+        location,
+        allowBids: request.allowBids !== false,
+        allowInterests: request.allowInterests !== false
+      };
+    });
 
     setAvailableRequests(requestsWithDefaults || []);
   } catch (error) {
-    console.error('Error fetching requests:', error);
+    console.error('Error fetching requests:', {
+      error,
+      time: new Date().toISOString(),
+      userLocation,
+      searchRadius
+    });
     toast.error("Failed to load available requests");
     setAvailableRequests([]);
   }
@@ -443,7 +570,8 @@ const fetchMyInterests = useCallback(async () => {
       }
     });
 
-    setMyInterests(response.data);
+    setMyInterests(Array.isArray(response.data.data) ? response.data.data : []);
+    console.log('Fetched interests:', response.data);
   } catch (error) {
     console.error('Error fetching my interests:', error);
   }
@@ -575,8 +703,19 @@ const handleExpressInterest = async (requestId: number) => {
            (!request.collegeFilterId || request.collegeFilterId === provider.collegeId);
   };
 
-  const handleRefresh = async () => {
+const handleRefresh = async () => {
+  try {
     setRefreshing(true);
+    // Force a visual update by briefly clearing data
+    if (activeTab === 'available') setAvailableRequests([]);
+    if (activeTab === 'mybids') setMyBids([]);
+    if (activeTab === 'requests') setRequests([]);
+    if (activeTab === 'myinterests') setMyInterests([]);
+    
+    // Add a small delay to ensure UI updates
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Then fetch fresh data
     switch (activeTab) {
       case 'available':
         await fetchAvailableRequests();
@@ -591,8 +730,13 @@ const handleExpressInterest = async (requestId: number) => {
         await fetchMyInterests();
         break;
     }
+  } catch (error) {
+    console.error('Refresh failed:', error);
+    toast.error('Failed to refresh data');
+  } finally {
     setRefreshing(false);
-  };
+  }
+};
 
   const handleBidOnRequest = (request: ClientRequest) => {
     setSelectedRequest(request);
@@ -919,14 +1063,20 @@ const handleExpressInterest = async (requestId: number) => {
         <div className="max-w-7xl mx-auto px-3 py-3 sm:px-4 sm:py-4 lg:px-6 lg:py-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-0">
           <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">Provider Dashboard</h1>
           <div className="flex items-center justify-end sm:justify-normal space-x-2 sm:space-x-3 w-full sm:w-auto">
-            <button 
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className="p-1 sm:p-2 rounded-full hover:bg-gray-100"
-              title="Refresh"
-            >
-              <ArrowPathIcon className={`h-4 w-4 sm:h-5 sm:w-5 text-gray-600 ${refreshing ? 'animate-spin' : ''}`} />
-            </button>
+         
+           <button 
+           
+  onClick={handleRefresh}
+  disabled={refreshing}
+  className={`p-1 sm:p-2 rounded-full hover:bg-gray-100 transition-colors ${
+    refreshing ? 'bg-gray-100' : ''
+  }`}
+  title="Refresh"
+>
+  <ArrowPathIcon className={`h-4 w-4 sm:h-5 sm:w-5 ${
+    refreshing ? 'text-blue-500 animate-spin' : 'text-gray-600'
+  }`} />
+</button>
             
             <div className="relative">
               <button 
@@ -1494,6 +1644,7 @@ const handleExpressInterest = async (requestId: number) => {
     </div>
   </div>
 )}
+
     </div>
   );
 }
