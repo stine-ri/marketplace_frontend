@@ -15,10 +15,12 @@ import Register from './components/auth/Register';
 import ProvidersList from './pages/ProviderList';
 import ProviderPublicProfile from './pages/ProviderPublicProfile';
 import { ClientDashboard } from './components/NewFeature/ClientDashboard';
-import ServicesProductsComponent  from './components/Services'
-import Product from './pages/Product'
-import Help from './pages/Help'
-import Seller from './pages/Seller'
+import ServicesProductsComponent  from './components/Services';
+import Product from './pages/Product';
+import Help from './pages/Help';
+import Seller from './pages/Seller';
+import { ChatList } from './components/Chat/ChatList';
+import { ChatWindow } from './components/Chat/ChatWindow';
 import { ToastContainer } from 'react-toastify';
 
 import 'react-toastify/dist/ReactToastify.css';
@@ -58,7 +60,8 @@ function AppContent() {
           <Route path="/products" element={<Product/>} />
           <Route path="/help" element={<Help/>} />
           <Route path="/become-seller" element={<Seller/>} />
-
+          <Route path="/chat" element={<ChatList />} />
+          <Route path="/chat/:chatRoomId" element={<ChatWindow />} />
           {/* Provider Dashboard Route */}
           <Route
             path="/provider/dashboard"

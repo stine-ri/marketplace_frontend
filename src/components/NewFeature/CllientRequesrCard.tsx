@@ -1,14 +1,19 @@
 import { useState, useEffect } from 'react';
-import { Request, Bid, ClientRequest } from '../../types/types';
+import { Request, Bid, ClientRequest, Interest } from '../../types/types';
 import api from '../../api/api';
 
 interface ClientRequestCardProps {
   request: ClientRequest;
   bidsCount: string;
   bids: Bid[];
-  status?: "pending" | "accepted" | "open" | "closed"; // Made optional since we can get it from request
+  status?: "pending" | "accepted" | "open" | "closed";
+  interests?: Interest[];
+  allowBids?: boolean;
+  allowInterests?: boolean;
   onAcceptBid: (requestId: number, bidId: number) => Promise<void>;
-  onRejectBid?: (requestId: number, bidId: number) => Promise<void>; // Made optional
+  onRejectBid?: (requestId: number, bidId: number) => Promise<void>;
+  onAcceptInterest?: (requestId: number, interestId: number) => void;
+  onRejectInterest?: (requestId: number, interestId: number) => void;
 }
 
 export function ClientRequestCard({
@@ -16,13 +21,18 @@ export function ClientRequestCard({
   bidsCount,
   bids: initialBids,
   status: propStatus,
+  allowBids,
+  allowInterests,
   onAcceptBid,
-  onRejectBid, // Still not used but now optional
+  onRejectBid,
+  onAcceptInterest,
+  onRejectInterest,
 }: ClientRequestCardProps) {
   const [showBids, setShowBids] = useState(false);
   const [bids, setBids] = useState<Bid[]>([]);
   const [loadingBids, setLoadingBids] = useState(false);
   const [mapVisible, setMapVisible] = useState(false);
+
 
   // Use propStatus if provided, otherwise fall back to request.status
   const status = propStatus || request.status || 'open';
@@ -58,7 +68,7 @@ export function ClientRequestCard({
     setShowBids(!showBids);
   };
 
-  const handleAcceptBid = async (bidId: number) => {
+ const handleAcceptBid = async (bidId: number) => {
     try {
       await onAcceptBid(request.id, bidId);
       await fetchBids();
@@ -66,14 +76,12 @@ export function ClientRequestCard({
       console.error('❌ Error accepting bid:', error);
     }
   };
-
-  const parseLocation = (location: any): { display: string; coords?: { lat: number; lng: number } } => {
+const parseLocation = (location: any): { display: string; coords?: { lat: number; lng: number } } => {
     if (!location) return { display: 'Location not specified' };
-    
+
     try {
       if (typeof location === 'string') {
         if (location.trim() === '{}') return { display: 'Location not specified' };
-        
         try {
           const parsed = JSON.parse(location);
           if (parsed && typeof parsed === 'object') {
@@ -86,14 +94,14 @@ export function ClientRequestCard({
           return { display: location };
         }
       }
-      
+
       if (typeof location === 'object') {
         return {
           display: location.address || location.name || 'Location specified',
           coords: location.lat && location.lng ? { lat: location.lat, lng: location.lng } : undefined
         };
       }
-      
+
       return { display: 'Location not specified' };
     } catch {
       return { display: 'Location not specified' };
@@ -258,6 +266,53 @@ export function ClientRequestCard({
               ))}
             </div>
           )}
+        </div>
+      )}
+      {/* Interests section */}
+      {request.interests && request.interests.length > 0 && (
+        <div className="border-t border-gray-200 p-4">
+          <h3 className="text-sm font-medium text-gray-900 mb-2">
+            Expressed Interests ({request.interests.length})
+          </h3>
+          <div className="space-y-3">
+            {request.interests.map(interest => (
+              <div key={interest.id} className="flex items-start justify-between p-3 bg-gray-50 rounded">
+                <div className="flex items-center space-x-3">
+                  <div className="flex-shrink-0">
+                    <img 
+                      className="h-10 w-10 rounded-full" 
+                      src={interest.provider?.avatar || '/default-avatar.png'} 
+                      alt={interest.provider?.name}
+                    />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">
+                      {interest.provider?.name || 'Provider'}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      Expressed on: {new Date(interest.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+                {request.status === 'open' && (
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => onAcceptInterest?.(request.id, interest.id)}
+                      className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                    >
+                      Accept
+                    </button>
+                    <button
+                     onClick={() => onRejectInterest?.(request.id, interest.id)}
+                      className="inline-flex items-center px-2.5 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

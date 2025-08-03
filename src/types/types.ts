@@ -15,6 +15,26 @@ export type College = {
   location?: string;
 };
 
+// types.ts or types/types.ts
+export interface Interest {
+  id: number;
+  providerId: number;
+  requestId: number;
+  message?: string;
+  created_at: string;
+  status: 'pending' | 'accepted' | 'rejected';
+  provider?: {
+    id: number;
+    name: string;
+    contact: string;
+     avatar?: string;
+      user?: {
+      id: number;
+      fullName: string;
+      avatar?: string;
+    };
+  };
+}
 
 
 export interface Request {
@@ -41,6 +61,7 @@ export interface Request {
   collegeFilterId?: number;
   status: 'open' | 'closed' | 'pending' | 'accepted';
   created_at: string;
+  interests?: Interest[]; 
   bids?: Bid[];
   college?: {
     id: number;
@@ -51,6 +72,7 @@ export interface Request {
 // Only used where backend sends snake_case fields
 export interface ClientRequest extends Request {
   desired_price: number; // override for use in components that consume backend directly
+  
 }
 export interface Bid {
   id: number;
@@ -102,6 +124,11 @@ export interface ProviderProfile {
   updatedAt: string;
   college: College | null;
   services: Service[];
+  user?: {
+    id: number;
+    fullName: string;
+    avatar?: string;
+  };
 }
 
 

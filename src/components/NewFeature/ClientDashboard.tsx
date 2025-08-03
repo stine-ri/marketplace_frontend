@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../../api/api';
+import { acceptInterest, rejectInterest,getRequestInterests  } from '../../api/api'; // Adjust the path accordingly
 import { ClientRequestCard } from '../NewFeature/CllientRequesrCard';
 import useWebSocket from '../../hooks/useWebSocket';
 import { PlusIcon, BellIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
@@ -8,7 +9,8 @@ import { useAuth } from '../../context/AuthContext';
 import { Bid } from '../../types/types';
 import { Request } from '../../types/types'; 
 import { Link } from 'react-router-dom';
-
+import { toast } from 'react-toastify';
+import { parseLocation } from '../../utilis/location';
 export function ClientDashboard() {
   const [requests, setRequests] = useState<Request[]>([]);
   const [loading, setLoading] = useState(true);
@@ -20,61 +22,55 @@ export function ClientDashboard() {
   const { user } = useAuth();
   const userId = user?.userId;
 
-  const { lastMessage, notifications, unreadCount } = useWebSocket(userId);
+  const { lastMessage, notifications, unreadCount } = useWebSocket();
 
-  const fetchRequests = useCallback(async () => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        console.error('No token found');
-        return;
+
+const fetchRequests = useCallback(async () => {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    if (!refreshing) setLoading(true);
+
+    const response = await api.get('/api/client/requests', {
+      headers: { Authorization: `Bearer ${token}` },
+      params: {
+        include: 'bids,interests.provider.user' // Request nested data
       }
+    });
+      console.log('API Response Structure:', {
+      data: response.data,
+      firstRequest: response.data[0],
+      hasBids: !!response.data[0]?.bids,
+      hasInterests: !!response.data[0]?.interests
+    })
+    if (response.data) {
+      const normalizedRequests = response.data.map((request: Request) => ({
+        ...request,
+        location: parseLocation(request.location) || request.location,
+        bids: request.bids?.map(bid => ({
+          ...bid,
+          status: bid.status || 'pending',
+          createdAt: bid.createdAt || bid.createdAt || new Date().toISOString()
+        })) || [],
+        interests: request.interests?.map(interest => ({
+          ...interest,
+          createdAt: interest.created_at || interest.created_at || new Date().toISOString(),
+          provider: interest.provider || {}
+        })) || [],
+        status: request.status || 'open',
+        createdAt: request.created_at || request.created_at || new Date().toISOString(),
+      }));
 
-      // Show loading only if not a background refresh
-      if (!refreshing) setLoading(true);
-
-      const response = await api.get('/api/client/requests', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      if (response.data && Array.isArray(response.data)) {
-        // Preserve the original data structure as much as possible
-        const normalizedRequests = response.data.map(request => {
-          // Parse location if it's a string, but preserve original structure
-          let parsedLocation = request.location;
-          if (typeof request.location === 'string') {
-            try {
-              parsedLocation = JSON.parse(request.location);
-            } catch (error) {
-              // Keep as string if parsing fails
-              parsedLocation = request.location;
-            }
-          }
-
-          return {
-            ...request, // Keep all original fields exactly as they are
-            location: parsedLocation,
-            bids: Array.isArray(request.bids) ? request.bids : [],
-            status: request.status || 'open',
-            createdAt: request.createdAt || new Date().toISOString()
-          };
-        });
-        
-        setRequests(normalizedRequests);
-      } else {
-        console.error('Invalid response format');
-        setRequests([]);
-      }
-    } catch (error: any) {
-      console.error('Fetch error:', error);
-      if (error.response?.status === 401) {
-        localStorage.removeItem('token');
-      }
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+      setRequests(normalizedRequests);
     }
-  }, [refreshing]);
+  } catch (error) {
+    console.error('Fetch error:', error);
+  } finally {
+    setLoading(false);
+    setRefreshing(false);
+  }
+}, [refreshing]);
 
   // Initial load and refresh
   useEffect(() => {
@@ -82,25 +78,40 @@ export function ClientDashboard() {
   }, [fetchRequests]);
 
   // Handle WebSocket updates for new bids from providers
-  useEffect(() => {
-    if (!lastMessage) return;
+useEffect(() => {
+  if (!lastMessage) return;
 
-    try {
-      const data = JSON.parse(lastMessage.data);
-      if (data.type === 'new_bid') {
-        // Provider submitted a bid to client's request
-        setRequests(prev => prev.map(req => 
-          req.id === data.requestId ? { 
-            ...req, // Keep all original request data
-            bids: [...(req.bids || []), data.bid],
-            status: req.status // Maintain existing status
-          } : req
-        ));
-      }
-    } catch (error) {
-      console.error('WebSocket error:', error);
-    }
-  }, [lastMessage]);
+  try {
+    const data = JSON.parse(lastMessage.data);
+    
+   if (data.type === 'new_interest') {
+  setRequests(prev => prev.map(req =>
+    req.id === data.requestId
+      ? {
+          ...req,
+          interests: [
+            ...(req.interests || []),
+            {
+              id: data.interest.id,
+              requestId: data.requestId,
+              providerId: data.interest.providerId,
+              message: data.interest.message,
+              status: 'pending',
+              provider: data.provider,
+              created_at: new Date().toISOString(), // ✅ add required field
+              updated_at: new Date().toISOString(), // optional if required
+            },
+          ],
+        }
+      : req
+  ));
+  toast.info(`New interest from ${data.provider.user?.fullName || 'a provider'}`);
+}
+
+  } catch (error) {
+    console.error('WebSocket error:', error);
+  }
+}, [lastMessage]);
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -189,6 +200,68 @@ export function ClientDashboard() {
       ? request.status === 'open' || request.status === 'pending'
       : request.status === 'closed' || request.status === 'accepted'
   );
+// Add interest handling functions
+// In ClientDashboard.tsx
+const handleAcceptInterest = async (requestId: number, interestId: number) => {
+  try {
+    const response = await acceptInterest(interestId);
+    
+    setRequests(prev =>
+      prev.map(req =>
+        req.id === requestId
+          ? {
+              ...req,
+              status: 'pending',
+              interests: req.interests?.map(interest =>
+                interest.id === interestId
+                  ? { ...interest, status: 'accepted' }
+                  : interest
+              ) || []
+            }
+          : req
+      )
+    );
+    
+    // If chat room was created in response
+    if (response.data?.chatRoomId) {
+      toast.success(
+        <div>
+          Interest accepted! <Link to={`/chat/${response.data.chatRoomId}`}>Go to chat</Link>
+        </div>
+      );
+    } else {
+      toast.success("Interest accepted successfully!");
+    }
+  } catch (error) {
+    console.error('Error accepting interest:', error);
+    toast.error("Failed to accept interest");
+  }
+};
+
+const handleRejectInterest = async (requestId: number, interestId: number) => {
+  try {
+    await rejectInterest(interestId);
+    
+    setRequests(prev =>
+      prev.map(req =>
+        req.id === requestId
+          ? {
+              ...req,
+              interests: req.interests?.map(interest =>
+                interest.id === interestId
+                  ? { ...interest, status: 'rejected' }
+                  : interest
+              ) || []
+            }
+          : req
+      )
+    );
+    toast.success("Interest rejected successfully!");
+  } catch (error) {
+    console.error('Error rejecting interest:', error);
+    toast.error("Failed to reject interest");
+  }
+};
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -261,6 +334,15 @@ export function ClientDashboard() {
           </svg>
           Find Providers
         </Link>
+        <Link 
+  to="/chat"
+  className="flex items-center px-4 py-2 text-gray-700 hover:bg-gray-100 rounded"
+>
+  <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+  </svg>
+  Messages
+</Link>
       </header>
 
       {/* Main Content */}
@@ -333,9 +415,12 @@ export function ClientDashboard() {
                     request={request} // Pass the complete request object without modifications
                     bidsCount={request.bids?.length?.toString() || '0'}
                     bids={request.bids || []}
+                    interests={request.interests || []} 
                     status={request.status || 'open'}
                     onAcceptBid={handleAcceptBid}
                     onRejectBid={handleRejectBid}
+                    onAcceptInterest={handleAcceptInterest}
+                    onRejectInterest={handleRejectInterest}
                   />
                 ))}
               </div>

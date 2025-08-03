@@ -5,6 +5,18 @@ import { isTokenExpired } from '../utilis/token';
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com',
 });
+// Add to your API service
+export const acceptInterest = (interestId: number) => {
+  return api.post(`/api/interests/${interestId}/accept`);
+};
+
+export const rejectInterest = (interestId: number) => {
+  return api.post(`/api/interests/${interestId}/reject`);
+};
+
+export const getRequestInterests = (requestId: number) => {
+  return api.get(`/api/interests/request/${requestId}`);
+};
 
 // REQUEST interceptor
 api.interceptors.request.use(config => {

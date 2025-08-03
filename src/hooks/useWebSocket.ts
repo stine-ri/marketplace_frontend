@@ -1,8 +1,7 @@
-// src/hooks/useWebSocket.ts
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Notification } from '../types/types';
+import { useAuth } from '../context/AuthContext';
 
-// Extended NotificationOptions interface
 interface NotificationOptions {
   body?: string;
   icon?: string;
@@ -21,15 +20,16 @@ interface NotificationOptions {
 }
 
 type WebSocketMessage = {
-  type: 'notification' | 'heartbeat' | 'read_receipt';
-  data: Notification | string;
+  type: string;
+  data: any;
 };
 
 const MAX_RECONNECT_ATTEMPTS = 5;
 const RECONNECT_INTERVAL = 5000;
 
-export default function useWebSocket(userId?: number) {
+export default function useWebSocket() {
   const url = import.meta.env.VITE_WS_URL;
+  const { user, token } = useAuth();
 
   const [socket, setSocket] = useState<WebSocket | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -38,40 +38,55 @@ export default function useWebSocket(userId?: number) {
   const reconnectTimerRef = useRef<number>();
   const [lastMessage, setLastMessage] = useState<any>(null);
 
-  // Handle incoming messages
   const handleMessage = useCallback((event: MessageEvent) => {
     try {
       const message: WebSocketMessage = JSON.parse(event.data);
-       setLastMessage(message);
-      
-      if (message.type === 'notification') {
-        const notification = message.data as Notification;
-        setNotifications(prev => [notification, ...prev]);
-        
-        // Show browser notification if permission is granted
-        const showNotification = () => {
-          new Notification(notification.title, {
-            body: notification.message,
-            icon: notification.icon || '/default-notification-icon.png',
-          } as NotificationOptions);
-        };
+      setLastMessage(message);
 
-        if (Notification.permission === 'granted') {
-          showNotification();
-        } else if (Notification.permission !== 'denied') {
-          Notification.requestPermission().then(permission => {
-            if (permission === 'granted') {
-              showNotification();
-            }
-          });
+      switch (message.type) {
+        case 'notification':
+        case 'new_notification': {
+          const notification = message.data as Notification;
+          setNotifications(prev => [notification, ...prev]);
+
+          const showNotification = () => {
+            new Notification(notification.title, {
+              body: notification.message,
+              icon: notification.icon || '/default-notification-icon.png',
+            } as NotificationOptions);
+          };
+
+          if (Notification.permission === 'granted') {
+            showNotification();
+          } else if (Notification.permission !== 'denied') {
+            Notification.requestPermission().then(permission => {
+              if (permission === 'granted') showNotification();
+            });
+          }
+          break;
         }
+
+        case 'initial_notifications': {
+          if (Array.isArray(message.data)) {
+            setNotifications(message.data);
+          }
+          break;
+        }
+
+        case 'interest_accepted':
+        case 'new_message': {
+          console.log('Received message type:', message.type);
+          break;
+        }
+
+        default:
+          console.warn('Unhandled message type:', message.type);
       }
     } catch (error) {
-      console.error('Error parsing WebSocket message:', error);
+      console.error('WebSocket message error:', error);
     }
   }, []);
 
-  // Cleanup WebSocket connection
   const cleanup = useCallback(() => {
     if (socket) {
       socket.onopen = null;
@@ -87,34 +102,31 @@ export default function useWebSocket(userId?: number) {
     }
   }, [socket]);
 
-  // Connection management
   const connect = useCallback(() => {
     cleanup();
 
-    if (!url || reconnectAttempt > MAX_RECONNECT_ATTEMPTS) {
-      return;
-    }
+    if (!url || !token || reconnectAttempt > MAX_RECONNECT_ATTEMPTS) return;
 
-    const wsUrl = userId ? `${url}?userId=${userId}` : url;
-    const ws = new WebSocket(wsUrl);
-    
+    const ws = new WebSocket(url);
     ws.onopen = () => {
       console.log('WebSocket connected');
+      setSocket(ws);
       setIsConnected(true);
       setReconnectAttempt(0);
+
+      ws.send(JSON.stringify({ type: 'auth', token }));
     };
-    
+
     ws.onmessage = handleMessage;
-    
+
     ws.onclose = () => {
-      setIsConnected(false);
       console.log('WebSocket disconnected');
-      
-      // Exponential backoff reconnect with max attempts
+      setIsConnected(false);
+
       if (reconnectAttempt < MAX_RECONNECT_ATTEMPTS) {
         const delay = Math.min(
           RECONNECT_INTERVAL * Math.pow(2, reconnectAttempt),
-          RECONNECT_INTERVAL * 10 // Max 50 seconds
+          RECONNECT_INTERVAL * 10
         );
         reconnectTimerRef.current = window.setTimeout(() => {
           setReconnectAttempt(prev => prev + 1);
@@ -122,61 +134,44 @@ export default function useWebSocket(userId?: number) {
         }, delay);
       }
     };
-    
+
     ws.onerror = (error) => {
       console.error('WebSocket error:', error);
       ws.close();
     };
-    
+
     setSocket(ws);
-  }, [url, userId, handleMessage, reconnectAttempt, cleanup]);
+  }, [url, token, handleMessage, reconnectAttempt, cleanup]);
 
-  // Initialize connection
   useEffect(() => {
-    if (!url) return;
-    
+    if (!url || !token || !user) return;
     connect();
+    return () => cleanup();
+  }, [url, token, user, connect, cleanup]);
 
-    return () => {
-      cleanup();
-    };
-  }, [url, userId, connect, cleanup]);
-
-  // Send message through WebSocket
   const sendMessage = useCallback((message: object) => {
     if (socket && socket.readyState === WebSocket.OPEN) {
       try {
         socket.send(JSON.stringify(message));
         return true;
       } catch (error) {
-        console.error('Error sending WebSocket message:', error);
+        console.error('WebSocket send error:', error);
         return false;
       }
     }
     return false;
   }, [socket]);
 
-  // Mark notification as read
   const markAsRead = useCallback((notificationId: number) => {
     setNotifications(prev =>
-      prev.map(n => 
-        n.id === notificationId ? { ...n, isRead: true } : n
-      )
+      prev.map(n => n.id === notificationId ? { ...n, isRead: true } : n)
     );
-    sendMessage({
-      type: 'mark_as_read',
-      notificationId
-    });
+    sendMessage({ type: 'mark_as_read', notificationId });
   }, [sendMessage]);
 
-  // Mark all notifications as read
   const markAllAsRead = useCallback(() => {
-    setNotifications(prev =>
-      prev.map(n => ({ ...n, isRead: true }))
-    );
-    sendMessage({
-      type: 'mark_all_read'
-    });
+    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+    sendMessage({ type: 'mark_all_read' });
   }, [sendMessage]);
 
   return {
@@ -188,6 +183,6 @@ export default function useWebSocket(userId?: number) {
     markAllAsRead,
     unreadCount: notifications.filter(n => !n.isRead).length,
     reconnectAttempt,
-     lastMessage
+    lastMessage
   };
 }
