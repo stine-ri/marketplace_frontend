@@ -35,37 +35,44 @@ const fetchRequests = useCallback(async () => {
     const response = await api.get('/api/client/requests', {
       headers: { Authorization: `Bearer ${token}` },
       params: {
-        include: 'bids,interests.provider.user' // Request nested data
+        include: 'interests'
       }
     });
-      console.log('API Response Structure:', {
-      data: response.data,
-      firstRequest: response.data[0],
-      hasBids: !!response.data[0]?.bids,
-      hasInterests: !!response.data[0]?.interests
-    })
+
     if (response.data) {
-      const normalizedRequests = response.data.map((request: Request) => ({
-        ...request,
-        location: parseLocation(request.location) || request.location,
-        bids: request.bids?.map(bid => ({
-          ...bid,
-          status: bid.status || 'pending',
-          createdAt: bid.createdAt || bid.createdAt || new Date().toISOString()
-        })) || [],
-        interests: request.interests?.map(interest => ({
-          ...interest,
-          createdAt: interest.created_at || interest.created_at || new Date().toISOString(),
-          provider: interest.provider || {}
-        })) || [],
-        status: request.status || 'open',
-        createdAt: request.created_at || request.created_at || new Date().toISOString(),
-      }));
+      const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com';
+      
+      const normalizedRequests = response.data.map((request: Request) => {
+        return {
+          ...request,
+          interests: (request.interests || []).map(interest => ({
+            ...interest,
+            provider: interest.provider ? {
+              ...interest.provider,
+              // Handle both possible avatar locations
+              profileImageUrl: interest.provider.profileImageUrl 
+                ? interest.provider.profileImageUrl.startsWith('http')
+                  ? interest.provider.profileImageUrl
+                  : `${baseURL}${interest.provider.profileImageUrl}`
+                : '/default-profile.png',
+              user: interest.provider.user ? {
+                ...interest.provider.user,
+                avatar: interest.provider.user.avatar 
+                  ? interest.provider.user.avatar.startsWith('http')
+                    ? interest.provider.user.avatar
+                    : `${baseURL}${interest.provider.user.avatar}`
+                  : '/default-avatar.png'
+              } : null
+            } : null
+          }))
+        };
+      });
 
       setRequests(normalizedRequests);
     }
   } catch (error) {
     console.error('Fetch error:', error);
+    toast.error('Failed to load requests');
   } finally {
     setLoading(false);
     setRefreshing(false);
@@ -83,36 +90,36 @@ useEffect(() => {
 
   try {
     const data = JSON.parse(lastMessage.data);
+    console.log('WebSocket message:', data); // Debug log
     
-   if (data.type === 'new_interest') {
-  setRequests(prev => prev.map(req =>
-    req.id === data.requestId
-      ? {
-          ...req,
-          interests: [
-            ...(req.interests || []),
-            {
-              id: data.interest.id,
-              requestId: data.requestId,
-              providerId: data.interest.providerId,
-              message: data.interest.message,
-              status: 'pending',
-              provider: data.provider,
-              created_at: new Date().toISOString(), // ✅ add required field
-              updated_at: new Date().toISOString(), // optional if required
-            },
-          ],
-        }
-      : req
-  ));
-  toast.info(`New interest from ${data.provider.user?.fullName || 'a provider'}`);
-}
-
+    if (data.type === 'new_interest') {
+      console.log('Processing new interest:', data); // Debug log
+      setRequests(prev => prev.map(req =>
+        req.id === data.requestId
+          ? {
+              ...req,
+              interests: [
+                ...(req.interests || []),
+                {
+                  id: data.interest.id,
+                  requestId: data.requestId,
+                  providerId: data.interest.providerId,
+                  message: data.interest.message,
+                  status: 'pending',
+                  provider: data.provider,
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                },
+              ],
+            }
+          : req
+      ));
+      toast.info(`New interest from ${data.provider.user?.fullName || 'a provider'}`);
+    }
   } catch (error) {
     console.error('WebSocket error:', error);
   }
 }, [lastMessage]);
-
   const handleRefresh = () => {
     setRefreshing(true);
     fetchRequests();

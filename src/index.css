@@ -21,3 +21,12 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
+img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.rounded-full {
+  object-fit: cover;
+}

@@ -21,17 +21,25 @@ export interface Interest {
   providerId: number;
   requestId: number;
   message?: string;
-  created_at: string;
+  createdAt: string;
+  updatedAt:string;
+  isShortlisted?:string;
   status: 'pending' | 'accepted' | 'rejected';
   provider?: {
     id: number;
+    firstName: string;
+    lastName: string;
     name: string;
     contact: string;
-     avatar?: string;
+    avatar?: string;
+    profileImageUrl?: string; 
       user?: {
       id: number;
       fullName: string;
       avatar?: string;
+      profileImageUrl?: string; 
+      created_at:string;
+      updated_at:string
     };
   };
 }
@@ -60,7 +68,8 @@ export interface Request {
   notes?: string;
   collegeFilterId?: number;
   status: 'open' | 'closed' | 'pending' | 'accepted';
-  created_at: string;
+  createdAt: string;
+  updated_at:string;
   interests?: Interest[]; 
   bids?: Bid[];
   college?: {
@@ -119,7 +128,7 @@ export interface ProviderProfile {
   isProfileComplete: boolean;
   rating: number | null;
   completedRequests: number;
-  profileImageUrl?: string; // ✅ Add this if it's optional
+  profileImageUrl?: string; 
   createdAt: string;
   updatedAt: string;
   college: College | null;
