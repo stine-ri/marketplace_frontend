@@ -33,7 +33,7 @@ export function ClientRequestCard({
   const [bids, setBids] = useState<Bid[]>([]);
   const [loadingBids, setLoadingBids] = useState(false);
   const [mapVisible, setMapVisible] = useState(false);
-  
+    const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
 
   // Use propStatus if provided, otherwise fall back to request.status
   const status = propStatus || request.status || 'open';
@@ -143,6 +143,15 @@ const parseLocation = (location: any): { display: string; coords?: { lat: number
   const getPrice = () => {
     const price = request.desired_price || request.desiredPrice;
     return price ? `$${Number(price).toFixed(2)}` : 'Price not specified';
+  };
+const handleImageError = (id: string, fallbackUrl = '/default-avatar.png') => {
+    setFailedImages(prev => ({ ...prev, [id]: true }));
+    return fallbackUrl;
+  };
+
+  const getAvatarUrl = (provider: any) => {
+    // Try profileImageUrl first, then user.avatar, then default
+    return provider?.profileImageUrl || provider?.user?.avatar || '/default-avatar.png';
   };
 
   return (
@@ -273,81 +282,66 @@ const parseLocation = (location: any): { display: string; coords?: { lat: number
       )}
       {/* Interests section */}
 {request.interests && request.interests.length > 0 && (
-  <div className="border-t border-gray-200 p-4">
-    <h3 className="text-sm font-medium text-gray-900 mb-2">
-      Expressed Interests ({request.interests.length})
-    </h3>
-    <div className="space-y-3">
-      {request.interests.map(interest => {
-        // Get provider details - check both possible locations
-        const provider = interest.provider;
-        const user = provider?.user;
-        
-        // Get provider name
-        const providerName = user?.fullName || 
-                           `${provider?.firstName || ''} ${provider?.lastName || ''}`.trim() || 
-                           'Provider';
+        <div className="border-t border-gray-200 p-4">
+          <h3 className="text-sm font-medium text-gray-900 mb-2">
+            Expressed Interests ({request.interests.length})
+          </h3>
+          <div className="space-y-3">
+            {request.interests.map(interest => {
+              const provider = interest.provider;
+              const user = provider?.user;
+              const providerId = provider?.id || interest.id;
+              
+              const providerName = user?.fullName || 
+                                `${provider?.firstName || ''} ${provider?.lastName || ''}`.trim() || 
+                                'Provider';
 
-        // Get avatar URL - prioritize profileImageUrl, fallback to user.avatar
-        const avatarUrl = provider?.profileImageUrl || 
-                         user?.avatar || 
-                         '/default-avatar.png';
+              const avatarUrl = getAvatarUrl(provider);
+              const imageFailed = failedImages[providerId];
 
-        return (
-          <div key={interest.id} className="flex items-start justify-between p-3 bg-gray-50 rounded">
-            <div className="flex items-center space-x-3">
-              <div className="flex-shrink-0">
-                <img
-  className="h-10 w-10 rounded-full object-cover"
-  src={avatarUrl}
-  alt={providerName}
-  onError={(e) => {
-    const img = e.target as HTMLImageElement;
-    // Try profile image first, then fallback to default
-    if (avatarUrl !== '/default-avatar.png') {
-      img.src = provider?.profileImageUrl || '/default-avatar.png';
-    } else {
-      img.src = '/default-avatar.png';
-    }
-    console.error('Avatar load failed - using fallback', {
-      attemptedUrl: avatarUrl,
-      fallbackUsed: img.src
-    });
-  }}
-  loading="lazy"
-/>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-900">
-                  {providerName}
-                </p>
-                <p className="text-xs text-gray-500">
-                  Expressed on: {format(new Date(interest.createdAt), 'MMM dd, yyyy h:mm a')}
-                </p>
-              </div>
-            </div>
-            {request.status === 'open' && (
-              <div className="flex space-x-2">
-                <button
-                  onClick={() => onAcceptInterest?.(request.id, interest.id)}
-                  className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                >
-                  Accept
-                </button>
-                <button
-                  onClick={() => onRejectInterest?.(request.id, interest.id)}
-                  className="inline-flex items-center px-2.5 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                >
-                  Reject
-                </button>
-              </div>
-            )}
+              return (
+                <div key={interest.id} className="flex items-start justify-between p-3 bg-gray-50 rounded">
+                  <div className="flex items-center space-x-3">
+                    <div className="flex-shrink-0">
+                      <img
+                        className="h-10 w-10 rounded-full object-cover"
+                        src={imageFailed ? '/default-avatar.png' : avatarUrl}
+                        alt={providerName}
+                        onError={() => handleImageError(providerId.toString())}
+                        loading="lazy"
+                      />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">
+                        {providerName}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Expressed on: {format(new Date(interest.createdAt), 'MMM dd, yyyy h:mm a')}
+                      </p>
+                    </div>
+                  </div>
+                  {request.status === 'open' && (
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => onAcceptInterest?.(request.id, interest.id)}
+                        className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                      >
+                        Accept
+                      </button>
+                      <button
+                        onClick={() => onRejectInterest?.(request.id, interest.id)}
+                        className="inline-flex items-center px-2.5 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
-        );
-      })}
-    </div>
-  </div>
-)}
+        </div>
+      )}
     </div>
   );
 }
