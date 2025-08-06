@@ -29,7 +29,10 @@ export default function Register() {
       alert("Passwords don't match!");
       return;
     }
-    
+    if (formData.password.length < 8) {
+        alert("Password must be at least 8 characters");
+        return;
+    }
     try {
       await register({
         full_name: formData.full_name,
@@ -40,7 +43,8 @@ export default function Register() {
         password: formData.password
       });
       navigate('/login'); // Redirect to login after registration
-    } catch (err) {
+    } catch (err: any) {
+        console.error("Registration error:", err);
       // Error handled in auth context
     }
   };

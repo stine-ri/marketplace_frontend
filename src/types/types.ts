@@ -233,3 +233,36 @@ export interface CreateBidPayload {
   price: number;
   message?: string;
 }
+// Add these to your existing types
+export interface Product {
+  id: number;
+  providerId: number;
+  name: string;
+  description: string;
+  price: string;
+  images: string[];
+  category: string;
+  stock?: number;
+  status: 'draft' | 'published' | 'archived';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProductSale {
+  id: number;
+  productId: number;
+  customerId: number;
+  quantity: number;
+  totalPrice: number;
+  status: 'pending' | 'completed' | 'cancelled';
+  createdAt: string;
+  updatedAt: string;
+  customer: {
+    name: string;
+    email: string;
+  };
+  product: {
+    name: string;
+    mainImage: string;
+  };
+}

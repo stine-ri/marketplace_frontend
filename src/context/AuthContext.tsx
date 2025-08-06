@@ -173,27 +173,57 @@ const login = async (email: string, password: string): Promise<UserType> => {
     address: string;
     role: Role;
     password: string;
-  }): Promise<UserType> => {
+}): Promise<UserType> => {
     setLoading(true);
     setError(null);
     try {
-      const { data } = await api.post('/api/register', formData);
-      setUser(data.user);
-      setToken(data.token);
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
-      return data.user;
+        const { data } = await api.post('/api/register', {
+            full_name: formData.full_name,
+            email: formData.email,
+            contact_phone: formData.contact_phone,
+            address: formData.address,
+            role: formData.role,
+            password: formData.password,
+            confirmPassword: formData.password // Add this line
+        });
+        
+        if (!data.token || !data.user) {
+            throw new Error('Registration response incomplete');
+        }
+
+        const userData: UserType = {
+            ...data.user,
+            providerId: data.user.providerId || null,
+            providerProfile: null
+        };
+
+        setUser(userData);
+        setToken(data.token);
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(userData));
+        return userData;
     } catch (err) {
-      if (err instanceof AxiosError) {
-        setError(err.response?.data?.message || 'Registration failed');
-      } else {
-        setError('Registration failed');
-      }
-      throw err;
+        let errorMessage = 'Registration failed';
+        
+        if (err instanceof AxiosError) {
+            errorMessage = err.response?.data?.error || 
+                         err.response?.data?.message || 
+                         'Registration failed';
+            
+            // Log detailed error for debugging
+            console.error('Registration error details:', {
+                status: err.response?.status,
+                data: err.response?.data,
+                headers: err.response?.headers
+            });
+        }
+
+        setError(errorMessage);
+        throw new Error(errorMessage);
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
-  };
+};
 
   // Logout
   const logout = () => {

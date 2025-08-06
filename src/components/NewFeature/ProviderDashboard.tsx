@@ -13,7 +13,7 @@ import { ProviderRequestCard } from './ProvideRequestCard';
 import { toast } from 'react-toastify';
 import { AxiosError } from 'axios';
 
-
+import { ProductManagementSection } from '../NewFeature/ProductManagementSection';
 
 interface ClientRequest extends Request {
   deadline?: string;
@@ -309,7 +309,7 @@ export function ProviderDashboard() {
   const [myBids, setMyBids] = useState<ExtendedBid[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'available' | 'mybids' | 'requests' | 'myinterests'>('available');
+const [activeTab, setActiveTab] = useState<'available' | 'mybids' | 'requests' | 'myinterests' | 'products'>('available');
   const [showNotifications, setShowNotifications] = useState(false);
   const [userLocation, setUserLocation] = useState<Location | null>(null);
   const [searchRadius, setSearchRadius] = useState<number>(50);
@@ -343,6 +343,7 @@ export function ProviderDashboard() {
  const { lastMessage, notifications, unreadCount } = useWebSocket();
   const [myInterests, setMyInterests] = useState<Interest[]>([]);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+
 
   useEffect(() => {
     const fetchProviderProfile = async () => {
@@ -958,7 +959,7 @@ const handleRefresh = async () => {
           <div>
             <h3 className="font-medium text-gray-900">Timing</h3>
             <div className="mt-2 bg-yellow-50 p-3 rounded">
-              <p>Posted: {formatDate(request.created_at)}</p>
+              <p>Posted: {formatDate(request.createdAt)}</p>
               {request.deadline && <p className="mt-1">Deadline: {formatDate(request.deadline)}</p>}
             </div>
           </div>
@@ -1134,6 +1135,7 @@ const handleRefresh = async () => {
             >
               Logout
             </button>
+            
           </div>
         </div>
       </header>
@@ -1182,6 +1184,12 @@ const handleRefresh = async () => {
                 >
                   My Interests ({myInterests.length})
                 </button>
+                <button
+  onClick={() => setActiveTab('products')}
+  className={`${activeTab === 'products' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+>
+  My Products
+</button>
               </nav>
             </div>
 
@@ -1241,7 +1249,7 @@ const handleRefresh = async () => {
 
                                 <div className="flex items-center">
                                   <CalendarIcon className="h-4 w-4 mr-1 text-gray-500" />
-                                  <span>Posted: {formatDate(request.created_at)}</span>
+                                  <span>Posted: {formatDate(request.createdAt)}</span>
                                 </div>
 
                                 <div className="flex items-center">
@@ -1441,7 +1449,7 @@ const handleRefresh = async () => {
                         <div key={interest.id} className="bg-white rounded-lg shadow p-4">
                           <h3 className="font-medium">Request ID: {interest.requestId}</h3>
                           <p className="text-gray-600 text-sm mt-1">
-                            Expressed on: {new Date(interest.created_at).toLocaleDateString()}
+                            Expressed on: {new Date(interest.createdAt).toLocaleDateString()}
                           </p>
                           <div className="mt-2 flex justify-end">
                             <button
@@ -1456,6 +1464,7 @@ const handleRefresh = async () => {
                     )}
                   </div>
                 )}
+                {activeTab === 'products' && <ProductManagementSection />}
               </>
             )}
           </>

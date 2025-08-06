@@ -120,17 +120,16 @@ export default function UserManagement() {
     }
   };
 
-  const handleCreateUser = async () => {
-  // Validate required fields
-  if (!createForm.name || !createForm.email || !createForm.password || !createForm.contact_phone || !createForm.address) {
+const handleCreateUser = async () => {
+  if (!createForm.name || !createForm.email || !createForm.password || 
+      !createForm.contact_phone || !createForm.address) {
     setError('All fields are required');
     return;
   }
 
   try {
-    // Prepare the data in the format the backend expects
     const userData = {
-      full_name: createForm.name,
+      full_name: createForm.name, // Ensure this matches backend expectation
       email: createForm.email,
       password: createForm.password,
       contact_phone: createForm.contact_phone,
@@ -138,13 +137,15 @@ export default function UserManagement() {
       role: createForm.role
     };
 
-    console.log('Sending user data:', userData); // Debug log
-
     const response = await axios.post(`${baseURL}/api/users`, userData, {
       headers: getAuthHeaders()
     });
     
-    setUsers([...users, response.data]);
+    // Normalize the backend response
+    const normalizedUser = normalizeUser(response.data);
+    setUsers([...users, normalizedUser]);
+    
+    // Reset form
     setCreateForm({ 
       name: '', 
       email: '', 
@@ -156,8 +157,7 @@ export default function UserManagement() {
     setShowCreateModal(false);
     setError(null);
   } catch (err: any) {
-    console.error('Full error response:', err.response); // Debug log
-    setError(err.response?.data?.message || 'Failed to create user');
+    setError(err.response?.data?.error?.message || 'Failed to create user');
   }
 };
 
@@ -492,7 +492,7 @@ export default function UserManagement() {
                 <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">contact_phone *</label>
                 <input
-                  type="password"
+                  type="contact_phone"
                   className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   value={createForm.contact_phone}
                   onChange={(e) => setCreateForm({...createForm, contact_phone: e.target.value})}
