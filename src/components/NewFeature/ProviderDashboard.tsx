@@ -7,14 +7,14 @@ import useWebSocket from '../../hooks/useWebSocket';
 import { useWebSocketContext } from '../../context/WebSocketContext';
 import { BellIcon, ArrowPathIcon, CurrencyDollarIcon, ClockIcon, PencilIcon, TrashIcon, EyeIcon, MapPinIcon, CalendarIcon, TagIcon, HandThumbUpIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../../context/AuthContext';
-import type { ProviderProfile } from '../../types/types';
-import { Request, Bid,  ProviderProfileFormData, Interest, PastWork , College, Service} from '../../types/types';
+import type { ProviderProfile, User, InterestWithChatRoom } from '../../types/types';
+import { Request, Bid,  ProviderProfileFormData, Interest, PastWork , College, Service, ChatRoom, ChatMessage,CombinedChatRoom } from '../../types/types';
 import { ProviderRequestCard } from './ProvideRequestCard';
 import { toast } from 'react-toastify';
 import { AxiosError } from 'axios';
 
 import { ProductManagementSection } from '../NewFeature/ProductManagementSection';
-
+import { useNavigate } from 'react-router-dom';
 interface ClientRequest extends Request {
   deadline?: string;
   client?: {
@@ -309,7 +309,8 @@ export function ProviderDashboard() {
   const [myBids, setMyBids] = useState<ExtendedBid[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-const [activeTab, setActiveTab] = useState<'available' | 'mybids' | 'requests' | 'myinterests' | 'products'>('available');
+const [activeTab, setActiveTab] = useState< 'available' | 'mybids' | 'requests' | 'myinterests' | 'products' | 'chat'>('available');
+
   const [showNotifications, setShowNotifications] = useState(false);
   const [userLocation, setUserLocation] = useState<Location | null>(null);
   const [searchRadius, setSearchRadius] = useState<number>(50);
@@ -343,7 +344,12 @@ const [activeTab, setActiveTab] = useState<'available' | 'mybids' | 'requests' |
  const { lastMessage, notifications, unreadCount } = useWebSocket();
   const [myInterests, setMyInterests] = useState<Interest[]>([]);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-
+// Add these state variables to your ProviderDashboard
+const [chatRooms, setChatRooms] = useState<ChatRoom[]>([]);
+const [currentChatRoom, setCurrentChatRoom] = useState<ChatRoom | null>(null);
+const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+const [newMessage, setNewMessage] = useState('');
+const navigate = useNavigate();
 
   useEffect(() => {
     const fetchProviderProfile = async () => {
@@ -578,6 +584,57 @@ const fetchMyInterests = useCallback(async () => {
   }
 }, []);
 
+const fetchChatRooms = useCallback(async () => {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      toast.error("Please log in to access chat");
+      return;
+    }
+
+    const response = await api.get('/api/chat', {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+
+    // Enhance rooms with participant info
+    const enhancedRooms = response.data.map((room: any) => ({
+      ...room,
+      otherParty: room.clientId === user?.userId ? room.provider : room.client,
+      lastMessage: room.messages?.[0] || null,
+      unreadCount: room.unreadCount || 0
+    }));
+
+    setChatRooms(enhancedRooms);
+  } catch (error) {
+    console.error('Error fetching chat rooms:', error);
+    toast.error('Failed to load chat rooms');
+  }
+}, [user?.userId]);
+
+const fetchChatMessages = useCallback(async (roomId: number) => {
+  try {
+    const response = await api.get(`/api/chat/${roomId}/messages`);
+    setChatMessages(response.data);
+  } catch (error) {
+    console.error('Error fetching chat messages:', error);
+  }
+}, []);
+
+const sendChatMessage = useCallback(async () => {
+  if (!currentChatRoom || !newMessage.trim()) return;
+
+  try {
+    const response = await api.post(`/api/chat/${currentChatRoom.id}/messages`, {
+      content: newMessage
+    });
+    setChatMessages(prev => [...prev, response.data]);
+    setNewMessage('');
+  } catch (error) {
+    console.error('Error sending message:', error);
+  }
+}, [currentChatRoom, newMessage]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -645,9 +702,45 @@ const handleExpressInterest = async (requestId: number) => {
       return;
     }
 
+    // Check if interest already exists before making the request
+    const existingRequest = availableRequests.find(req => req.id === requestId);
+    const hasExistingInterest = existingRequest?.interests?.some(i => 
+      Number(i.providerId) === Number(providerId)
+    );
+    
+    if (hasExistingInterest) {
+      toast.info("You have already expressed interest in this request");
+      return;
+    }
+
+    // Create a unique temporary ID to avoid conflicts
+    const tempId = Date.now() + Math.random();
+
+    // Optimistically update UI first
+    setAvailableRequests(prev => 
+      prev.map(req => {
+        if (req.id !== requestId) return req;
+        
+        const existingInterests = req.interests || [];
+        const tempInterest: Interest = {
+          id: tempId,
+          requestId,
+          providerId: providerId!,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          status: 'pending'
+        };
+        
+        return {
+          ...req,
+          interests: [...existingInterests, tempInterest]
+        };
+      })
+    );
+
     const { data } = await api.post<Interest>(
       `/api/interests/${requestId}`,
-      {}, // Empty body since backend gets providerId from auth
+      {},
       {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -656,6 +749,41 @@ const handleExpressInterest = async (requestId: number) => {
       }
     );
 
+    // Update with real data from server
+    setAvailableRequests(prev => 
+      prev.map(req => {
+        if (req.id !== requestId) return req;
+        
+        const existingInterests = req.interests || [];
+        // Remove the temporary interest and any duplicates, then add the real one
+        const cleanedInterests = existingInterests.filter(i => 
+          i.id !== tempId && Number(i.providerId) !== Number(providerId)
+        );
+        
+        return {
+          ...req,
+          interests: [...cleanedInterests, data]
+        };
+      })
+    );
+
+    // Also update myInterests state
+    setMyInterests(prev => {
+      // Remove any existing interest for this request to avoid duplicates
+      const filtered = prev.filter(i => i.requestId !== requestId);
+      return [...filtered, data];
+    });
+
+    toast.success("Interest expressed successfully!");
+  } catch (error: any) {
+    console.error("Express interest error:", {
+      error,
+      requestId,
+      providerId,
+      time: new Date().toISOString()
+    });
+    
+    // Revert optimistic update on error
     setAvailableRequests(prev => 
       prev.map(req => {
         if (req.id !== requestId) return req;
@@ -663,38 +791,27 @@ const handleExpressInterest = async (requestId: number) => {
         const existingInterests = req.interests || [];
         return {
           ...req,
-          interests: [
-            ...existingInterests,
-            {
-              ...data,
-              providerId: data.providerId // Use the providerId from response
-            }
-          ]
+          interests: existingInterests.filter(i => 
+            Number(i.providerId) !== Number(providerId)
+          )
         };
       })
     );
-
-    toast.success("Interest expressed successfully!");
-  }  catch (error: any) {
-    console.error("Express interest error:", {
-      error,
-      requestId,
-      time: new Date().toISOString()
-    });
     
-    // Show specific error message if available
     const errorMessage = error.response?.data?.error 
       || error.message 
       || "Failed to express interest";
       
     toast.error(errorMessage);
     
-    // Optional: Refresh interests if conflict occurs
     if (error.response?.status === 409) {
+      // Interest already exists, refresh the data
       fetchMyInterests();
+      fetchAvailableRequests();
     }
   }
 };
+
 
   const isRequestRelevant = (request: Request): boolean => {
     if (!provider || !Array.isArray(provider.services)) return false;
@@ -988,14 +1105,32 @@ const handleRefresh = async () => {
   );
 };
 
-  const renderRequestActions = (request: ClientRequest) => {
+const renderRequestActions = (request: ClientRequest) => {
   if (!providerId) {
     console.warn('No providerId available');
     return null;
   }
 
   const hasBid = myBids.some(bid => bid.requestId === request.id && bid.status !== 'withdrawn');
-  const hasInterest = request.interests?.some(i => i.providerId === providerId) || false;
+  
+  // Improved interest detection with multiple checks
+  const hasInterest = 
+    // Check in request interests
+    request.interests?.some(i => 
+      Number(i.providerId) === Number(providerId)
+    ) ||
+    // Also check in myInterests state as backup
+    myInterests.some(i => 
+      i.requestId === request.id && Number(i.providerId) === Number(providerId)
+    ) ||
+    false;
+  
+  // Debug logging (remove in production)
+  if (request.interests && request.interests.length > 0) {
+    console.log('Request interests:', request.interests);
+    console.log('Current providerId:', providerId, typeof providerId);
+    console.log('Has interest?', hasInterest);
+  }
   
   // Default to true if property is undefined
   const allowBids = request.allowBids !== false;
@@ -1007,9 +1142,9 @@ const handleRefresh = async () => {
         <button
           onClick={() => handleBidOnRequest(request)}
           disabled={hasBid}
-          className={`flex items-center justify-center px-3 py-2 rounded-md text-sm font-medium ${
+          className={`flex items-center justify-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
             hasBid
-              ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
+              ? 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
               : 'bg-indigo-600 text-white hover:bg-indigo-700'
           }`}
         >
@@ -1022,9 +1157,9 @@ const handleRefresh = async () => {
         <button
           onClick={() => handleExpressInterest(request.id)}
           disabled={hasInterest}
-          className={`flex items-center justify-center px-3 py-2 rounded-md text-sm font-medium ${
+          className={`flex items-center justify-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
             hasInterest
-              ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
+              ? 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
               : 'bg-green-600 text-white hover:bg-green-700'
           }`}
         >
@@ -1033,12 +1168,12 @@ const handleRefresh = async () => {
         </button>
       )}
       
-    <button
+      <button
         onClick={() => {
           setSelectedRequest(request);
           setShowDetailsModal(true);
         }}
-        className="flex items-center justify-center px-3 py-2 bg-gray-100 text-gray-700 rounded-md text-sm font-medium hover:bg-gray-200"
+        className="flex items-center justify-center px-3 py-2 bg-gray-100 text-gray-700 rounded-md text-sm font-medium hover:bg-gray-200 transition-colors"
       >
         <EyeIcon className="h-4 w-4 mr-1" />
         View Details
@@ -1047,6 +1182,47 @@ const handleRefresh = async () => {
   );
 };
 
+// Helper function to get display name
+const getDisplayName = (party: User | ProviderProfile | undefined): string => {
+  if (!party) return 'Unknown';
+  
+  // If it's a User
+  if ('name' in party) {
+    return party.name || party.full_name || 'User';
+  }
+  
+  // If it's a ProviderProfile with user object
+  if (party.user?.fullName) {
+    return party.user.fullName;
+  }
+  
+  // If it's a ProviderProfile without user object
+  return `${party.firstName} ${party.lastName}`.trim() || 'Provider';
+};
+
+// Helper function to get avatar URL
+// Helper type predicates
+function isUser(party: User | ProviderProfile): party is User {
+  return (party as User).role !== undefined;
+}
+
+function isProviderProfile(party: User | ProviderProfile): party is ProviderProfile {
+  return (party as ProviderProfile).firstName !== undefined;
+}
+
+const getAvatarUrl = (party: User | ProviderProfile | undefined): string | undefined => {
+  if (!party) return undefined;
+  
+  if (isUser(party)) {
+    // Handle User case
+    return party.avatar;
+  } else if (isProviderProfile(party)) {
+    // Handle ProviderProfile case
+    return party.user?.avatar || party.profileImageUrl;
+  }
+
+  return undefined;
+};
   return (
     <div className="min-h-screen bg-gray-50">
       {showProfileModal && (
@@ -1184,6 +1360,15 @@ const handleRefresh = async () => {
                 >
                   My Interests ({myInterests.length})
                 </button>
+                 <button
+                   onClick={() => {
+                        setActiveTab('chat');
+                        fetchChatRooms();
+                     }}
+                     className={`${activeTab === 'chat' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-2 px-1 sm:py-3 sm:px-2 border-b-2 font-medium text-xs sm:text-sm`}
+                      >
+                      Messages ({chatRooms.filter(r => (r.unreadCount ?? 0) > 0).length})
+                  </button>
                 <button
   onClick={() => setActiveTab('products')}
   className={`${activeTab === 'products' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
@@ -1465,6 +1650,89 @@ const handleRefresh = async () => {
                   </div>
                 )}
                 {activeTab === 'products' && <ProductManagementSection />}
+
+               
+{activeTab === 'chat' && (
+  <div className="space-y-4">
+    {chatRooms.length === 0 ? (
+      <div className="text-center py-8 bg-white rounded-lg shadow">
+        <div className="text-gray-400 text-lg mb-2">💬</div>
+        <h3 className="text-lg font-medium text-gray-900">No conversations yet</h3>
+        <p className="text-sm text-gray-500">
+          Chat rooms will appear here when clients contact you about your bids or services.
+        </p>
+      </div>
+    ) : (
+      <div className="grid gap-4">
+        {chatRooms.map(room => {
+          const isProvider = room.providerId === user?.userId;
+          const otherParty = isProvider ? room.client : room.provider;
+          const isInterestRoom = room.fromInterest;
+          
+          return (
+            <div 
+              key={room.id}
+              className="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow cursor-pointer"
+              onClick={() => navigate(`/chat/${room.id}`)}
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                   <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
+  {getAvatarUrl(otherParty) ? (
+    <img 
+      src={getAvatarUrl(otherParty)} 
+      alt={getDisplayName(otherParty)}
+      className="w-10 h-10 rounded-full object-cover"
+    />
+  ) : (
+    <span className="text-sm font-medium text-gray-600">
+      {getDisplayName(otherParty)?.charAt(0) || '?'}
+    </span>
+  )}
+</div>
+<div>
+  <h3 className="font-medium text-gray-900">
+    {getDisplayName(otherParty) || 'Client'}
+    {isInterestRoom && (
+                          <span className="ml-2 px-2 py-0.5 text-xs bg-green-100 text-green-800 rounded-full">
+                            From Interest
+                          </span>
+                        )}
+                      </h3>
+                      <p className="text-sm text-gray-500">
+                        {room.request?.productName || `Request #${room.requestId}`}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {room.lastMessage && (
+                    <div className="text-sm text-gray-600">
+                      <p className="truncate">
+                        {room.lastMessage.content}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        {new Date(room.lastMessage.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="text-right">
+                  {(room.unreadCount ?? 0) > 0 && (
+                    <span className="inline-flex items-center justify-center w-6 h-6 text-xs font-medium text-white bg-red-500 rounded-full">
+                      {room.unreadCount}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    )}
+  </div>
+)}
               </>
             )}
           </>

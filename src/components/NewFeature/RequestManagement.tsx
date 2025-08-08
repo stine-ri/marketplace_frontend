@@ -192,6 +192,8 @@ export default function RequestManagement() {
 
     setFilteredRequests(filtered);
   }, [requests, searchTerm, statusFilter, typeFilter, priceRange]);
+  
+// fetch requests
 
   const fetchRequests = async () => {
     setIsLoading(true);
@@ -199,7 +201,7 @@ export default function RequestManagement() {
     try {
       console.log('Fetching all requests...');
       // Since there's no specific admin requests endpoint, we'll assume there's a general requests endpoint
-      const response = await axios.get<Request[]>(`${baseURL}/api/requests`, {
+      const response = await axios.get<Request[]>(`${baseURL}/api/admin/bids/requests`, {
         headers: getAuthHeaders()
       });
       console.log('Requests fetched:', response.data);

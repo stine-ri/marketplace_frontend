@@ -10,6 +10,7 @@ import { Bid } from '../../types/types';
 import { Request } from '../../types/types'; 
 import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
+import { useNavigate } from 'react-router-dom';
 import { parseLocation } from '../../utilis/location';
 export function ClientDashboard() {
   const [requests, setRequests] = useState<Request[]>([]);
@@ -18,11 +19,68 @@ export function ClientDashboard() {
   const [showNewRequestModal, setShowNewRequestModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'active' | 'completed'>('active');
   const [showNotifications, setShowNotifications] = useState(false);
+const [processingInterests, setProcessingInterests] = useState<Record<number, 'accept' | 'reject' | null>>({});
 
   const { user } = useAuth();
   const userId = user?.userId;
 
   const { lastMessage, notifications, unreadCount } = useWebSocket();
+const navigate = useNavigate();
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com';
+
+
+
+const fetchWithAuth = async (
+  url: string,
+  options: RequestInit = {}
+): Promise<Response> => {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      navigate('/login');
+      throw new Error('No authentication token found');
+    }
+
+    const response = await fetch(`${API_BASE_URL}${url}`, {
+      ...options,
+      headers: {
+        ...options.headers,
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (response.status === 404) {
+      // Special handling for chat rooms
+      if (url.includes('/api/chat/')) {
+        const parts = url.split('/');
+        const chatRoomId = parts[parts.length - 1];
+
+        // Attempt to create the chat room if it doesn't exist
+        if (confirm('Chat room not found. Would you like to create it?')) {
+          const createResponse: Response = await fetchWithAuth('/api/chat/from-interest', {
+            method: 'POST',
+            body: JSON.stringify({ interestId: chatRoomId })
+          });
+          return createResponse;
+        }
+      }
+      throw new Error('The requested resource was not found');
+    }
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+    }
+
+    return response;
+  } catch (error) {
+    console.error('Fetch error:', error);
+    throw error;
+  }
+};
+
+
 
 
 const fetchRequests = useCallback(async () => {
@@ -208,20 +266,40 @@ useEffect(() => {
       : request.status === 'closed' || request.status === 'accepted'
   );
 // Add interest handling functions
-// In ClientDashboard.tsx
+
 const handleAcceptInterest = async (requestId: number, interestId: number) => {
   try {
-    const response = await acceptInterest(interestId);
+    setProcessingInterests(prev => ({ ...prev, [interestId]: 'accept' }));
     
+    // 1. Accept the interest and create chat room in one call
+    const response = await api.post(`/api/interests/${interestId}/accept`);
+    
+    console.log('Backend response:', response.data); // Add this for debugging
+    
+    // The backend returns the full chat room object with 'id', not 'chatRoomId'
+    if (!response.data?.id) {
+      throw new Error('Chat room creation failed');
+    }
+    
+    const chatRoomId = response.data.id; // Extract the ID
+  
+    
+    // Skip verification for now since /api/chat/{id}/verify might not exist
+    // await verifyChatRoom(chatRoomId);
+    
+    // 3. Update UI state
     setRequests(prev =>
       prev.map(req =>
         req.id === requestId
           ? {
               ...req,
-              status: 'pending',
               interests: req.interests?.map(interest =>
                 interest.id === interestId
-                  ? { ...interest, status: 'accepted' }
+                  ? {
+                      ...interest,
+                      status: 'accepted',
+                      chatRoomId: chatRoomId
+                    }
                   : interest
               ) || []
             }
@@ -229,21 +307,41 @@ const handleAcceptInterest = async (requestId: number, interestId: number) => {
       )
     );
     
-    // If chat room was created in response
-    if (response.data?.chatRoomId) {
-      toast.success(
+    // 4. Navigate to chat
+    navigate(`/api/chat/chats/${chatRoomId}`);
+    
+  } catch (error) {
+    console.error('Error accepting interest:', error);
+    if (error instanceof Error) {
+      toast.error(
         <div>
-          Interest accepted! <Link to={`/chat/${response.data.chatRoomId}`}>Go to chat</Link>
+          Failed to accept interest: {error.message}
+          <button
+            onClick={() => handleAcceptInterest(requestId, interestId)}
+            className="ml-2 text-blue-500"
+          >
+            Retry
+          </button>
         </div>
       );
     } else {
-      toast.success("Interest accepted successfully!");
+      toast.error(
+        <div>
+          Failed to accept interest
+          <button
+            onClick={() => handleAcceptInterest(requestId, interestId)}
+            className="ml-2 text-blue-500"
+          >
+            Retry
+          </button>
+        </div>
+      );
     }
-  } catch (error) {
-    console.error('Error accepting interest:', error);
-    toast.error("Failed to accept interest");
+  } finally {
+    setProcessingInterests(prev => ({ ...prev, [interestId]: null }));
   }
 };
+
 
 const handleRejectInterest = async (requestId: number, interestId: number) => {
   try {
@@ -263,10 +361,13 @@ const handleRejectInterest = async (requestId: number, interestId: number) => {
           : req
       )
     );
+    
     toast.success("Interest rejected successfully!");
+    return Promise.resolve();
   } catch (error) {
     console.error('Error rejecting interest:', error);
     toast.error("Failed to reject interest");
+    return Promise.reject(error);
   }
 };
 

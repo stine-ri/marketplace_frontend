@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-
+import { FaEye, FaEyeSlash } from 'react-icons/fa';
 type Role = 'admin' | 'service_provider' | 'client';
 
 export default function Register() {
@@ -15,6 +15,9 @@ export default function Register() {
     confirmPassword: ''
   });
   
+   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
   const { register, error, loading } = useAuth();
   const navigate = useNavigate();
 
@@ -22,7 +25,13 @@ export default function Register() {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
+  const togglePasswordVisibility = () => {
+    setShowPassword(!showPassword);
+  };
 
+  const toggleConfirmPasswordVisibility = () => {
+    setShowConfirmPassword(!showConfirmPassword);
+  };
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (formData.password !== formData.confirmPassword) {
@@ -131,6 +140,14 @@ export default function Register() {
               onChange={handleChange}
               placeholder="••••••••"
             />
+            <button
+              type="button"
+              className="absolute inset-y-0 right-0 pr-3 flex items-center mt-6"
+              onClick={togglePasswordVisibility}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+            >
+              {showPassword ? <FaEyeSlash className="text-gray-500" /> : <FaEye className="text-gray-500" />}
+            </button>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700">Confirm password</label>
@@ -143,6 +160,14 @@ export default function Register() {
               onChange={handleChange}
               placeholder="••••••••"
             />
+            <button
+              type="button"
+              className="absolute inset-y-0 right-0 pr-3 flex items-center mt-6"
+              onClick={toggleConfirmPasswordVisibility }
+              aria-label={showPassword ? "Hide password" : "Show password"}
+            >
+              {showPassword ? <FaEyeSlash className="text-gray-500" /> : <FaEye className="text-gray-500" />}
+            </button>
           </div>
           <button
             type="submit"

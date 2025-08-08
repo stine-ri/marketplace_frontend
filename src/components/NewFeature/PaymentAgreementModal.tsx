@@ -1,16 +1,13 @@
 // components/PaymentAgreementModal.tsx
 import { useState } from 'react';
 import { Dialog } from '@headlessui/react';
+import { CreateAgreementDto, PaymentMethod } from '../../types/payment';
 
 interface PaymentAgreementModalProps {
   isOpen: boolean;
   onClose: () => void;
   chatRoomId: number;
-  onAgreementReached: (agreement: {
-    amount: number;
-    paymentMethod: string;
-    terms: string;
-  }) => void;
+  onAgreementReached: (agreement: CreateAgreementDto) => Promise<void>;
 }
 
 export function PaymentAgreementModal({
@@ -20,19 +17,24 @@ export function PaymentAgreementModal({
   onAgreementReached
 }: PaymentAgreementModalProps) {
   const [amount, setAmount] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('mpesa');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('mpesa');
   const [terms, setTerms] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!amount || isNaN(parseFloat(amount))) {
+      return;
+    }
+
     setIsSubmitting(true);
     
     try {
       await onAgreementReached({
         amount: parseFloat(amount),
         paymentMethod,
-        terms
+        terms: terms.trim() || undefined
       });
       onClose();
     } catch (error) {
@@ -71,11 +73,12 @@ export function PaymentAgreementModal({
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Payment Method
           </label>
-          <select
-            value={paymentMethod}
-            onChange={(e) => setPaymentMethod(e.target.value)}
-            className="w-full border border-gray-300 rounded-md px-3 py-2"
-          >
+         <select
+  value={paymentMethod}
+  onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
+  className="w-full border border-gray-300 rounded-md px-3 py-2"
+>
+
             <option value="mpesa">M-Pesa</option>
             <option value="cash">Cash</option>
             <option value="bank">Bank Transfer</option>

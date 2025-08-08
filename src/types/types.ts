@@ -24,6 +24,7 @@ export interface Interest {
   createdAt: string;
   updatedAt:string;
   isShortlisted?:string;
+  chatRoomId?: number;
   status: 'pending' | 'accepted' | 'rejected';
   provider?: {
     id: number;
@@ -133,6 +134,7 @@ export interface ProviderProfile {
   updatedAt: string;
   college: College | null;
   services: Service[];
+
   user?: {
     id: number;
     fullName: string;
@@ -152,6 +154,7 @@ export type User = {
   updatedAt: string;
   isActive?: boolean;
   providerId?: number;
+   avatar?: string;
   providerProfile?: ProviderProfile;
   
   // Backend compatibility fields (optional)
@@ -265,4 +268,46 @@ export interface ProductSale {
     name: string;
     mainImage: string;
   };
+}
+export interface ChatRoom {
+  id: number;
+  requestId: number;
+  clientId: number;
+  providerId: number;
+  status: 'active' | 'closed';
+  createdAt: string;
+  updatedAt: string;
+  lastMessage?: ChatMessage;
+  request?: {
+    productName: string;
+  };
+  unreadCount?: number;
+  client?: User; 
+  provider?: User | ProviderProfile; 
+  fromInterest?: boolean; 
+  
+}
+
+export interface ChatMessage {
+  id: number;
+  chatRoomId: number;
+  senderId: number;
+  content: string;
+  isSystem: boolean;
+  read: boolean;
+  createdAt: string;
+  sender?: {
+    id: number;
+    name: string;
+    avatar?: string;
+  };
+}
+export type CombinedChatRoom = ChatRoom & {
+  fromInterest?: boolean;
+  request?: Request;
+};
+
+export interface InterestWithChatRoom extends Interest {
+  chatRoom: ChatRoom;
+  request: Request;
 }

@@ -6,8 +6,10 @@ const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com',
 });
 // Add to your API service
-export const acceptInterest = (interestId: number) => {
-  return api.post(`/api/interests/${interestId}/accept`);
+// In your api.ts file
+export const acceptInterest = async (interestId: number) => {
+  const response = await api.post(`/api/interests/${interestId}/accept`);
+  return response;
 };
 
 export const rejectInterest = (interestId: number) => {

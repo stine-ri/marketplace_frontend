@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Notification } from '../types/types';
 import { useAuth } from '../context/AuthContext';
+import { toast } from 'react-toastify';
 
 interface NotificationOptions {
   body?: string;
@@ -27,7 +28,7 @@ type WebSocketMessage = {
 const MAX_RECONNECT_ATTEMPTS = 5;
 const RECONNECT_INTERVAL = 5000;
 
-export default function useWebSocket() {
+export default function useWebSocket(userId?: number) {
   const url = import.meta.env.VITE_WS_URL;
   const { user, token } = useAuth();
 
@@ -38,54 +39,59 @@ export default function useWebSocket() {
   const reconnectTimerRef = useRef<number>();
   const [lastMessage, setLastMessage] = useState<any>(null);
 
-  const handleMessage = useCallback((event: MessageEvent) => {
-    try {
-      const message: WebSocketMessage = JSON.parse(event.data);
-      setLastMessage(message);
+// Update the handleMessage function in useWebSocket.ts
+const handleMessage = useCallback((event: MessageEvent) => {
+  try {
+    const message: WebSocketMessage = JSON.parse(event.data);
+    setLastMessage(message);
 
-      switch (message.type) {
-        case 'notification':
-        case 'new_notification': {
-          const notification = message.data as Notification;
-          setNotifications(prev => [notification, ...prev]);
-
-          const showNotification = () => {
-            new Notification(notification.title, {
-              body: notification.message,
-              icon: notification.icon || '/default-notification-icon.png',
-            } as NotificationOptions);
-          };
-
-          if (Notification.permission === 'granted') {
-            showNotification();
-          } else if (Notification.permission !== 'denied') {
-            Notification.requestPermission().then(permission => {
-              if (permission === 'granted') showNotification();
-            });
-          }
-          break;
-        }
-
-        case 'initial_notifications': {
-          if (Array.isArray(message.data)) {
-            setNotifications(message.data);
-          }
-          break;
-        }
-
-        case 'interest_accepted':
-        case 'new_message': {
-          console.log('Received message type:', message.type);
-          break;
-        }
-
-        default:
-          console.warn('Unhandled message type:', message.type);
+    switch (message.type) {
+      case 'notification':
+      case 'new_notification': {
+        const notification = message.data as Notification;
+        setNotifications(prev => [notification, ...prev]);
+        // ... existing notification code ...
+        break;
       }
-    } catch (error) {
-      console.error('WebSocket message error:', error);
+
+      case 'initial_notifications': {
+        if (Array.isArray(message.data)) {
+          setNotifications(message.data);
+        }
+        break;
+      }
+
+      case 'new_message': {
+        // Handle incoming chat messages
+        const { chatRoomId, message: chatMessage } = message.data;
+        // Update your chat state here
+        console.log('New message received:', chatMessage);
+        break;
+      }
+
+      case 'interest_accepted': {
+        // Handle when a client accepts the provider's interest
+        const { requestId, chatRoomId } = message.data;
+        toast.success(`Your interest in request #${requestId} was accepted!`);
+        // You might want to fetch the chat room details here
+        break;
+      }
+
+      case 'chat_room_created': {
+        // Handle when a new chat room is created for an accepted interest
+        const { chatRoom } = message.data;
+        // Update your chat rooms state
+        console.log('New chat room created:', chatRoom);
+        break;
+      }
+
+      default:
+        console.warn('Unhandled message type:', message.type);
     }
-  }, []);
+  } catch (error) {
+    console.error('WebSocket message error:', error);
+  }
+}, []);
 
   const cleanup = useCallback(() => {
     if (socket) {

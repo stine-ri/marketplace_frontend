@@ -13,7 +13,6 @@ export const ProductManagementSection = () => {
   const [productStatusFilter, setProductStatusFilter] = useState<'all' | 'published' | 'draft' | 'archived'>('all');
   const [saleStatusFilter, setSaleStatusFilter] = useState<'all' | 'pending' | 'completed' | 'cancelled'>('all');
 
-// utils/priceFormatter.ts
 
 
   const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com';

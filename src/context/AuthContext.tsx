@@ -19,6 +19,7 @@ export type UserType = {
   longitude?: number;
   services?: number[];
   providerId?: number;
+  avatar?: string; 
   providerProfile?: ProviderProfile;
 };
 
