@@ -15,7 +15,7 @@ export default function Register() {
     confirmPassword: ''
   });
   
-   const [showPassword, setShowPassword] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const { register, error, loading } = useAuth();
@@ -25,6 +25,7 @@ export default function Register() {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
+
   const togglePasswordVisibility = () => {
     setShowPassword(!showPassword);
   };
@@ -32,6 +33,7 @@ export default function Register() {
   const toggleConfirmPasswordVisibility = () => {
     setShowConfirmPassword(!showConfirmPassword);
   };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (formData.password !== formData.confirmPassword) {
@@ -51,10 +53,9 @@ export default function Register() {
         role: formData.role,
         password: formData.password
       });
-      navigate('/login'); // Redirect to login after registration
+      navigate('/login');
     } catch (err: any) {
         console.error("Registration error:", err);
-      // Error handled in auth context
     }
   };
 
@@ -129,46 +130,51 @@ export default function Register() {
               <option value="admin">Administrator</option>
             </select>
           </div>
-          <div>
+          
+          {/* Password field with visibility toggle */}
+          <div className="relative">
             <label className="block text-sm font-medium text-gray-700">Password</label>
             <input
               name="password"
-              type="password"
+              type={showPassword ? "text" : "password"}
               required
-              className="mt-1 p-2 w-full border rounded-md focus:ring-blue-500 focus:border-blue-500"
+              className="mt-1 p-2 w-full border rounded-md focus:ring-blue-500 focus:border-blue-500 pr-10"
               value={formData.password}
               onChange={handleChange}
               placeholder="••••••••"
             />
             <button
               type="button"
-              className="absolute inset-y-0 right-0 pr-3 flex items-center mt-6"
+              className="absolute right-3 top-9 p-1"
               onClick={togglePasswordVisibility}
               aria-label={showPassword ? "Hide password" : "Show password"}
             >
               {showPassword ? <FaEyeSlash className="text-gray-500" /> : <FaEye className="text-gray-500" />}
             </button>
           </div>
-          <div>
+          
+          {/* Confirm Password field with visibility toggle */}
+          <div className="relative">
             <label className="block text-sm font-medium text-gray-700">Confirm password</label>
             <input
               name="confirmPassword"
-              type="password"
+              type={showConfirmPassword ? "text" : "password"}
               required
-              className="mt-1 p-2 w-full border rounded-md focus:ring-blue-500 focus:border-blue-500"
+              className="mt-1 p-2 w-full border rounded-md focus:ring-blue-500 focus:border-blue-500 pr-10"
               value={formData.confirmPassword}
               onChange={handleChange}
               placeholder="••••••••"
             />
             <button
               type="button"
-              className="absolute inset-y-0 right-0 pr-3 flex items-center mt-6"
-              onClick={toggleConfirmPasswordVisibility }
-              aria-label={showPassword ? "Hide password" : "Show password"}
+              className="absolute right-3 top-9 p-1"
+              onClick={toggleConfirmPasswordVisibility}
+              aria-label={showConfirmPassword ? "Hide password" : "Show password"}
             >
-              {showPassword ? <FaEyeSlash className="text-gray-500" /> : <FaEye className="text-gray-500" />}
+              {showConfirmPassword ? <FaEyeSlash className="text-gray-500" /> : <FaEye className="text-gray-500" />}
             </button>
           </div>
+          
           <button
             type="submit"
             disabled={loading}

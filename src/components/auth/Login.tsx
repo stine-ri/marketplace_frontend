@@ -16,47 +16,37 @@ export default function Login() {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
- const togglePasswordVisibility = () => {
+
+  const togglePasswordVisibility = () => {
     setShowPassword(!showPassword);
   };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       const user = await login(formData.email, formData.password);
       
-      // Debug: Log the user object to see what role is returned
-      console.log('Logged in user:', user);
-      console.log('User role:', user?.role);
-      console.log("Token being used:", localStorage.getItem('token'));
-
-      // Redirect based on role with better error handling
       if (user?.role) {
-        switch (user.role.toLowerCase()) { // Convert to lowercase for consistency
+        switch (user.role.toLowerCase()) {
           case 'admin':
-            console.log('Navigating to admin dashboard');
             navigate('/admin/dashboard');
             break;
           case 'service_provider':
-          case 'provider': // Alternative role name
-            console.log('Navigating to provider dashboard');
+          case 'provider':
             navigate('/provider/dashboard');
             break;
           case 'client':
-          case 'customer': // Alternative role name
-            console.log('Navigating to client dashboard');
+          case 'customer':
             navigate('/client/dashboard');
             break;
           default:
-            console.log('Unknown role, navigating to home');
             navigate('/');
         }
       } else {
-        console.log('No role found, navigating to home');
         navigate('/');
       }
     } catch (err) {
       console.error('Login error:', err);
-      // error already handled in context
     }
   };
 
@@ -85,23 +75,23 @@ export default function Login() {
               placeholder="your@email.com"
             />
           </div>
-          <div>
+          <div className="relative">
             <label htmlFor="password" className="block text-sm font-medium text-gray-700">
               Password
             </label>
             <input
               id="password"
               name="password"
-              type="password"
+              type={showPassword ? "text" : "password"}
               required
-              className="mt-1 p-2 w-full border rounded-md focus:ring-blue-500 focus:border-blue-500"
+              className="mt-1 p-2 w-full border rounded-md focus:ring-blue-500 focus:border-blue-500 pr-10"
               value={formData.password}
               onChange={handleChange}
               placeholder="••••••••"
             />
             <button
               type="button"
-              className="absolute inset-y-0 right-0 pr-3 flex items-center mt-6"
+              className="absolute right-3 top-9 p-1"
               onClick={togglePasswordVisibility}
               aria-label={showPassword ? "Hide password" : "Show password"}
             >

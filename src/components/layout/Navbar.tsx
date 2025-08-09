@@ -1,6 +1,6 @@
-import React, { useState, ReactNode } from 'react';
+import React, { useState, ReactNode, useRef, useEffect } from 'react';
 import { Search, Menu, X, User } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import NotificationBell from '../NewFeature/NotificationBell';
 
@@ -10,7 +10,11 @@ interface NavbarProps {
 
 export function Navbar({ children }: NavbarProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
 
   const handleMenuClose = () => setIsMenuOpen(false);
 
@@ -18,6 +22,45 @@ export function Navbar({ children }: NavbarProps) {
     logout();
     setIsMenuOpen(false);
   };
+
+  const handleSearchToggle = () => {
+    setIsSearchOpen(!isSearchOpen);
+    if (!isSearchOpen) {
+      // Focus the input after the state update
+      setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 100);
+    }
+  };
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      // Navigate to search results page with query
+      navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+      setIsSearchOpen(false);
+      setSearchQuery('');
+    }
+  };
+
+  const handleSearchClose = () => {
+    setIsSearchOpen(false);
+    setSearchQuery('');
+  };
+
+  // Close search when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchInputRef.current && !searchInputRef.current.contains(event.target as Node)) {
+        setIsSearchOpen(false);
+      }
+    };
+
+    if (isSearchOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [isSearchOpen]);
 
   return (
     <header className="bg-white shadow-sm sticky top-0 z-50">
@@ -63,12 +106,39 @@ export function Navbar({ children }: NavbarProps) {
 
           {/* Desktop Action Buttons */}
           <div className="hidden lg:flex items-center space-x-3">
-            <button 
-              className="p-2 text-gray-600 hover:text-blue-600 hover:bg-gray-100 rounded-md transition-colors"
-              aria-label="Search"
-            >
-              <Search size={20} />
-            </button>
+            {/* Desktop Search */}
+            <div className="relative">
+              {isSearchOpen ? (
+                <form onSubmit={handleSearchSubmit} className="flex items-center">
+                  <div className="relative">
+                    <input
+                      ref={searchInputRef}
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search services, products..."
+                      className="w-64 pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                    <Search size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSearchClose}
+                    className="ml-2 p-2 text-gray-600 hover:text-red-600 hover:bg-gray-100 rounded-md transition-colors"
+                  >
+                    <X size={18} />
+                  </button>
+                </form>
+              ) : (
+                <button 
+                  onClick={handleSearchToggle}
+                  className="p-2 text-gray-600 hover:text-blue-600 hover:bg-gray-100 rounded-md transition-colors"
+                  aria-label="Search"
+                >
+                  <Search size={20} />
+                </button>
+              )}
+            </div>
             
             {user ? (
               <div className="flex items-center space-x-3">
@@ -107,8 +177,9 @@ export function Navbar({ children }: NavbarProps) {
 
           {/* Mobile/Tablet Action Buttons */}
           <div className="flex lg:hidden items-center space-x-2">
-            {/* Search button for mobile/tablet */}
+            {/* Mobile Search */}
             <button 
+              onClick={handleSearchToggle}
               className="p-2 text-gray-600 hover:text-blue-600 hover:bg-gray-100 rounded-md transition-colors"
               aria-label="Search"
             >
@@ -133,6 +204,32 @@ export function Navbar({ children }: NavbarProps) {
             </button>
           </div>
         </div>
+
+        {/* Mobile Search Bar */}
+        {isSearchOpen && (
+          <div className="lg:hidden mt-4 pb-2">
+            <form onSubmit={handleSearchSubmit}>
+              <div className="relative">
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search services, products..."
+                  className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+                <Search size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <button
+                  type="button"
+                  onClick={handleSearchClose}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 text-gray-600 hover:text-red-600 rounded-md transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
       </div>
 
       {/* Mobile/Tablet Menu */}

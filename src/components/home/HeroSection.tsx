@@ -1,7 +1,118 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search } from 'lucide-react';
+import axios, { AxiosError } from 'axios';
+import { toast } from 'react-hot-toast';
+
+type ResultItem = {
+  id: number | string;
+  name: string;
+  category: string;
+  description: string;
+  price: number;
+  images?: string[];
+  image?: string;
+  provider?: string;
+};
+
 export const HeroSection = () => {
-  return <section className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white py-16 lg:py-24">
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchType, setSearchType] = useState<'services' | 'products'>('services');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showResults, setShowResults] = useState(false);
+
+const handleSearch = async () => {
+  if (!searchQuery.trim()) {
+    toast.error('Please enter a search term');
+    return;
+  }
+
+  setIsSearching(true);
+  setShowResults(true);
+  
+  try {
+    const endpoint = searchType === 'services' 
+      ? '/api/services' 
+      : '/api/products/search'; // Using our new search endpoint
+    
+    const response = await axios.get(endpoint, {
+      params: {
+        q: searchQuery.toLowerCase(), // Changed from 'search' to 'q' to match our endpoint
+        // Add other potential filters here if needed
+        // category: selectedCategory,
+      },
+      timeout: 10000,
+      validateStatus: (status) => status < 500
+    });
+
+    // Handle both array response (from /api/services) and object response (from /api/products/search)
+    const results = Array.isArray(response.data) 
+      ? response.data 
+      : response.data.data || [];
+
+    if (results.length === 0) {
+      setSearchResults([]);
+      toast(`${searchQuery} is not yet in our system, but coming soon!`, {
+        icon: 'ℹ️',
+      });
+    } else {
+      // Format the results to match our expected structure
+      const results: ResultItem[] = []; // or fetched from API
+
+      const formattedResults = results.map((item) => ({
+  id: item.id,
+  name: item.name,
+  category: item.category,
+  description: item.description,
+  price: item.price,
+  images: item.images || (item.image ? [item.image] : []),
+  provider: item.provider || 'Unknown Provider'
+}));
+
+      
+      setSearchResults(formattedResults);
+    }
+  } catch (err) {
+    if (axios.isAxiosError(err)) {
+      console.error('Detailed search error:', {
+        message: err.message,
+        config: err.config,
+        response: err.response?.data
+      });
+
+      if (err.response) {
+        // Server responded with error status
+        toast.error(err.response.data?.error || `Search failed: ${err.response.status}`);
+      } else if (err.request) {
+        // Request was made but no response
+        toast.error('Server is not responding. Please try again later.');
+      } else {
+        // Other errors
+        toast.error('Error setting up search request');
+      }
+    } else if (err instanceof Error) {
+      // Generic non-Axios errors
+      console.error('Non-Axios error:', err.message);
+      toast.error(err.message);
+    } else {
+      // Completely unknown error
+      console.error('Unknown error:', err);
+      toast.error('An unexpected error occurred.');
+    }
+
+    setSearchResults([]);
+  } finally {
+    setIsSearching(false);
+  }
+};
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSearch();
+    }
+  };
+
+  return (
+    <section className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white py-16 lg:py-24 relative">
       <div className="container mx-auto px-4">
         <div className="max-w-3xl mx-auto text-center">
           <h1 className="text-4xl md:text-5xl font-bold mb-6">
@@ -11,40 +122,134 @@ export const HeroSection = () => {
             Discover local service providers and unique products from sellers
             around the world.
           </p>
-          <div className="bg-white rounded-lg p-2 flex items-center shadow-lg max-w-2xl mx-auto">
-            <div className="flex-grow relative">
-              <input type="text" placeholder="What are you looking for?" className="w-full px-4 py-3 text-gray-800 focus:outline-none" />
+          
+          {/* Search Bar */}
+          <div className="bg-white rounded-lg p-2 flex flex-col md:flex-row items-center shadow-lg max-w-2xl mx-auto">
+            <div className="flex-grow relative w-full mb-2 md:mb-0">
+              <input 
+                type="text" 
+                placeholder="What are you looking for?" 
+                className="w-full px-4 py-3 text-gray-800 focus:outline-none rounded-md md:rounded-r-none"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={handleKeyDown}
+              />
             </div>
-            <div className="relative">
-              <select className="appearance-none bg-transparent border-l border-gray-300 px-4 py-3 text-gray-500 focus:outline-none">
+            
+            <div className="relative w-full md:w-auto">
+              <select 
+                className="appearance-none bg-gray-100 border border-gray-300 md:border-l-0 px-4 py-3 text-gray-700 focus:outline-none rounded-md md:rounded-none w-full"
+                value={searchType}
+                onChange={(e) => setSearchType(e.target.value as 'services' | 'products')}
+              >
                 <option value="services">Services</option>
                 <option value="products">Products</option>
               </select>
             </div>
-            <button className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-md flex items-center">
-              <Search size={20} className="mr-2" />
-              Search
+            
+            <button 
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-md flex items-center justify-center w-full md:w-auto mt-2 md:mt-0 md:rounded-l-none"
+              onClick={handleSearch}
+              disabled={isSearching}
+            >
+              {isSearching ? (
+                <span className="flex items-center">
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Searching...
+                </span>
+              ) : (
+                <span className="flex items-center">
+                  <Search size={20} className="mr-2" />
+                  Search
+                </span>
+              )}
             </button>
           </div>
+          
+          {/* Search Results */}
+          {showResults && (
+            <div className="mt-4 bg-white rounded-lg shadow-lg max-w-2xl mx-auto text-left max-h-96 overflow-y-auto">
+              {searchResults.length === 0 ? (
+                <div className="p-4 text-gray-700">
+                  No {searchType} found for "{searchQuery}". Coming soon!
+                </div>
+              ) : (
+                <ul className="divide-y divide-gray-200">
+                  {searchResults.map((item) => (
+                    <li key={item.id} className="p-4 hover:bg-gray-50 transition-colors">
+                      <div className="flex items-start">
+                        {item.images?.[0] && (
+                          <img 
+                            src={item.images[0]} 
+                            alt={item.name} 
+                            className="w-16 h-16 object-cover rounded-md mr-4"
+                          />
+                        )}
+                        <div>
+                          <h3 className="font-medium text-gray-900">{item.name}</h3>
+                          <p className="text-sm text-gray-500">{item.category}</p>
+                          {item.description && (
+                            <p className="text-sm text-gray-600 mt-1">{item.description}</p>
+                          )}
+                          {item.price && (
+                            <p className="text-sm font-medium text-blue-600 mt-1">
+                              ${parseFloat(item.price).toFixed(2)}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+          
+          {/* Popular Searches */}
           <div className="mt-8 flex flex-wrap justify-center gap-4 text-sm">
             <span className="text-blue-100">Popular:</span>
-            <a href="#" className="text-white hover:underline">
-              Web Design
-            </a>
-            <a href="#" className="text-white hover:underline">
-              Home Cleaning
-            </a>
-            <a href="#" className="text-white hover:underline">
-              Electronics
-            </a>
-            <a href="#" className="text-white hover:underline">
+            <button 
+              onClick={() => {
+                setSearchQuery('Cleaning');
+                setSearchType('services');
+              }} 
+              className="text-white hover:underline"
+            >
+              Cleaning
+            </button>
+            <button 
+              onClick={() => {
+                setSearchQuery('Plumbing');
+                setSearchType('services');
+              }} 
+              className="text-white hover:underline"
+            >
+              Plumbing
+            </button>
+            <button 
+              onClick={() => {
+                setSearchQuery('Furniture');
+                setSearchType('products');
+              }} 
+              className="text-white hover:underline"
+            >
+              Furniture
+            </button>
+            <button 
+              onClick={() => {
+                setSearchQuery('Handmade Crafts');
+                setSearchType('products');
+              }} 
+              className="text-white hover:underline"
+            >
               Handmade Crafts
-            </a>
-            <a href="#" className="text-white hover:underline">
-              Tutoring
-            </a>
+            </button>
           </div>
         </div>
       </div>
-    </section>;
+    </section>
+  );
 };
