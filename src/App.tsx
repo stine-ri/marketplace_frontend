@@ -22,7 +22,7 @@ import Seller from './pages/Seller';
 import { ChatList } from './components/Chat/ChatList';
 import { ChatWindow } from './components/Chat/ChatWindow';
 import { ToastContainer } from 'react-toastify';
-
+import { ProductDetail } from './components/NewFeature/ProductDetail';
 import 'react-toastify/dist/ReactToastify.css';
 export function App() {
   return (
@@ -62,6 +62,7 @@ function AppContent() {
           <Route path="/become-seller" element={<Seller/>} />
           <Route path="/chat" element={<ChatList />} />
           <Route path="/chat/:chatRoomId" element={<ChatWindow />} />
+          <Route path="/products/:id" element={<ProductDetail />} />
           {/* Provider Dashboard Route */}
           <Route
             path="/provider/dashboard"

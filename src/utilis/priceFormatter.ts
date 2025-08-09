@@ -1,13 +1,15 @@
 export const formatPrice = (price: string | number): string => {
-  // Convert to number if it's a string
   const numericPrice = typeof price === 'string' ? parseFloat(price) : price;
-  
-  // Handle invalid numbers
+
   if (isNaN(numericPrice)) {
     console.warn('Invalid price value:', price);
-    return '$0.00';
+    return 'Ksh 0.00';
   }
-  
-  // Format with 2 decimal places
-  return `$${numericPrice.toFixed(2)}`;
+
+  return new Intl.NumberFormat('en-KE', {
+    style: 'currency',
+    currency: 'KES',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(numericPrice);
 };

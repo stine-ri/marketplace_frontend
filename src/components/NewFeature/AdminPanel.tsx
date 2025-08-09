@@ -6,6 +6,7 @@ import { getAuthHeaders, isAdmin } from '../../utilis/auth';
 import UserManagement from './UserManagement';
 import BidManagement from '../NewFeature/BidsManagement';
 import RequestManagement from '../NewFeature/RequestManagement';
+import InterestsManagement from './InterestManagement';
 import { 
   FiSearch, 
   FiTrash2, 
@@ -23,7 +24,7 @@ import {
 
 const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com';
 
-type AdminSection = 'services' | 'colleges' | 'users' | 'bids' | 'requests' | 'settings';
+type AdminSection = 'services' | 'colleges' | 'users' | 'bids' | 'requests' |  'interests' |'settings';
 
 export default function AdminPanel() {
   const [services, setServices] = useState<Service[]>([]);
@@ -199,6 +200,7 @@ export default function AdminPanel() {
     { id: 'requests', label: 'Request Management', icon: FiMessageSquare },
     { id: 'bids', label: 'Bid Management', icon: FiDollarSign },
     { id: 'settings', label: 'Settings', icon: FiSettings },
+    { id: 'interests', label: 'Interests Management', icon: FiUsers },
   ];
 
   // Check admin access
@@ -302,7 +304,10 @@ export default function AdminPanel() {
             <BidManagement />
           ) : activeSection === 'requests' ? (
             <RequestManagement />
+          ) : activeSection === 'interests' ? (
+            <InterestsManagement />
           ) : activeSection === 'settings' ? (
+            
             <div className="p-6">
               <div className="bg-white rounded-lg shadow-sm border p-6">
                 <h3 className="text-lg font-semibold mb-4">System Settings</h3>

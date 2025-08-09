@@ -20,7 +20,9 @@ import {
   FiMapPin,
   FiPackage,
   FiEdit,
-  FiTrash2
+  FiTrash2,
+  FiChevronLeft,
+  FiChevronRight
 } from 'react-icons/fi';
 
 // Types for request data structure
@@ -72,6 +74,18 @@ interface Bid {
   };
 }
 
+interface ApiResponse {
+  success: boolean;
+  data: Request[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+  error?: string;
+}
+
 const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com';
 
 export default function RequestManagement() {
@@ -81,10 +95,16 @@ export default function RequestManagement() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [typeFilter, setTypeFilter] = useState<string>('all'); // service or product
+  const [typeFilter, setTypeFilter] = useState<string>('all');
   const [priceRange, setPriceRange] = useState<string>('all');
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<Request | null>(null);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 1
+  });
 
   // Helper functions
   const getClientName = (request: Request) => {
@@ -133,15 +153,6 @@ export default function RequestManagement() {
     return 'high';
   };
 
-  const parseLocation = (locationStr?: string) => {
-    if (!locationStr) return null;
-    try {
-      return JSON.parse(locationStr);
-    } catch {
-      return null;
-    }
-  };
-
   // Check admin status and fetch requests
   useEffect(() => {
     if (!isAdmin()) {
@@ -149,13 +160,12 @@ export default function RequestManagement() {
       return;
     }
     fetchRequests();
-  }, []);
+  }, [pagination.page, pagination.limit]);
 
   // Filter requests based on search, status, type, and price range
   useEffect(() => {
     let filtered = requests;
 
-    // Apply search filter
     if (searchTerm) {
       filtered = filtered.filter(request => {
         const clientName = getClientName(request).toLowerCase();
@@ -171,48 +181,94 @@ export default function RequestManagement() {
       });
     }
 
-    // Apply status filter
     if (statusFilter !== 'all') {
       filtered = filtered.filter(request => request.status === statusFilter);
     }
 
-    // Apply type filter
     if (typeFilter !== 'all') {
-      if (typeFilter === 'service') {
-        filtered = filtered.filter(request => request.isService);
-      } else if (typeFilter === 'product') {
-        filtered = filtered.filter(request => !request.isService);
-      }
+      filtered = filtered.filter(request => 
+        typeFilter === 'service' ? request.isService : !request.isService
+      );
     }
 
-    // Apply price range filter
     if (priceRange !== 'all') {
-      filtered = filtered.filter(request => getPriceRangeFilter(request.desiredPrice) === priceRange);
+      filtered = filtered.filter(request => 
+        getPriceRangeFilter(request.desiredPrice) === priceRange
+      );
     }
 
     setFilteredRequests(filtered);
   }, [requests, searchTerm, statusFilter, typeFilter, priceRange]);
-  
-// fetch requests
 
-  const fetchRequests = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      console.log('Fetching all requests...');
-      // Since there's no specific admin requests endpoint, we'll assume there's a general requests endpoint
-      const response = await axios.get<Request[]>(`${baseURL}/api/admin/bids/requests`, {
-        headers: getAuthHeaders()
+const fetchRequests = async () => {
+  setIsLoading(true);
+  setError(null);
+  try {
+    // Debug log to verify the exact request being made
+    console.log('Making request to:', `${baseURL}/api/admin/requests`, {
+      params: {
+        page: pagination.page,
+        limit: pagination.limit,
+        status: statusFilter !== 'all' ? statusFilter : undefined,
+        search: searchTerm || undefined
+      },
+      headers: getAuthHeaders()
+    });
+
+    const response = await axios.get(`${baseURL}/api/admin/bids/requests`, {
+      headers: getAuthHeaders(),
+      params: {
+        page: pagination.page.toString(),  // Ensure string type
+        limit: pagination.limit.toString(), // Ensure string type
+        ...(statusFilter !== 'all' && { status: statusFilter }),
+        ...(searchTerm && { search: searchTerm })
+      }
+    });
+
+    if (response.data.success) {
+      setRequests(response.data.data);
+      setPagination({
+        ...pagination,
+        total: response.data.pagination.total,
+        totalPages: response.data.pagination.totalPages
       });
-      console.log('Requests fetched:', response.data);
-      setRequests(response.data);
-    } catch (err: any) {
-      console.error('Error fetching requests:', err);
-      setError(err.response?.data?.message || 'Failed to fetch requests');
-    } finally {
-      setIsLoading(false);
+    } else {
+      setError(response.data.error || 'Failed to fetch requests');
+    }
+  } catch (err: any) {
+    console.error('Full error details:', {
+      message: err.message,
+      response: err.response?.data,
+      config: err.config
+    });
+    
+    if (err.response) {
+      if (err.response.status === 400) {
+        setError(err.response.data?.error || 
+                err.response.data?.message || 
+                'Invalid request parameters. Please check your filters.');
+      } else {
+        setError(err.response.data?.message || 'Failed to fetch requests');
+      }
+    } else {
+      setError('Network error. Please check your connection.');
+    }
+  } finally {
+    setIsLoading(false);
+  }
+};
+
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= pagination.totalPages) {
+      setPagination({ ...pagination, page: newPage });
     }
   };
+
+  const handleLimitChange = (newLimit: number) => {
+    setPagination({ ...pagination, limit: newLimit, page: 1 });
+  };
+
 
   const handleUpdateRequestStatus = async (requestId: number, newStatus: string) => {
     if (!window.confirm(`Are you sure you want to change this request status to ${newStatus}?`)) {
@@ -363,6 +419,7 @@ export default function RequestManagement() {
             className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && fetchRequests()}
           />
         </div>
         
@@ -370,17 +427,15 @@ export default function RequestManagement() {
           <div className="flex items-center gap-2">
             <FiFilter className="text-gray-400" />
             <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="all">All Status</option>
-              <option value="open">Open</option>
-              <option value="in_progress">In Progress</option>
-              <option value="completed">Completed</option>
-              <option value="closed">Closed</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
+  value={statusFilter}
+  onChange={(e) => setStatusFilter(e.target.value)}
+  className="border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+>
+  <option value="all">All Status</option>
+  <option value="open">Open</option>
+  <option value="in_progress">In Progress</option>
+  <option value="completed">Completed</option>
+</select>
           </div>
 
           <select
@@ -432,6 +487,43 @@ export default function RequestManagement() {
                   Retry loading requests
                 </button>
               )}
+
+              {/* Pagination Controls */}
+      <div className="flex flex-col sm:flex-row items-center justify-between mt-4 gap-4">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-600">Rows per page:</span>
+          <select
+            value={pagination.limit}
+            onChange={(e) => handleLimitChange(Number(e.target.value))}
+            className="border rounded-lg px-2 py-1 text-sm"
+          >
+            <option value="10">10</option>
+            <option value="20">20</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-600">
+            Page {pagination.page} of {pagination.totalPages}
+          </span>
+          <button
+            onClick={() => handlePageChange(pagination.page - 1)}
+            disabled={pagination.page <= 1}
+            className="p-1 rounded disabled:opacity-50"
+          >
+            <FiChevronLeft />
+          </button>
+          <button
+            onClick={() => handlePageChange(pagination.page + 1)}
+            disabled={pagination.page >= pagination.totalPages}
+            className="p-1 rounded disabled:opacity-50"
+          >
+            <FiChevronRight />
+          </button>
+        </div>
+      </div>
             </div>
           ) : (
             <div className="overflow-x-auto">

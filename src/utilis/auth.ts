@@ -1,7 +1,10 @@
 // utilis/auth.ts
 export const getAuthHeaders = () => {
   const token = localStorage.getItem('token');
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  return {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
+  };
 };
 
 export const isAdmin = () => {

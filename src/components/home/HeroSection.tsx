@@ -16,95 +16,91 @@ type ResultItem = {
 
 export const HeroSection = () => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchType, setSearchType] = useState<'services' | 'products'>('services');
+  const [searchType, setSearchType] = useState<'services' | 'products' | 'productsAll'>('services');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showResults, setShowResults] = useState(false);
 
 const handleSearch = async () => {
-  if (!searchQuery.trim()) {
+  // Only require search term for services and products search (not for productsAll)
+  if (!searchQuery.trim() && searchType !== 'productsAll') {
     toast.error('Please enter a search term');
     return;
   }
 
   setIsSearching(true);
   setShowResults(true);
-  
+
   try {
-    const endpoint = searchType === 'services' 
-      ? '/api/services' 
-      : '/api/products/search'; // Using our new search endpoint
-    
+    let endpoint = '';
+    let params = {};
+
+    switch (searchType) {
+      case 'services':
+        endpoint = 'https://mkt-backend-sz2s.onrender.com/api/services';
+        params = { q: searchQuery.toLowerCase() };
+        break;
+      case 'products':
+        endpoint = 'https://mkt-backend-sz2s.onrender.com/api/products/search';
+        params = { q: searchQuery.toLowerCase() };
+        break;
+      case 'productsAll':
+        endpoint = 'https://mkt-backend-sz2s.onrender.com/api/products';
+        params = {}; // No search params for productsAll
+        break;
+      default:
+        throw new Error('Invalid search type');
+    }
+
     const response = await axios.get(endpoint, {
-      params: {
-        q: searchQuery.toLowerCase(), // Changed from 'search' to 'q' to match our endpoint
-        // Add other potential filters here if needed
-        // category: selectedCategory,
-      },
+      params,
       timeout: 10000,
-      validateStatus: (status) => status < 500
+      validateStatus: (status) => status < 500,
     });
 
-    // Handle both array response (from /api/services) and object response (from /api/products/search)
-    const results = Array.isArray(response.data) 
+    // Handle different response formats
+    const apiResults = Array.isArray(response.data) 
       ? response.data 
-      : response.data.data || [];
+      : response.data?.data || [];
 
-    if (results.length === 0) {
+    if (apiResults.length === 0) {
       setSearchResults([]);
-      toast(`${searchQuery} is not yet in our system, but coming soon!`, {
-        icon: 'ℹ️',
-      });
+      toast(
+        searchType === 'productsAll'
+          ? 'No products found'
+          : `${searchQuery} is not yet in our system, but coming soon!`,
+        { icon: 'ℹ️' }
+      );
     } else {
-      // Format the results to match our expected structure
-      const results: ResultItem[] = []; // or fetched from API
+      const formattedResults = apiResults.map((item: any) => ({
+        id: item.id,
+        name: item.name,
+        category: item.category,
+        description: item.description,
+        price: item.price || null,
+        images: item.images || (item.image ? [item.image] : []),
+        provider: item.provider || 'Unknown Provider',
+      }));
 
-      const formattedResults = results.map((item) => ({
-  id: item.id,
-  name: item.name,
-  category: item.category,
-  description: item.description,
-  price: item.price,
-  images: item.images || (item.image ? [item.image] : []),
-  provider: item.provider || 'Unknown Provider'
-}));
-
-      
       setSearchResults(formattedResults);
     }
-  } catch (err) {
+  } catch (err: any) {
+    console.error('Search error:', err);
+    
+    let errorMessage = 'Failed to search. Please try again.';
     if (axios.isAxiosError(err)) {
-      console.error('Detailed search error:', {
-        message: err.message,
-        config: err.config,
-        response: err.response?.data
-      });
-
-      if (err.response) {
-        // Server responded with error status
-        toast.error(err.response.data?.error || `Search failed: ${err.response.status}`);
-      } else if (err.request) {
-        // Request was made but no response
-        toast.error('Server is not responding. Please try again later.');
-      } else {
-        // Other errors
-        toast.error('Error setting up search request');
-      }
+      errorMessage = err.response?.data?.error || err.message;
     } else if (err instanceof Error) {
-      // Generic non-Axios errors
-      console.error('Non-Axios error:', err.message);
-      toast.error(err.message);
-    } else {
-      // Completely unknown error
-      console.error('Unknown error:', err);
-      toast.error('An unexpected error occurred.');
+      errorMessage = err.message;
     }
 
+    toast.error(errorMessage);
     setSearchResults([]);
   } finally {
     setIsSearching(false);
   }
 };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       handleSearch();
