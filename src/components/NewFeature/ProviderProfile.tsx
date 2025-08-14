@@ -8,6 +8,25 @@ interface ProviderProfileProps {
   services: Service[];
 }
 
+// Price formatting utility function
+const formatPrice = (price: string | number | undefined | null): string => {
+  // Handle undefined/null cases
+  if (price === undefined || price === null) {
+    return 'KSh 0.00';
+  }
+
+  // Convert to number if it's a string
+  const numericPrice = typeof price === 'string' ? parseFloat(price) : price;
+
+  // Handle NaN cases
+  if (isNaN(numericPrice)) {
+    return 'KSh 0.00';
+  }
+
+  // Format with KSh prefix and comma separators
+  return `KSh ${numericPrice.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
+};
+
 export default function ProviderProfile({ profile, colleges, services }: ProviderProfileProps) {
   const [currentCollege, setCurrentCollege] = useState<College | null>(null);
   const [selectedServices, setSelectedServices] = useState<Service[]>([]);
@@ -19,11 +38,18 @@ export default function ProviderProfile({ profile, colleges, services }: Provide
       if (college) setCurrentCollege(college);
     }
 
-    // Map service IDs to service objects
+    // Map service IDs to service objects and include pricing from profile
     if (profile.services && services.length > 0) {
       const matchedServices = services.filter(service => 
         profile.services.some(s => s.id === service.id)
-      );
+      ).map(service => {
+        // Find the pricing from profile services
+        const profileService = profile.services.find(s => s.id === service.id);
+        return {
+          ...service,
+          price: profileService?.price || service.price
+        };
+      });
       setSelectedServices(matchedServices);
     }
   }, [profile, colleges, services]);
@@ -95,18 +121,27 @@ export default function ProviderProfile({ profile, colleges, services }: Provide
       
       {/* Main Profile Content */}
       <div className="p-6 md:p-8">
-        {/* Services Section */}
+        {/* Services Section with Pricing */}
         {selectedServices.length > 0 && (
           <div className="mb-8">
-            <h2 className="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">Services Offered</h2>
-            <div className="flex flex-wrap gap-2">
+            <h2 className="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">Services & Pricing</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {selectedServices.map(service => (
-                <span 
-                  key={service.id}
-                  className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium"
-                >
-                  {service.name}
-                </span>
+                <div key={service.id} className="bg-gray-50 p-4 rounded-lg">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className="font-medium text-gray-800">{service.name}</h3>
+                      {service.description && (
+                        <p className="text-sm text-gray-600 mt-1">{service.description}</p>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <span className="text-lg font-semibold text-blue-600">
+                        {formatPrice(service.price)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
               ))}
             </div>
           </div>
@@ -150,9 +185,37 @@ export default function ProviderProfile({ profile, colleges, services }: Provide
             <p className="text-gray-700 whitespace-pre-line">{profile.bio}</p>
           </div>
         )}
+
+        {/* Past Works Section */}
+        {profile.pastWorks && profile.pastWorks.length > 0 && (
+          <div className="mb-8">
+            <h2 className="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">Portfolio</h2>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {profile.pastWorks.map((work, index) => (
+                <div key={index} className="bg-gray-50 rounded-lg overflow-hidden">
+                  <div className="aspect-w-1 aspect-h-1">
+                    <img
+                      src={work.imageUrl}
+                      alt={work.description || `Portfolio item ${index + 1}`}
+                      className="w-full h-48 object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = '/default-work.png';
+                      }}
+                    />
+                  </div>
+                  {work.description && (
+                    <div className="p-3">
+                      <p className="text-sm text-gray-600">{work.description}</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         
         {/* Stats Section */}
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 bg-gray-50 p-4 rounded-lg">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-gray-50 p-4 rounded-lg">
           <div className="text-center">
             <div className="text-2xl font-bold text-blue-600">{profile.completedRequests || 0}</div>
             <div className="text-sm text-gray-500">Completed Requests</div>
@@ -166,6 +229,15 @@ export default function ProviderProfile({ profile, colleges, services }: Provide
           <div className="text-center">
             <div className="text-2xl font-bold text-blue-600">{selectedServices.length}</div>
             <div className="text-sm text-gray-500">Services Offered</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-blue-600">
+              {selectedServices.length > 0 
+                ? formatPrice(Math.min(...selectedServices.map(s => s.price || 0).filter(p => p > 0)))
+                : 'N/A'
+              }
+            </div>
+            <div className="text-sm text-gray-500">Starting From</div>
           </div>
         </div>
       </div>

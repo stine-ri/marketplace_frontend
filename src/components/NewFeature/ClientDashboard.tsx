@@ -3,17 +3,17 @@ import api from '../../api/api';
 import { acceptInterest, rejectInterest, getRequestInterests } from '../../api/api';
 import { ClientRequestCard } from '../NewFeature/CllientRequesrCard';
 import useWebSocket from '../../hooks/useWebSocket';
-import { PlusIcon, BellIcon, ArrowPathIcon, ShoppingBagIcon, Bars3Icon, XMarkIcon, FunnelIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, BellIcon, ArrowPathIcon, ShoppingBagIcon, Bars3Icon, XMarkIcon, FunnelIcon, ReceiptPercentIcon  } from '@heroicons/react/24/outline';
 import { NewRequestModal } from '../NewFeature/NewRequestModal';
 import { useAuth } from '../../context/AuthContext';
 import { Bid, Request } from '../../types/types'; 
 import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
-import { parseLocation } from '../../utilis/location';
 import { ProductFilterModal } from '../NewFeature/ProductFilterModal';
 import { ProductCard } from '../NewFeature/ProductCard';
-
+import { PurchaseHistoryCard } from '../NewFeature/PurchaseHistoryCard';
+import { PurchaseModal } from '../NewFeature/PurchaseModal';
 export function ClientDashboard() {
   // Existing state
   const [requests, setRequests] = useState<Request[]>([]);
@@ -39,22 +39,47 @@ export function ClientDashboard() {
   const { user } = useAuth();
   const userId = user?.userId;
   const { lastMessage, notifications, unreadCount } = useWebSocket();
+  const [showPurchaseModal, setShowPurchaseModal] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [purchaseHistory, setPurchaseHistory] = useState<any[]>([]);
+  const [loadingPurchases, setLoadingPurchases] = useState(false);
+  const [activeMainTab, setActiveMainTab] = useState<'requests' | 'marketplace' | 'purchases'>('requests');
   const navigate = useNavigate();
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com';
 
-  // Add Product interface if not already defined
+  // Add Product interface
   interface Product {
     id: number;
     name: string;
     price: string;
-    images: string[];
+    description: string;
+    images: string[];  
+    image?: string | null; 
+    primaryImage?: string | null;  
+  imageUrl?: string | null;      
     provider: {
       firstName: string;
       lastName: string;
-      rating: number;
-      profileImageUrl: string;
+      rating?: number;
+      profileImageUrl?: string;
     };
   }
+
+  interface Purchase {
+  id: number;
+  product: {
+    name: string;
+    price: string;
+    image: string;
+    provider: string;
+  };
+  quantity: number;
+  totalPrice: string;
+  status: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
+  createdAt: string;
+}
+
+
 
   const fetchWithAuth = async (
     url: string,
@@ -393,25 +418,80 @@ export function ClientDashboard() {
     }
   };
 
-  // function to fetch products
+  // FIXED: function to fetch products with proper image URL handling
+  
   const fetchProducts = useCallback(async () => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) return;
 
-      const params = new URLSearchParams();
-      if (productFilters.category) params.append('category', productFilters.category);
-      if (productFilters.minPrice) params.append('minPrice', productFilters.minPrice);
-      if (productFilters.maxPrice) params.append('maxPrice', productFilters.maxPrice);
-      if (productFilters.collegeId) params.append('collegeId', productFilters.collegeId);
+    const params = new URLSearchParams();
+    if (productFilters.category) params.append('category', productFilters.category);
+    if (productFilters.minPrice) params.append('minPrice', productFilters.minPrice);
+    if (productFilters.maxPrice) params.append('maxPrice', productFilters.maxPrice);
+    if (productFilters.collegeId) params.append('collegeId', productFilters.collegeId);
 
-      const response = await api.get<Product[]>(`/api/products?${params.toString()}`);
-      setProducts(response.data);
-    } catch (error) {
-      console.error('Error fetching products:', error);
-      toast.error('Failed to load products');
-    }
-  }, [productFilters]);
+    const response = await api.get<Product[]>(`/api/client/products?${params.toString()}`);
+    
+    // Helper function to normalize ONLY if needed
+    const normalizeImageUrl = (imageUrl: string | null | undefined): string | null => {
+      if (!imageUrl) return null;
+      
+      // If it's already an absolute URL, don't modify it
+      if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+        return imageUrl;
+      }
+      
+      // Only normalize relative URLs
+      if (imageUrl.startsWith('/')) {
+        return `${API_BASE_URL}${imageUrl}`;
+      }
+      
+      return `${API_BASE_URL}/${imageUrl}`;
+    };
+
+    // Process products - backend should already have normalized images
+    const productsWithImages = response.data.map(product => {
+      console.log(`Raw product ${product.id}:`, {
+        images: product.images,
+        imageCount: product.images?.length || 0
+      }); // Debug log
+
+      // The backend already normalizes images, so we should use them directly
+      // Only apply normalization if the images are still relative paths
+      const processedImages = (product.images || []).map(imageUrl => {
+        const normalized = normalizeImageUrl(imageUrl);
+        console.log(`Image normalization: ${imageUrl} -> ${normalized}`);
+        return normalized;
+      }).filter(Boolean);
+
+      return {
+        ...product,
+        images: processedImages,
+        // Handle any legacy single image properties
+        primaryImage: processedImages[0] || null,
+        // Normalize provider profile image
+        provider: product.provider ? {
+          ...product.provider,
+          profileImageUrl: normalizeImageUrl(product.provider.profileImageUrl)
+        } : product.provider
+      };
+    });
+    
+    console.log('Final processed products:', productsWithImages.map(p => ({
+      id: p.id,
+      name: p.name,
+      imageCount: p.images.length,
+      firstImage: p.images[0]
+    })));
+    
+    setProducts(productsWithImages);
+  } catch (error) {
+    console.error('Error fetching products:', error);
+    toast.error('Failed to load products');
+  }
+}, [productFilters, API_BASE_URL]);
+
 
   // Update the effect to fetch products
   useEffect(() => {
@@ -430,6 +510,186 @@ export function ClientDashboard() {
     setShowNotifications(!showNotifications);
   };
 
+// purchase a product
+const handlePurchaseProduct = async (productId: number, purchaseData: {
+  quantity: number;
+  paymentMethod: string;
+  shippingAddress: string;
+}) => {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+
+    // Validate required fields before sending
+    if (!purchaseData.quantity || purchaseData.quantity <= 0) {
+      throw new Error('Invalid quantity specified');
+    }
+    
+    if (!purchaseData.paymentMethod?.trim()) {
+      throw new Error('Payment method is required');
+    }
+    
+    if (!purchaseData.shippingAddress?.trim()) {
+      throw new Error('Shipping address is required');
+    }
+
+    console.log('=== Purchase Request Debug ===');
+    console.log('Product ID:', productId);
+    console.log('Purchase Data:', purchaseData);
+    console.log('Token present:', !!token);
+
+    // Try the primary endpoint first with better error handling
+    const requestBody = {
+      quantity: Number(purchaseData.quantity),
+      paymentMethod: purchaseData.paymentMethod.trim(),
+      shippingAddress: purchaseData.shippingAddress.trim()
+    };
+
+    console.log('Request Body:', requestBody);
+
+    const response = await fetch(`${API_BASE_URL}/api/client/products/${productId}/purchase`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    console.log('Response status:', response.status);
+    console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+
+    // Get response text first
+    const responseText = await response.text();
+    console.log('Raw response:', responseText);
+
+    let responseData;
+    try {
+      responseData = responseText ? JSON.parse(responseText) : {};
+    } catch (parseError) {
+      console.error('Failed to parse response as JSON:', parseError);
+      console.error('Raw response that failed to parse:', responseText);
+      throw new Error(`Invalid server response: ${responseText.substring(0, 100)}...`);
+    }
+
+    if (response.ok) {
+      console.log('✅ Purchase successful:', responseData);
+      
+      // Call fetchPurchaseHistory if it exists
+      if (typeof fetchPurchaseHistory === 'function') {
+        fetchPurchaseHistory();
+      }
+      
+      return responseData;
+    } else {
+      // Enhanced error handling for different status codes
+      console.error('❌ Purchase failed:', {
+        status: response.status,
+        statusText: response.statusText,
+        responseData
+      });
+
+      let errorMessage = 'Purchase failed';
+      
+      switch (response.status) {
+        case 400:
+          errorMessage = responseData?.error || 'Invalid request data';
+          break;
+        case 401:
+          errorMessage = 'Authentication failed';
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          window.location.href = '/login';
+          return;
+        case 403:
+          errorMessage = 'Access denied';
+          break;
+        case 404:
+          errorMessage = 'Product not found or endpoint unavailable';
+          break;
+        case 500:
+          errorMessage = responseData?.error || 'Server error occurred';
+          // If we have detailed error info from the server, include it
+          if (responseData?.details) {
+            console.error('Server error details:', responseData.details);
+            if (process.env.NODE_ENV === 'development') {
+              errorMessage += ': ' + responseData.details;
+            }
+          }
+          break;
+        default:
+          errorMessage = responseData?.error || `HTTP ${response.status}: ${response.statusText}`;
+      }
+
+      throw new Error(errorMessage);
+    }
+
+  } catch (error) {
+  console.error('=== Purchase Function Error ===');
+
+  if (error instanceof Error) {
+    console.error('Error type:', error.constructor.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+
+    // Re-throw with more context if it's a network error
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      throw new Error(
+        'Network error: Unable to connect to server. Please check your internet connection and server status.'
+      );
+    }
+
+    throw error; // preserve original error if not network-related
+  } else {
+    console.error('Unknown error:', error);
+    throw error; // still rethrow for unknown cases
+  }
+
+  console.error('===============================');
+}
+};
+
+//fetch purchase history
+const fetchPurchaseHistory = useCallback(async () => {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    setLoadingPurchases(true);
+    const response = await api.get('/api/client/products/purchases/history', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    if (response.data) {
+      setPurchaseHistory(response.data);
+    }
+  } catch (error) {
+    console.error('Error fetching purchase history:', error);
+    toast.error('Failed to load purchase history');
+  } finally {
+    setLoadingPurchases(false);
+  }
+}, []);
+
+//  useEffect to fetch purchase history when the purchases tab is active
+useEffect(() => {
+  if (activeMainTab === 'purchases') {
+    fetchPurchaseHistory();
+  }
+}, [activeMainTab, fetchPurchaseHistory]);
+
+const handleViewDetails = (product: Product) => {
+  // Navigate to product details page
+  navigate(`/products/${product.id}`);
+};
+
+const handlePurchase = (product: Product) => {
+  setSelectedProduct(product);
+  setShowPurchaseModal(true);
+};
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header with improved mobile layout */}
@@ -463,26 +723,69 @@ export function ClientDashboard() {
             <div className="hidden lg:flex items-center space-x-4">
               {/* Main/Marketplace Toggle */}
               <div className="flex bg-gray-100 rounded-lg p-1">
-                <button
-                  onClick={() => setShowMarketplace(false)}
-                  className={`px-3 py-2 rounded-md text-sm font-medium transition-all ${
-                    !showMarketplace 
-                      ? 'bg-white text-indigo-600 shadow-sm' 
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
+  <button
+    onClick={() => {
+      setActiveMainTab('requests');
+      setShowMarketplace(false);
+    }}
+    className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-all text-center ${
+      activeMainTab === 'requests' 
+        ? 'bg-white text-indigo-600 shadow-sm' 
+        : 'text-gray-500 hover:text-gray-700'
+    }`}
+  >
+    <span className="hidden sm:inline">My Requests</span>
+    <span className="sm:hidden">Requests</span>
+  </button>
+  <button
+    onClick={() => {
+      setActiveMainTab('marketplace');
+      setShowMarketplace(true);
+    }}
+    className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-all text-center ${
+      activeMainTab === 'marketplace' 
+        ? 'bg-white text-indigo-600 shadow-sm' 
+        : 'text-gray-500 hover:text-gray-700'
+    }`}
+  >
+    Marketplace
+  </button>
+  <button
+    onClick={() => {
+      setActiveMainTab('purchases');
+      setShowMarketplace(false);
+    }}
+    className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-all text-center ${
+      activeMainTab === 'purchases' 
+        ? 'bg-white text-indigo-600 shadow-sm' 
+        : 'text-gray-500 hover:text-gray-700'
+    }`}
+  >
+    <span className="hidden sm:inline">My Purchases</span>
+    <span className="sm:hidden">Purchases</span>
+  </button>
+</div>
+              
+              {/* Navigation Links */}
+              <div className="flex items-center space-x-2">
+                <Link 
+                  to="/providers"
+                  className="flex items-center px-3 py-2 text-sm font-medium text-gray-700 hover:text-indigo-600 hover:bg-gray-50 rounded-lg transition-colors"
                 >
-                  My Requests
-                </button>
-                <button
-                  onClick={() => setShowMarketplace(true)}
-                  className={`px-3 py-2 rounded-md text-sm font-medium transition-all ${
-                    showMarketplace 
-                      ? 'bg-white text-indigo-600 shadow-sm' 
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                  Find Providers
+                </Link>
+                <Link 
+                  to="/chat"
+                  className="flex items-center px-3 py-2 text-sm font-medium text-gray-700 hover:text-indigo-600 hover:bg-gray-50 rounded-lg transition-colors"
                 >
-                  Marketplace
-                </button>
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                  Messages
+                </Link>
               </div>
               
               {/* Action buttons */}
@@ -639,33 +942,49 @@ export function ClientDashboard() {
                 <div className="p-4 space-y-4">
                   {/* Main/Marketplace Toggle - Mobile */}
                   <div className="flex bg-gray-100 rounded-lg p-1">
-                    <button
-                      onClick={() => {
-                        setShowMarketplace(false);
-                        setMobileMenuOpen(false);
-                      }}
-                      className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-all text-center ${
-                        !showMarketplace 
-                          ? 'bg-white text-indigo-600 shadow-sm' 
-                          : 'text-gray-500'
-                      }`}
-                    >
-                      My Requests
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowMarketplace(true);
-                        setMobileMenuOpen(false);
-                      }}
-                      className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-all text-center ${
-                        showMarketplace 
-                          ? 'bg-white text-indigo-600 shadow-sm' 
-                          : 'text-gray-500'
-                      }`}
-                    >
-                      Marketplace
-                    </button>
-                  </div>
+  <button
+    onClick={() => {
+      setActiveMainTab('requests');
+      setShowMarketplace(false);
+      setMobileMenuOpen(false);
+    }}
+    className={`flex-1 px-2 py-2 rounded-md text-xs font-medium transition-all text-center ${
+      activeMainTab === 'requests' 
+        ? 'bg-white text-indigo-600 shadow-sm' 
+        : 'text-gray-500'
+    }`}
+  >
+    Requests
+  </button>
+  <button
+    onClick={() => {
+      setActiveMainTab('marketplace');
+      setShowMarketplace(true);
+      setMobileMenuOpen(false);
+    }}
+    className={`flex-1 px-2 py-2 rounded-md text-xs font-medium transition-all text-center ${
+      activeMainTab === 'marketplace' 
+        ? 'bg-white text-indigo-600 shadow-sm' 
+        : 'text-gray-500'
+    }`}
+  >
+    Market
+  </button>
+  <button
+    onClick={() => {
+      setActiveMainTab('purchases');
+      setShowMarketplace(false);
+      setMobileMenuOpen(false);
+    }}
+    className={`flex-1 px-2 py-2 rounded-md text-xs font-medium transition-all text-center ${
+      activeMainTab === 'purchases' 
+        ? 'bg-white text-indigo-600 shadow-sm' 
+        : 'text-gray-500'
+    }`}
+  >
+    Purchases
+  </button>
+</div>
                   
                   {/* New Request button - Mobile */}
                   <button
@@ -711,168 +1030,247 @@ export function ClientDashboard() {
 
       {/* Main Content - Enhanced spacing and layout */}
       <main className="mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-6 max-w-7xl">
-        {showMarketplace ? (
-          /* Marketplace View - Enhanced mobile layout */
-          <div className="bg-white rounded-lg shadow-sm">
-            {/* Marketplace header */}
-            <div className="p-4 sm:p-6 border-b border-gray-200">
-              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
-                <div>
-                  <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Product Marketplace</h2>
-                  <p className="text-sm text-gray-600 mt-1">Discover products from providers</p>
-                </div>
-                <button
-                  onClick={() => setShowProductFilters(true)}
-                  className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors w-full sm:w-auto"
-                >
-                  <FunnelIcon className="h-4 w-4 mr-2" />
-                  Filter Products
-                </button>
-              </div>
-            </div>
+  {activeMainTab === 'marketplace' ? (
+    /* Marketplace View - Enhanced mobile layout */
+    <div className="bg-white rounded-lg shadow-sm">
+      {/* Marketplace header */}
+      <div className="p-4 sm:p-6 border-b border-gray-200">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+          <div>
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Product Marketplace</h2>
+            <p className="text-sm text-gray-600 mt-1">Discover products from providers</p>
+          </div>
+          <button
+            onClick={() => setShowProductFilters(true)}
+            className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors w-full sm:w-auto"
+          >
+            <FunnelIcon className="h-4 w-4 mr-2" />
+            Filter Products
+          </button>
+        </div>
+      </div>
 
-            {/* Marketplace content */}
-            <div className="p-4 sm:p-6">
-              {products.length === 0 ? (
-                <div className="text-center py-12">
-                  <ShoppingBagIcon className="mx-auto h-12 w-12 text-gray-400" />
-                  <h3 className="mt-4 text-lg font-medium text-gray-900">No products found</h3>
-                  <p className="mt-2 text-sm text-gray-500">
-                    Try adjusting your filters or check back later.
-                  </p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
-                  {products.map((product) => (
-                    <ProductCard 
-                      key={product.id}
-                      product={product}
-                      onClick={() => navigate(`/products/${product.id}`)}
-                    />
-                  ))}
-                </div>
-              )}
+      {/* Marketplace content */}
+      <div className="p-4 sm:p-6">
+        {products.length === 0 ? (
+          <div className="text-center py-12">
+            <ShoppingBagIcon className="mx-auto h-12 w-12 text-gray-400" />
+            <h3 className="mt-4 text-lg font-medium text-gray-900">No products found</h3>
+            <p className="mt-2 text-sm text-gray-500">
+              Try adjusting your filters or check back later.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+            {products.map((product) => (
+              <ProductCard 
+                key={product.id}
+                product={product}
+                onViewDetails={handleViewDetails}
+                onPurchase={handlePurchase}
+                showPurchaseButton={true}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  ) : activeMainTab === 'purchases' ? (
+    /* Purchase History View */
+    <div className="bg-white rounded-lg shadow-sm">
+      {/* Purchase History header */}
+      <div className="p-4 sm:p-6 border-b border-gray-200">
+        <div className="flex items-center gap-3">
+          <ReceiptPercentIcon className="h-6 w-6 sm:h-8 sm:w-8 text-indigo-600" />
+          <div>
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Purchase History</h2>
+            <p className="text-sm text-gray-600 mt-1">Track your orders and purchases</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Purchase History content */}
+      <div className="p-4 sm:p-6">
+        {loadingPurchases ? (
+          <div className="flex justify-center items-center h-64">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 sm:h-12 sm:w-12 border-t-2 border-b-2 border-indigo-500 mx-auto"></div>
+              <p className="mt-4 text-sm text-gray-600">Loading purchases...</p>
+            </div>
+          </div>
+        ) : purchaseHistory.length === 0 ? (
+          <div className="text-center py-12">
+            <ReceiptPercentIcon className="mx-auto h-12 w-12 text-gray-400" />
+            <h3 className="mt-4 text-lg font-medium text-gray-900">No purchases yet</h3>
+            <p className="mt-2 text-sm text-gray-500 max-w-sm mx-auto">
+              Your purchase history will appear here after you buy products from the marketplace.
+            </p>
+            <div className="mt-8">
+              <button
+                onClick={() => {
+                  setActiveMainTab('marketplace');
+                  setShowMarketplace(true);
+                }}
+                className="inline-flex items-center px-6 py-3 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+              >
+                <ShoppingBagIcon className="-ml-1 mr-2 h-5 w-5" />
+                Browse Marketplace
+              </button>
             </div>
           </div>
         ) : (
-          /* Requests View - Enhanced responsive layout */
-          <>
-            {/* Tabs - Improved mobile design */}
-            <div className="bg-white rounded-lg shadow-sm mb-4 sm:mb-6">
-              <div className="border-b border-gray-200">
-                <nav className="flex">
-                  <button
-                    onClick={() => setActiveTab('active')}
-                    className={`flex-1 py-4 px-1 text-center border-b-2 font-medium text-sm sm:text-base transition-colors ${
-                      activeTab === 'active' 
-                        ? 'border-indigo-500 text-indigo-600' 
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
-                  >
-                    <span className="block sm:inline">Active</span>
-                    <span className="block sm:inline sm:ml-1 text-xs sm:text-sm">
-                      ({requests.filter(r => r.status === 'open' || r.status === 'pending').length})
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('completed')}
-                    className={`flex-1 py-4 px-1 text-center border-b-2 font-medium text-sm sm:text-base transition-colors ${
-                      activeTab === 'completed' 
-                        ? 'border-indigo-500 text-indigo-600' 
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
-                  >
-                    <span className="block sm:inline">Completed</span>
-                    <span className="block sm:inline sm:ml-1 text-xs sm:text-sm">
-                      ({requests.filter(r => r.status === 'closed' || r.status === 'accepted').length})
-                    </span>
-                  </button>
-                </nav>
-              </div>
-            </div>
-
-            {/* Loading State */}
-            {loading ? (
-              <div className="flex justify-center items-center h-64 bg-white rounded-lg shadow-sm">
-                <div className="text-center">
-                  <div className="animate-spin rounded-full h-8 w-8 sm:h-12 sm:w-12 border-t-2 border-b-2 border-indigo-500 mx-auto"></div>
-                  <p className="mt-4 text-sm text-gray-600">Loading requests...</p>
-                </div>
-              </div>
-            ) : (
-              <>
-                {/* Empty State - Enhanced mobile layout */}
-                {filteredRequests.length === 0 ? (
-                  <div className="text-center py-12 sm:py-16 bg-white rounded-lg shadow-sm">
-                    <svg
-                      className="mx-auto h-12 w-12 sm:h-16 sm:w-16 text-gray-400"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      aria-hidden="true"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                      />
-                    </svg>
-                    <h3 className="mt-4 text-lg sm:text-xl font-medium text-gray-900">
-                      No {activeTab === 'active' ? 'active' : 'completed'} requests
-                    </h3>
-                    <p className="mt-2 text-sm sm:text-base text-gray-500 max-w-sm mx-auto">
-                      {activeTab === 'active' 
-                        ? 'Get started by creating a new service request to connect with providers.'
-                        : 'Your completed requests will appear here once services are fulfilled.'}
-                    </p>
-                    {activeTab === 'active' && (
-                      <div className="mt-8">
-                        <button
-                          onClick={() => setShowNewRequestModal(true)}
-                          className="inline-flex items-center px-6 py-3 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
-                        >
-                          <PlusIcon className="-ml-1 mr-2 h-5 w-5" />
-                          Create Your First Request
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  /* Requests List - Enhanced spacing */
-                  <div className="space-y-4 sm:space-y-6">
-                    {filteredRequests.map((request, index) => (
-                      <ClientRequestCard
-                        key={request.id || `request-${index}`}
-                        request={request}
-                        bidsCount={request.bids?.length?.toString() || '0'}
-                        bids={request.bids || []}
-                        interests={request.interests || []} 
-                        status={request.status || 'open'}
-                        onAcceptBid={handleAcceptBid}
-                        onRejectBid={handleRejectBid}
-                        onAcceptInterest={handleAcceptInterest}
-                        onRejectInterest={handleRejectInterest}
-                      />
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-          </>
+          <div className="space-y-4 sm:space-y-6">
+            {purchaseHistory.map((purchase) => (
+              <PurchaseHistoryCard
+                key={purchase.id}
+                purchase={purchase}
+              />
+            ))}
+          </div>
         )}
-      </main>
+      </div>
+    </div>
+  ) : (
+    /* Requests View - Enhanced responsive layout */
+    <>
+      {/* Tabs - Improved mobile design */}
+      <div className="bg-white rounded-lg shadow-sm mb-4 sm:mb-6">
+        <div className="border-b border-gray-200">
+          <nav className="flex">
+            <button
+              onClick={() => setActiveTab('active')}
+              className={`flex-1 py-4 px-1 text-center border-b-2 font-medium text-sm sm:text-base transition-colors ${
+                activeTab === 'active' 
+                  ? 'border-indigo-500 text-indigo-600' 
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <span className="block sm:inline">Active</span>
+              <span className="block sm:inline sm:ml-1 text-xs sm:text-sm">
+                ({requests.filter(r => r.status === 'open' || r.status === 'pending').length})
+              </span>
+            </button>
+            <button
+              onClick={() => setActiveTab('completed')}
+              className={`flex-1 py-4 px-1 text-center border-b-2 font-medium text-sm sm:text-base transition-colors ${
+                activeTab === 'completed' 
+                  ? 'border-indigo-500 text-indigo-600' 
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <span className="block sm:inline">Completed</span>
+              <span className="block sm:inline sm:ml-1 text-xs sm:text-sm">
+                ({requests.filter(r => r.status === 'closed' || r.status === 'accepted').length})
+              </span>
+            </button>
+          </nav>
+        </div>
+      </div>
+
+      {/* Loading State */}
+      {loading ? (
+        <div className="flex justify-center items-center h-64 bg-white rounded-lg shadow-sm">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 sm:h-12 sm:w-12 border-t-2 border-b-2 border-indigo-500 mx-auto"></div>
+            <p className="mt-4 text-sm text-gray-600">Loading requests...</p>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Empty State - Enhanced mobile layout */}
+          {filteredRequests.length === 0 ? (
+            <div className="text-center py-12 sm:py-16 bg-white rounded-lg shadow-sm">
+              <svg
+                className="mx-auto h-12 w-12 sm:h-16 sm:w-16 text-gray-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              <h3 className="mt-4 text-lg sm:text-xl font-medium text-gray-900">
+                No {activeTab === 'active' ? 'active' : 'completed'} requests
+              </h3>
+              <p className="mt-2 text-sm sm:text-base text-gray-500 max-w-sm mx-auto">
+                {activeTab === 'active' 
+                  ? 'Get started by creating a new service request to connect with providers.'
+                  : 'Your completed requests will appear here once services are fulfilled.'}
+              </p>
+              {activeTab === 'active' && (
+                <div className="mt-8">
+                  <button
+                    onClick={() => setShowNewRequestModal(true)}
+                    className="inline-flex items-center px-6 py-3 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+                  >
+                    <PlusIcon className="-ml-1 mr-2 h-5 w-5" />
+                    Create Your First Request
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Requests List - Enhanced spacing */
+            <div className="space-y-4 sm:space-y-6">
+              {filteredRequests.map((request, index) => (
+                <ClientRequestCard
+                  key={request.id || `request-${index}`}
+                  request={request}
+                  bidsCount={request.bids?.length?.toString() || '0'}
+                  bids={request.bids || []}
+                  interests={request.interests || []} 
+                  status={request.status || 'open'}
+                  onAcceptBid={handleAcceptBid}
+                  onRejectBid={handleRejectBid}
+                  onAcceptInterest={handleAcceptInterest}
+                  onRejectInterest={handleRejectInterest}
+                />
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </>
+  )}
+</main>
+
 
       {/* Floating Action Button for Mobile */}
       <div className="lg:hidden fixed bottom-6 right-4 z-30">
-        <button
-          onClick={() => setShowNewRequestModal(true)}
-          className="inline-flex items-center justify-center w-14 h-14 border border-transparent rounded-full shadow-lg text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all transform hover:scale-105 active:scale-95"
-        >
-          <PlusIcon className="h-6 w-6" />
-          <span className="sr-only">New Request</span>
-        </button>
-      </div>
+  {activeMainTab === 'requests' ? (
+    <button
+      onClick={() => setShowNewRequestModal(true)}
+      className="inline-flex items-center justify-center w-14 h-14 border border-transparent rounded-full shadow-lg text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all transform hover:scale-105 active:scale-95"
+    >
+      <PlusIcon className="h-6 w-6" />
+      <span className="sr-only">New Request</span>
+    </button>
+  ) : activeMainTab === 'marketplace' ? (
+    <button
+      onClick={() => setShowProductFilters(true)}
+      className="inline-flex items-center justify-center w-14 h-14 border border-transparent rounded-full shadow-lg text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all transform hover:scale-105 active:scale-95"
+    >
+      <FunnelIcon className="h-6 w-6" />
+      <span className="sr-only">Filter Products</span>
+    </button>
+  ) : (
+    <button
+      onClick={() => {
+        setActiveMainTab('marketplace');
+        setShowMarketplace(true);
+      }}
+      className="inline-flex items-center justify-center w-14 h-14 border border-transparent rounded-full shadow-lg text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all transform hover:scale-105 active:scale-95"
+    >
+      <ShoppingBagIcon className="h-6 w-6" />
+      <span className="sr-only">Browse Marketplace</span>
+    </button>
+  )}
+</div>
 
       {/* Modals */}
       <NewRequestModal
@@ -890,6 +1288,12 @@ export function ClientDashboard() {
         }}
         currentFilters={productFilters}
       />
+      <PurchaseModal
+  isOpen={showPurchaseModal}
+  onClose={() => setShowPurchaseModal(false)}
+  product={selectedProduct}
+  onPurchase={handlePurchaseProduct}
+/>
     </div>
   );
 }

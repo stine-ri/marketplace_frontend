@@ -7,6 +7,7 @@ export type Service = {
   price?: number; 
   lat: number;
   lng: number;
+  description?:string;
 };
 
 export type College = {
@@ -25,6 +26,7 @@ export interface Interest {
   updatedAt:string;
   isShortlisted?:string;
   chatRoomId?: number;
+  proposedPrice?: number; 
   status: 'pending' | 'accepted' | 'rejected';
   provider?: {
     id: number;
@@ -82,7 +84,7 @@ export interface Request {
 // Only used where backend sends snake_case fields
 export interface ClientRequest extends Request {
   desired_price: number; // override for use in components that consume backend directly
-  
+   
 }
 export interface Bid {
   id: number;

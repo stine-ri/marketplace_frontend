@@ -29,7 +29,7 @@ export const ProductDetail = () => {
   useEffect(() => {
     const fetchProduct = async () => {
       try {
-        const response = await api.get<Product>(`/api/products/${id}`);
+        const response = await api.get<Product>(`/api/client/products/${id}`);
         setProduct(response.data);
       } catch (error) {
         console.error('Error fetching product:', error);
@@ -50,14 +50,17 @@ export const ProductDetail = () => {
         {/* Product Images */}
         <div className="space-y-4">
           {product.images.map((image: string, index: number) => (
-            <div key={index} className="bg-white rounded-lg shadow-md overflow-hidden">
-              <img
-                src={image}
-                alt={`${product.name} - ${index + 1}`}
-                className="w-full h-auto object-cover"
-              />
-            </div>
-          ))}
+  <div key={index} className="bg-white rounded-lg shadow-md overflow-hidden">
+    <img
+      src={image}
+      alt={`${product.name} - ${index + 1}`}
+      className="w-full h-auto object-cover"
+      onError={(e) => {
+        (e.target as HTMLImageElement).src = '/placeholder-product.png';
+      }}
+    />
+  </div>
+))}
         </div>
         
         {/* Product Info */}
@@ -90,11 +93,11 @@ export const ProductDetail = () => {
                   {product.provider.firstName} {product.provider.lastName}
                 </p>
                 <div className="flex items-center">
-                  <StarIcon className="h-5 w-5 text-yellow-400" />
-                  <span className="ml-1 text-gray-600">
-                    {product.provider.rating?.toFixed(1) || 'New'}
-                  </span>
-                </div>
+  <StarIcon className="h-5 w-5 text-yellow-400" />
+  <span className="ml-1 text-gray-600">
+    {product.provider.rating ? product.provider.rating.toFixed(1) : 'New'}
+  </span>
+</div>
               </div>
             </div>
           </div>

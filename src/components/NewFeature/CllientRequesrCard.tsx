@@ -3,6 +3,7 @@ import { Request, Bid, ClientRequest, Interest } from '../../types/types';
 import api from '../../api/api';
 import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
+import { formatPrice } from '../../utilis/priceFormatter'; // Add this import
 
 interface ClientRequestCardProps {
   request: ClientRequest;
@@ -143,10 +144,19 @@ const parseLocation = (location: any): { display: string; coords?: { lat: number
     return request.productName || 'Product Request';
   };
 
+  // Updated getPrice function to use KSh formatting
   const getPrice = () => {
-    const price = request.desired_price || request.desiredPrice;
-    return price ? `$${Number(price).toFixed(2)}` : 'Price not specified';
+    // Cast to any to access potentially dynamic properties, or check available properties
+    const requestAny = request as any;
+    const price = request.desired_price || 
+                  request.desiredPrice || 
+                  requestAny.budget || 
+                  requestAny.price ||
+                  requestAny.maxBudget ||
+                  requestAny.expectedPrice;
+    return price ? formatPrice(price) : 'Price not specified';
   };
+
 const handleImageError = (id: string, fallbackUrl = '/default-avatar.png') => {
     setFailedImages(prev => ({ ...prev, [id]: true }));
     return fallbackUrl;
@@ -156,6 +166,7 @@ const handleImageError = (id: string, fallbackUrl = '/default-avatar.png') => {
     // Try profileImageUrl first, then user.avatar, then default
     return provider?.profileImageUrl || provider?.user?.avatar || '/default-avatar.png';
   };
+
 const handleAcceptInterest = async (interestId: number) => {
     if (!onAcceptInterest) return;
     
@@ -203,7 +214,7 @@ const handleAcceptInterest = async (interestId: number) => {
 
             <p className="flex flex-wrap items-center gap-2">
               <span className="font-medium">Price:</span> 
-              <span>{getPrice()}</span>
+              <span className="font-semibold text-green-600">{getPrice()}</span>
             </p>
 
             <div className="flex flex-col sm:flex-row sm:items-center gap-2">
@@ -273,7 +284,8 @@ const handleAcceptInterest = async (interestId: number) => {
                 >
                   <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
                     <div className="flex-1">
-                      <h4 className="font-semibold">${bid.price.toFixed(2)}</h4>
+                      {/* Updated bid price display to use KSh formatting */}
+                      <h4 className="font-semibold text-green-600">{formatPrice(bid.price)}</h4>
                       <p className="text-sm text-gray-600 mt-1">
                         From: {bid.provider?.firstName} {bid.provider?.lastName}
                       </p>
@@ -355,6 +367,12 @@ const handleAcceptInterest = async (interestId: number) => {
                       <p className="text-xs text-gray-500">
                         Expressed on: {format(new Date(interest.createdAt), 'MMM dd, yyyy h:mm a')}
                       </p>
+                      {/* Add proposed price display if it exists */}
+                      {interest.proposedPrice && (
+                        <p className="text-sm font-medium text-green-600 mt-1">
+                          Proposed: {formatPrice(interest.proposedPrice)}
+                        </p>
+                      )}
                       {isAccepted && (
                         <p className="text-xs text-green-600 mt-1">
                           ✓ Accepted - You can chat with this provider

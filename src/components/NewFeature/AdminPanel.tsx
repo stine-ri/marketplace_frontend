@@ -1,4 +1,4 @@
-// src/components/AdminPanel.tsx - Updated with Request Management
+// src/components/AdminPanel.tsx - Updated with Product Management
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Service, College } from '../../types/types';
@@ -6,6 +6,7 @@ import { getAuthHeaders, isAdmin } from '../../utilis/auth';
 import UserManagement from './UserManagement';
 import BidManagement from '../NewFeature/BidsManagement';
 import RequestManagement from '../NewFeature/RequestManagement';
+import ProductManagement from './ProductManagement';
 import InterestsManagement from './InterestManagement';
 import { 
   FiSearch, 
@@ -19,12 +20,13 @@ import {
   FiMenu,
   FiX,
   FiDollarSign,
-  FiMessageSquare
+  FiMessageSquare,
+  FiShoppingBag
 } from 'react-icons/fi';
 
 const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com';
 
-type AdminSection = 'services' | 'colleges' | 'users' | 'bids' | 'requests' |  'interests' |'settings';
+type AdminSection = 'services' | 'colleges' | 'users' | 'bids' | 'requests' | 'products' | 'interests' | 'settings';
 
 export default function AdminPanel() {
   const [services, setServices] = useState<Service[]>([]);
@@ -193,14 +195,15 @@ export default function AdminPanel() {
     (college.location && college.location.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  // Updated menu items to include Request Management
+  // Updated menu items to include Product Management
   const menuItems = [
     { id: 'services', label: 'Services & Colleges', icon: FiPackage },
+    { id: 'products', label: 'Product Management', icon: FiShoppingBag },
     { id: 'users', label: 'User Management', icon: FiUsers },
     { id: 'requests', label: 'Request Management', icon: FiMessageSquare },
     { id: 'bids', label: 'Bid Management', icon: FiDollarSign },
-    { id: 'settings', label: 'Settings', icon: FiSettings },
     { id: 'interests', label: 'Interests Management', icon: FiUsers },
+    { id: 'settings', label: 'Settings', icon: FiSettings },
   ];
 
   // Check admin access
@@ -304,10 +307,11 @@ export default function AdminPanel() {
             <BidManagement />
           ) : activeSection === 'requests' ? (
             <RequestManagement />
+          ) : activeSection === 'products' ? (
+            <ProductManagement />
           ) : activeSection === 'interests' ? (
             <InterestsManagement />
           ) : activeSection === 'settings' ? (
-            
             <div className="p-6">
               <div className="bg-white rounded-lg shadow-sm border p-6">
                 <h3 className="text-lg font-semibold mb-4">System Settings</h3>

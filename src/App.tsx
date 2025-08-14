@@ -6,7 +6,6 @@ import {ProviderDashboard} from './components/NewFeature/ProviderDashboard';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
 import { WebSocketProvider } from './context/WebSocketContext';
-// import RequestForm from './components/NewFeature/RequestForm';
 import AdminPanel from './components/NewFeature/AdminPanel';
 import NotificationBell from './components/NewFeature/NotificationBell';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -51,7 +50,6 @@ function AppContent() {
       <main className="flex-grow">
         <Routes>
           <Route path="/" element={<Home />} />
-          {/* <Route path="/request" element={<RequestForm />} /> */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/providers" element={<ProvidersList />} />

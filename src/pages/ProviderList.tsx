@@ -1,6 +1,6 @@
 // src/pages/ProvidersList.tsx
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { ProviderProfile, Service, College } from '../types/types';
@@ -8,9 +8,43 @@ import { AxiosError } from 'axios';
 
 const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com';
 
+// Price formatting utility functions
+const formatPrice = (price: string | number | undefined | null): string => {
+  // Handle undefined/null cases
+  if (price === undefined || price === null) {
+    return 'KSh 0.00';
+  }
+
+  // Convert to number if it's a string
+  const numericPrice = typeof price === 'string' ? parseFloat(price) : price;
+
+  // Handle NaN cases
+  if (isNaN(numericPrice)) {
+    return 'KSh 0.00';
+  }
+
+  // Format with KSh prefix and comma separators
+  return `KSh ${numericPrice.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
+};
+
+const formatPriceRange = (prices: (number | undefined)[]): string => {
+  // Filter out undefined/null values and ensure we have valid numbers
+  const validPrices = prices.filter((price): price is number => 
+    price !== undefined && price !== null && !isNaN(price)
+  );
+  
+  if (validPrices.length === 0) return 'Price not set';
+  
+  const min = Math.min(...validPrices);
+  const max = Math.max(...validPrices);
+  
+  return min === max 
+    ? formatPrice(min)
+    : `${formatPrice(min)} - ${formatPrice(max)}`;
+};
+
 export default function ProvidersList() {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const [allProviders, setAllProviders] = useState<ProviderProfile[]>([]);
   const [filteredProviders, setFilteredProviders] = useState<ProviderProfile[]>([]);
   const [services, setServices] = useState<Service[]>([]);
@@ -266,13 +300,13 @@ export default function ProvidersList() {
           
           {/* Price Range - Full width on mobile */}
           <div className="sm:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Price Range</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Price Range (KSh)</label>
             <div className="flex flex-col sm:flex-row gap-2">
               <input
                 type="number"
                 value={filters.minPrice}
                 onChange={(e) => setFilters({...filters, minPrice: e.target.value})}
-                placeholder="Min price"
+                placeholder="Min price (KSh)"
                 className="w-full p-2 border border-gray-300 rounded-lg"
                 min="0"
               />
@@ -280,7 +314,7 @@ export default function ProvidersList() {
                 type="number"
                 value={filters.maxPrice}
                 onChange={(e) => setFilters({...filters, maxPrice: e.target.value})}
-                placeholder="Max price"
+                placeholder="Max price (KSh)"
                 className="w-full p-2 border border-gray-300 rounded-lg"
                 min="0"
               />
@@ -318,10 +352,10 @@ export default function ProvidersList() {
                 onChange={(e) => setFilters({...filters, radius: Number(e.target.value)})}
                 className="p-2 border border-gray-300 rounded-b-lg sm:rounded-bl-none sm:rounded-r-lg"
               >
-                <option value="5">5 mi</option>
-                <option value="10">10 mi</option>
-                <option value="25">25 mi</option>
-                <option value="50">50 mi</option>
+                <option value="5">5 km</option>
+                <option value="10">10 km</option>
+                <option value="25">25 km</option>
+                <option value="50">50 km</option>
               </select>
             </div>
           </div>
@@ -422,24 +456,11 @@ export default function ProvidersList() {
                       </span>
                     </div>
                     
-                    {/* Price Range */}
+                    {/* Price Range - Updated to use KSh */}
                     {provider.services && provider.services.length > 0 && (
                       <div className="mt-1">
                         <span className="text-xs sm:text-sm font-medium">
-                          {(() => {
-                            const prices = provider.services
-                              .map(s => s.price)
-                              .filter(price => price !== undefined && price !== null);
-                            
-                            if (prices.length === 0) return 'Price not set';
-                            
-                            const min = Math.min(...prices);
-                            const max = Math.max(...prices);
-                            
-                            return min === max 
-                              ? `$${min}` 
-                              : `$${min} - $${max}`;
-                          })()}
+                          {formatPriceRange(provider.services.map(s => s.price))}
                         </span>
                       </div>
                     )}
@@ -451,7 +472,7 @@ export default function ProvidersList() {
                       </p>
                     )}
                     
-                    {/* Services Offered */}
+                    {/* Services Offered - Updated to use KSh */}
                     {provider.services && provider.services.length > 0 && (
                       <div className="mt-3 sm:mt-4">
                         <h4 className="text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Services Offered</h4>
@@ -461,7 +482,7 @@ export default function ProvidersList() {
                               key={service.id}
                               className="px-2 py-1 text-xs sm:text-sm bg-blue-100 text-blue-800 rounded-full"
                             >
-                              {service.name} (${service.price ?? '?'})
+                              {service.name} ({formatPrice(service.price)})
                             </span>
                           ))}
                           {provider.services.length > 3 && (
@@ -472,26 +493,28 @@ export default function ProvidersList() {
                         </div>
                       </div>
                     )}
-                    {/* Add Past Works Preview */}
-      {provider.pastWorks?.length > 0 && (
-        <div className="mt-4">
-          <h4 className="text-xs sm:text-sm font-medium text-gray-700 mb-2">Sample Work</h4>
-          <div className="flex gap-2 overflow-x-auto pb-2">
-            {provider.pastWorks.slice(0, 2).map((work, index) => (
-              <div key={index} className="flex-shrink-0 w-16 h-16 relative">
-                <img
-                  src={work.imageUrl}
-                  alt={`Past work ${index + 1}`}
-                  className="w-full h-full object-cover rounded"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src = '/default-work.png';
-                  }}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+
+                    {/* Past Works Preview */}
+                    {provider.pastWorks?.length > 0 && (
+                      <div className="mt-4">
+                        <h4 className="text-xs sm:text-sm font-medium text-gray-700 mb-2">Sample Work</h4>
+                        <div className="flex gap-2 overflow-x-auto pb-2">
+                          {provider.pastWorks.slice(0, 2).map((work, index) => (
+                            <div key={index} className="flex-shrink-0 w-16 h-16 relative">
+                              <img
+                                src={work.imageUrl}
+                                alt={`Past work ${index + 1}`}
+                                className="w-full h-full object-cover rounded"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = '/default-work.png';
+                                }}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Action Buttons */}
                     <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row justify-between gap-2">
                       <Link 
