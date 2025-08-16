@@ -252,34 +252,38 @@ const LocationControls = ({
 );
 
 function formatLocation(location: any): string {
-  // Handle null/undefined/empty cases
+  // Handle null/undefined/empty cases first
   if (!location) return 'Location not provided';
   
-  // Handle the object format from your API
-  if (typeof location === 'object') {
-    // Check for valid label first
-    if (location.label && location.label !== '{}' && location.label.trim() !== '') {
-      return location.label.trim();
-    }
-    
-    // Then check for valid coordinates
-    if (location.lat !== 0 && location.lng !== 0) {
-      return `${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}`;
-    }
-    
-    // Handle empty label cases
-    if (location.label === '{}') {
-      return 'Location not provided';
-    }
-  }
-  
-  // Handle stringified JSON
+  // Handle stringified JSON cases
   if (typeof location === 'string') {
     try {
       const parsed = JSON.parse(location);
       return formatLocation(parsed);
     } catch {
       return location !== '{}' ? location : 'Location not provided';
+    }
+  }
+
+  // Handle object cases
+  if (typeof location === 'object') {
+    // Check for valid label first
+    if (location.label && location.label !== '{}' && location.label.trim() !== '') {
+      return location.label.trim();
+    }
+    
+    // Then check for valid coordinates with proper null checks
+    if (location.lat != null && location.lng != null) {
+      const lat = Number(location.lat);
+      const lng = Number(location.lng);
+      if (!isNaN(lat) && !isNaN(lng)) {
+        return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+      }
+    }
+    
+    // Handle empty label cases
+    if (location.label === '{}') {
+      return 'Location not provided';
     }
   }
   
