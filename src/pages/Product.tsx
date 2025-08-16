@@ -43,62 +43,66 @@ const ProductsComponent = () => {
     { id: 'beauty', name: 'Beauty & Health', count: 289 }
   ];
 
-  // Fetch products from backend
-useEffect(() => {
-  const fetchProducts = async () => {
-    try {
-      setLoading(true);
-      console.log('Fetching products...'); // Add this line
-      
-      let endpoint = 'https://mkt-backend-sz2s.onrender.com/api/products';
-      let params = {};
-      
-      if (searchQuery) {
-        endpoint = 'https://mkt-backend-sz2s.onrender.com/api/products/search';
-        params = { q: searchQuery.toLowerCase() };
-      }
-      
-      if (selectedCategory !== 'all') {
-        endpoint = 'https://mkt-backend-sz2s.onrender.com/api/products/search';
-        params = { ...params, category: selectedCategory };
-      }
-
-      const queryString = new URLSearchParams(params).toString();
-      const url = queryString ? `${endpoint}?${queryString}` : endpoint;
-      
-      console.log('API URL:', url); // Add this line
-      
-      const response = await fetch(url);
-      console.log('Response status:', response.status); // Add this line
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch products');
-      }
-      
-      const data = await response.json();
-      console.log('Received data:', data); // Add this line
-      
-      setProducts(data);
-      setError(null);
-    } catch (err) {
-      console.error('Error:', err); // Make sure this is logging
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError(String(err));
-      }
-    } finally {
-      setLoading(false);
-      console.log('Loading complete'); // Add this line
-    }
+  const showLoginMessage = () => {
+    alert("Kindly login or register to view or purchase our products");
   };
 
-  const debounceTimer = setTimeout(() => {
-    fetchProducts();
-  }, 500);
+  // Fetch products from backend
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        setLoading(true);
+        console.log('Fetching products...'); // Add this line
+        
+        let endpoint = 'https://mkt-backend-sz2s.onrender.com/api/products';
+        let params = {};
+        
+        if (searchQuery) {
+          endpoint = 'https://mkt-backend-sz2s.onrender.com/api/products/search';
+          params = { q: searchQuery.toLowerCase() };
+        }
+        
+        if (selectedCategory !== 'all') {
+          endpoint = 'https://mkt-backend-sz2s.onrender.com/api/products/search';
+          params = { ...params, category: selectedCategory };
+        }
 
-  return () => clearTimeout(debounceTimer);
-}, [searchQuery, selectedCategory]);
+        const queryString = new URLSearchParams(params).toString();
+        const url = queryString ? `${endpoint}?${queryString}` : endpoint;
+        
+        console.log('API URL:', url); // Add this line
+        
+        const response = await fetch(url);
+        console.log('Response status:', response.status); // Add this line
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch products');
+        }
+        
+        const data = await response.json();
+        console.log('Received data:', data); // Add this line
+        
+        setProducts(data);
+        setError(null);
+      } catch (err) {
+        console.error('Error:', err); // Make sure this is logging
+        if (err instanceof Error) {
+          setError(err.message);
+        } else {
+          setError(String(err));
+        }
+      } finally {
+        setLoading(false);
+        console.log('Loading complete'); // Add this line
+      }
+    };
+
+    const debounceTimer = setTimeout(() => {
+      fetchProducts();
+    }, 500);
+
+    return () => clearTimeout(debounceTimer);
+  }, [searchQuery, selectedCategory]);
 
   const filteredProducts = products.filter(product => {
     const price = parseFloat(product.price);
@@ -124,56 +128,56 @@ useEffect(() => {
   });
 
   // Format product data to match our component's expectations
-const formatProduct = (product: any): Product => {
-  // Create a fallback image using a data URL (this will always work)
-  const fallbackImage = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgZmlsbD0iI2Y4ZjlmYSIvPgogIDx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IiM2YjczODAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIwLjNlbSI+Tm8gSW1hZ2UgQXZhaWxhYmxlPC90ZXh0Pgo8L3N2Zz4K';
-  
-  // Helper function to format provider name
-  const formatProviderName = (providerName: string | undefined) => {
-    if (!providerName) return 'Registered Provider';
+  const formatProduct = (product: any): Product => {
+    // Create a fallback image using a data URL (this will always work)
+    const fallbackImage = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgZmlsbD0iI2Y4ZjlmYSIvPgogIDx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IiM2YjczODAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIwLjNlbSI+Tm8gSW1hZ2UgQXZhaWxhYmxlPC90ZXh0Pgo8L3N2Zz4K';
     
-    // If it's 'unknown provider' or similar, return 'Registered Provider'
-    if (providerName.toLowerCase().includes('unknown') || 
-        providerName.toLowerCase().includes('default') ||
-        providerName.trim() === '') {
-      return 'Registered Provider';
-    }
+    // Helper function to format provider name
+    const formatProviderName = (providerName: string | undefined) => {
+      if (!providerName) return 'Registered Provider';
+      
+      // If it's 'unknown provider' or similar, return 'Registered Provider'
+      if (providerName.toLowerCase().includes('unknown') || 
+          providerName.toLowerCase().includes('default') ||
+          providerName.trim() === '') {
+        return 'Registered Provider';
+      }
+      
+      // Otherwise return the actual provider name
+      return providerName;
+    };
     
-    // Otherwise return the actual provider name
-    return providerName;
+    return {
+      id: product.id,
+      name: product.name,
+      description: product.description || '',
+      price: product.price || '0',
+      originalPrice: product.originalPrice || null,
+      rating: product.rating ? Number(product.rating) : 4.5, // Default rating for demo
+      reviews: product.reviews ? Number(product.reviews) : Math.floor(Math.random() * 100) + 10, // Random reviews for demo
+      images: Array.isArray(product.images) && product.images.length > 0 ? product.images : [fallbackImage], // Fallback image
+      category: product.category || 'uncategorized',
+      tags: Array.isArray(product.tags) ? product.tags : ['new', 'popular'], // Default tags
+      inStock: product.inStock ?? (product.stock ? product.stock > 0 : true),
+      shipping: '', // Remove shipping info
+      featured: product.featured || Math.random() > 0.7, // Random featured for demo
+      createdAt: product.createdAt || new Date().toISOString(),
+      status: product.status || 'published',
+      location: product.location || 'Nairobi, Kenya', // Default location
+      provider: formatProviderName(product.provider)
+    };
   };
-  
-  return {
-    id: product.id,
-    name: product.name,
-    description: product.description || '',
-    price: product.price || '0',
-    originalPrice: product.originalPrice || null,
-    rating: product.rating ? Number(product.rating) : 4.5, // Default rating for demo
-    reviews: product.reviews ? Number(product.reviews) : Math.floor(Math.random() * 100) + 10, // Random reviews for demo
-    images: Array.isArray(product.images) && product.images.length > 0 ? product.images : [fallbackImage], // Fallback image
-    category: product.category || 'uncategorized',
-    tags: Array.isArray(product.tags) ? product.tags : ['new', 'popular'], // Default tags
-    inStock: product.inStock ?? (product.stock ? product.stock > 0 : true),
-    shipping: '', // Remove shipping info
-    featured: product.featured || Math.random() > 0.7, // Random featured for demo
-    createdAt: product.createdAt || new Date().toISOString(),
-    status: product.status || 'published',
-    location: product.location || 'Nairobi, Kenya', // Default location
-    provider: formatProviderName(product.provider)
-  };
-};
 
-// Enhanced price formatting for KSH
-const formatPrice = (price: string | number) => {
-  // Convert to number if it's a string
-  const amount = typeof price === 'string' ? parseFloat(price) : price;
-  return new Intl.NumberFormat('en-KE', {
-    style: 'currency',
-    currency: 'KES',
-    minimumFractionDigits: 0
-  }).format(amount);
-};
+  // Enhanced price formatting for KSH
+  const formatPrice = (price: string | number) => {
+    // Convert to number if it's a string
+    const amount = typeof price === 'string' ? parseFloat(price) : price;
+    return new Intl.NumberFormat('en-KE', {
+      style: 'currency',
+      currency: 'KES',
+      minimumFractionDigits: 0
+    }).format(amount);
+  };
 
   const formattedProducts = sortedProducts.map(formatProduct);
 
@@ -383,10 +387,16 @@ const formatPrice = (price: string | number) => {
                         )}
                       </div>
                       <div className="absolute top-4 right-4 flex gap-2">
-                        <button className="p-2 bg-white rounded-full shadow-sm hover:bg-gray-50 transition-colors">
+                        <button 
+                          className="p-2 bg-white rounded-full shadow-sm hover:bg-gray-50 transition-colors"
+                          onClick={showLoginMessage}
+                        >
                           <Heart className="w-4 h-4 text-gray-600" />
                         </button>
-                        <button className="p-2 bg-white rounded-full shadow-sm hover:bg-gray-50 transition-colors">
+                        <button 
+                          className="p-2 bg-white rounded-full shadow-sm hover:bg-gray-50 transition-colors"
+                          onClick={showLoginMessage}
+                        >
                           <Eye className="w-4 h-4 text-gray-600" />
                         </button>
                       </div>
@@ -437,7 +447,7 @@ const formatPrice = (price: string | number) => {
                       </div>
                       
                       <button
-                        disabled={!product.inStock}
+                        onClick={showLoginMessage}
                         className={`w-full py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
                           product.inStock
                             ? 'bg-blue-600 hover:bg-blue-700 text-white'
@@ -532,14 +542,20 @@ const formatPrice = (price: string | number) => {
                             </div>
                             
                             <div className="flex gap-2">
-                              <button className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                              <button 
+                                className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                                onClick={showLoginMessage}
+                              >
                                 <Heart className="w-5 h-5 text-gray-600" />
                               </button>
-                              <button className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                              <button 
+                                className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                                onClick={showLoginMessage}
+                              >
                                 <Eye className="w-5 h-5 text-gray-600" />
                               </button>
                               <button
-                                disabled={!product.inStock}
+                                onClick={showLoginMessage}
                                 className={`px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
                                   product.inStock
                                     ? 'bg-blue-600 hover:bg-blue-700 text-white'
@@ -575,10 +591,16 @@ const formatPrice = (price: string | number) => {
             Create an account to access exclusive deals, track your orders, and connect with trusted sellers worldwide.
           </p>
           <div className="flex flex-col sm:flex-row gap-6 justify-center">
-            <button className="bg-white text-blue-600 px-10 py-4 rounded-xl text-lg font-bold hover:bg-gray-50 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1">
+            <button 
+              className="bg-white text-blue-600 px-10 py-4 rounded-xl text-lg font-bold hover:bg-gray-50 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
+              onClick={showLoginMessage}
+            >
               Register as Buyer
             </button>
-            <button className="border-2 border-white text-white px-10 py-4 rounded-xl text-lg font-bold hover:bg-white hover:text-blue-600 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1">
+            <button 
+              className="border-2 border-white text-white px-10 py-4 rounded-xl text-lg font-bold hover:bg-white hover:text-blue-600 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
+              onClick={showLoginMessage}
+            >
               Register as Seller
             </button>
           </div>
