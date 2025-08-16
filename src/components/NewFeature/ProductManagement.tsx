@@ -508,7 +508,6 @@ const fetchProducts = async () => {
       </td>
       <td className="px-4 py-4 whitespace-nowrap">
         <div className="flex items-center text-sm font-medium text-gray-900">
-          <FiDollarSign size={14} className="mr-1" />
           <span>{formatPrice(product.price)}</span>
         </div>
       </td>
@@ -610,7 +609,7 @@ const fetchProducts = async () => {
           <h3 className="text-lg font-medium text-gray-800 mb-4">Products by Status</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {stats.productsByStatus.map((item) => (
-              <div key={item.status} className="flex items-center justify-between p-3 bg-gray-50 rounded">
+              <div key={`status-${item.status}`}className="flex items-center justify-between p-3 bg-gray-50 rounded">
                 <span className="capitalize">{item.status}</span>
                 <span className="font-bold">{item.count}</span>
               </div>
@@ -624,7 +623,7 @@ const fetchProducts = async () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               {stats.productsByCategory.map((item) => (
-                <div key={item.category} className="mb-2">
+                <div key={`category-${item.category}`}className="mb-2">
                   <div className="flex justify-between mb-1">
                     <span>{item.category}</span>
                     <span>{item.count}</span>
@@ -640,7 +639,7 @@ const fetchProducts = async () => {
             </div>
             <div>
               {stats.avgPriceByCategory.map((item) => (
-               <div key={item.category} className="mb-3 p-3 bg-gray-50 rounded">
+               <div key={`avgprice-${item.category}`} className="mb-3 p-3 bg-gray-50 rounded">
   <div className="flex justify-between">
     <span>{item.category}</span>
     <span className="font-bold">{formatPrice(item.avgPrice)}</span>
@@ -794,7 +793,11 @@ const fetchProducts = async () => {
               </div>
             ) : isMobile ? (
               <div className="p-2">
-                {filteredProducts.map(product => renderMobileProductCard(product))}
+                {filteredProducts.map(product => (
+  <div key={product.id}>
+    {renderMobileProductCard(product)}
+  </div>
+))}
               </div>
             ) : (
               <>

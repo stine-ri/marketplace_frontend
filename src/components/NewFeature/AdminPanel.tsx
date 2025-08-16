@@ -1,4 +1,4 @@
-// src/components/AdminPanel.tsx - Updated with Product Management
+// src/components/AdminPanel.tsx - Updated with Support Management
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Service, College } from '../../types/types';
@@ -8,6 +8,7 @@ import BidManagement from '../NewFeature/BidsManagement';
 import RequestManagement from '../NewFeature/RequestManagement';
 import ProductManagement from './ProductManagement';
 import InterestsManagement from './InterestManagement';
+import SupportManagement from './SupportManagement';
 import { 
   FiSearch, 
   FiTrash2, 
@@ -21,12 +22,13 @@ import {
   FiX,
   FiDollarSign,
   FiMessageSquare,
-  FiShoppingBag
+  FiShoppingBag,
+  FiMessageCircle
 } from 'react-icons/fi';
 
 const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com';
 
-type AdminSection = 'services' | 'colleges' | 'users' | 'bids' | 'requests' | 'products' | 'interests' | 'settings';
+type AdminSection = 'services' | 'colleges' | 'users' | 'bids' | 'requests' | 'products' | 'interests' | 'support' | 'settings';
 
 export default function AdminPanel() {
   const [services, setServices] = useState<Service[]>([]);
@@ -41,7 +43,7 @@ export default function AdminPanel() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedItems, setSelectedItems] = useState<number[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-
+   
   // Check admin access
   useEffect(() => {
     if (!isAdmin()) {
@@ -195,7 +197,7 @@ export default function AdminPanel() {
     (college.location && college.location.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  // Updated menu items to include Product Management
+  // Menu items including Support Management
   const menuItems = [
     { id: 'services', label: 'Services & Colleges', icon: FiPackage },
     { id: 'products', label: 'Product Management', icon: FiShoppingBag },
@@ -203,7 +205,8 @@ export default function AdminPanel() {
     { id: 'requests', label: 'Request Management', icon: FiMessageSquare },
     { id: 'bids', label: 'Bid Management', icon: FiDollarSign },
     { id: 'interests', label: 'Interests Management', icon: FiUsers },
-    { id: 'settings', label: 'Settings', icon: FiSettings },
+    { id: 'support', label: 'Support Tickets', icon: FiMessageCircle },
+    { id: 'settings', label: 'Settings', icon: FiSettings }
   ];
 
   // Check admin access
@@ -311,6 +314,8 @@ export default function AdminPanel() {
             <ProductManagement />
           ) : activeSection === 'interests' ? (
             <InterestsManagement />
+          ) : activeSection === 'support' ? (
+            <SupportManagement />
           ) : activeSection === 'settings' ? (
             <div className="p-6">
               <div className="bg-white rounded-lg shadow-sm border p-6">

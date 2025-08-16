@@ -14,6 +14,17 @@ type ResultItem = {
   provider?: string;
 };
 
+const formatPrice = (price: number | string | undefined | null): string => {
+  if (price === undefined || price === null) return 'KSh 0.00';
+  
+  // Convert price to number if it's a string
+  const numericPrice = typeof price === 'string' ? parseFloat(price) : price;
+  
+  if (isNaN(numericPrice)) return 'KSh 0.00';
+  
+  return `KSh ${numericPrice.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
+};
+
 export const HeroSection = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchType, setSearchType] = useState<'services' | 'products' | 'productsAll'>('services');
@@ -77,7 +88,7 @@ const handleSearch = async () => {
         name: item.name,
         category: item.category,
         description: item.description,
-        price: item.price || null,
+        price: item.price ? Number(item.price) : null,
         images: item.images || (item.image ? [item.image] : []),
         provider: item.provider || 'Unknown Provider',
       }));
@@ -192,7 +203,7 @@ const handleSearch = async () => {
                           )}
                           {item.price && (
                             <p className="text-sm font-medium text-blue-600 mt-1">
-                              ${parseFloat(item.price).toFixed(2)}
+                              {formatPrice(item.price)}
                             </p>
                           )}
                         </div>
