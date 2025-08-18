@@ -1,7 +1,7 @@
 // src/components/NotificationBell.tsx
 import { useState, useEffect } from 'react';
 import { Notification } from '../../types/types';
-import useNotifications from '../../hooks/useNotification';
+import useNotifications from './useNotification';
 import { useNavigate } from 'react-router-dom';
 
 export default function NotificationBell({ userId }: { userId?: number }) {

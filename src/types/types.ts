@@ -239,6 +239,8 @@ export interface CreateBidPayload {
   message?: string;
 }
 // Add these to your existing types
+// In src/types/types.ts, replace the existing Product interface with this complete version:
+
 export interface Product {
   id: number;
   providerId: number;
@@ -251,6 +253,18 @@ export interface Product {
   status: 'draft' | 'published' | 'archived';
   createdAt: string;
   updatedAt: string;
+  
+  // Legacy/compatibility properties
+  image?: string | null; 
+  primaryImage?: string | null;  
+  imageUrl?: string | null;      
+  
+  provider: {
+    firstName: string;
+    lastName: string;
+    rating?: number;
+    profileImageUrl?: string | null | undefined; // Support all possible types
+  };
 }
 
 export interface ProductSale {

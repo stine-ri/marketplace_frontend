@@ -1,5 +1,5 @@
 // src/context/WebSocketContext.tsx
-import { createContext, useContext, ReactNode, useMemo } from 'react';
+import { createContext, useContext, ReactNode, useMemo, useState, useEffect } from 'react';
 import useWebSocket from '../hooks/useWebSocket';
 
 type WebSocketContextType = ReturnType<typeof useWebSocket>;
@@ -13,10 +13,23 @@ export function WebSocketProvider({
   children: ReactNode;
   userId?: number;
 }) {
-const ws = useWebSocket(userId);
+  const ws = useWebSocket(userId);
+  const [isReady, setIsReady] = useState(false);
 
+  // Wait for WebSocket to be ready if user is authenticated
+  useEffect(() => {
+    if (userId) {
+      setIsReady(ws.isConnected);
+    } else {
+      setIsReady(true); // Ready immediately if no user (no WebSocket needed)
+    }
+  }, [userId, ws.isConnected]);
 
   const value = useMemo(() => ws, [ws]);
+
+  if (!isReady) {
+    return <div>Connecting to real-time service...</div>;
+  }
 
   return (
     <WebSocketContext.Provider value={value}>

@@ -3,7 +3,9 @@ import { Request, Bid, ClientRequest, Interest } from '../../types/types';
 import api from '../../api/api';
 import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
-import { formatPrice } from '../../utilis/priceFormatter'; // Add this import
+import { formatPrice } from '../../utilis/priceFormatter';
+// Import your enhanced location utilities
+import { getLocationDisplay, hasValidCoordinates, formatCoordinates } from '../../utilis/location';
 
 interface ClientRequestCardProps {
   request: ClientRequest;
@@ -72,7 +74,7 @@ export function ClientRequestCard({
     setShowBids(!showBids);
   };
 
- const handleAcceptBid = async (bidId: number) => {
+  const handleAcceptBid = async (bidId: number) => {
     try {
       await onAcceptBid(request.id, bidId);
       await fetchBids();
@@ -80,40 +82,10 @@ export function ClientRequestCard({
       console.error('❌ Error accepting bid:', error);
     }
   };
-  
-const parseLocation = (location: any): { display: string; coords?: { lat: number; lng: number } } => {
-    if (!location) return { display: 'Location not specified' };
 
-    try {
-      if (typeof location === 'string') {
-        if (location.trim() === '{}') return { display: 'Location not specified' };
-        try {
-          const parsed = JSON.parse(location);
-          if (parsed && typeof parsed === 'object') {
-            return {
-              display: parsed.address || parsed.name || 'Location specified',
-              coords: parsed.lat && parsed.lng ? { lat: parsed.lat, lng: parsed.lng } : undefined
-            };
-          }
-        } catch {
-          return { display: location };
-        }
-      }
-
-      if (typeof location === 'object') {
-        return {
-          display: location.address || location.name || 'Location specified',
-          coords: location.lat && location.lng ? { lat: location.lat, lng: location.lng } : undefined
-        };
-      }
-
-      return { display: 'Location not specified' };
-    } catch {
-      return { display: 'Location not specified' };
-    }
-  };
-
-  const { display: locationDisplay, coords: locationCoords } = parseLocation(request.location);
+  // Use the enhanced location utilities
+  const { display: locationDisplay, coords: locationCoords } = getLocationDisplay(request.location);
+  const hasCoordinates = hasValidCoordinates(request.location);
 
   const statusColors = {
     open: 'bg-blue-100 text-blue-800',
@@ -157,7 +129,7 @@ const parseLocation = (location: any): { display: string; coords?: { lat: number
     return price ? formatPrice(price) : 'Price not specified';
   };
 
-const handleImageError = (id: string, fallbackUrl = '/default-avatar.png') => {
+  const handleImageError = (id: string, fallbackUrl = '/default-avatar.png') => {
     setFailedImages(prev => ({ ...prev, [id]: true }));
     return fallbackUrl;
   };
@@ -167,7 +139,7 @@ const handleImageError = (id: string, fallbackUrl = '/default-avatar.png') => {
     return provider?.profileImageUrl || provider?.user?.avatar || '/default-avatar.png';
   };
 
-const handleAcceptInterest = async (interestId: number) => {
+  const handleAcceptInterest = async (interestId: number) => {
     if (!onAcceptInterest) return;
     
     try {
@@ -191,7 +163,8 @@ const handleAcceptInterest = async (interestId: number) => {
     } finally {
       setProcessingInterests(prev => ({ ...prev, [interestId]: null }));
     }
-  }
+  };
+
   return (
     <div className="bg-white p-4 sm:p-6 rounded-lg shadow-md mb-4">
       <div className="flex flex-col sm:flex-row justify-between gap-4">
@@ -219,31 +192,55 @@ const handleAcceptInterest = async (interestId: number) => {
 
             <div className="flex flex-col sm:flex-row sm:items-center gap-2">
               <span className="font-medium">Location:</span>
-              <div>
-                <p>{locationDisplay}</p>
-                {locationCoords && (
-                  <button
-                    onClick={() => setMapVisible(!mapVisible)}
-                    className="text-blue-600 text-sm mt-1 hover:underline"
-                  >
-                    {mapVisible ? 'Hide map' : 'View map'}
-                  </button>
+              <div className="flex flex-col">
+                <p className="text-gray-700">{locationDisplay}</p>
+                {hasCoordinates && locationCoords && (
+                  <div className="mt-1">
+                    <button
+                      onClick={() => setMapVisible(!mapVisible)}
+                      className="text-blue-600 text-sm hover:underline inline-flex items-center gap-1"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      {mapVisible ? 'Hide coordinates' : 'Show coordinates'}
+                    </button>
+                    {mapVisible && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Coordinates: {formatCoordinates(locationCoords.lat, locationCoords.lng)}
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
 
-            {mapVisible && locationCoords && (
-              <div className="mt-2 bg-gray-100 p-2 rounded">
-                <div className="h-40 bg-blue-50 flex items-center justify-center text-gray-500">
-                  Map View: {locationCoords.lat.toFixed(4)}, {locationCoords.lng.toFixed(4)}
+            {/* Enhanced map view section */}
+            {mapVisible && hasCoordinates && locationCoords && (
+              <div className="mt-3 bg-gray-100 p-3 rounded-lg">
+                <div className="h-40 bg-gradient-to-br from-blue-50 to-indigo-100 rounded-md flex flex-col items-center justify-center text-gray-600 border-2 border-dashed border-gray-300">
+                  <svg className="w-8 h-8 mb-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-1.447-.894L15 4m0 13V4m-6 3l6-3" />
+                  </svg>
+                  <p className="text-sm font-medium">Map Location</p>
+                  <p className="text-xs text-gray-500">{formatCoordinates(locationCoords.lat, locationCoords.lng)}</p>
+                  <button
+                    onClick={() => window.open(`https://www.google.com/maps?q=${locationCoords.lat},${locationCoords.lng}`, '_blank')}
+                    className="mt-2 text-xs text-blue-600 hover:underline"
+                  >
+                    Open in Google Maps
+                  </button>
                 </div>
               </div>
             )}
 
             {request.description && (
-              <div className="mt-2">
-                <p className="font-medium">Description:</p>
-                <p className="text-gray-700 mt-1 whitespace-pre-wrap">{request.description}</p>
+              <div className="mt-3">
+                <p className="font-medium text-gray-900">Description:</p>
+                <p className="text-gray-700 mt-1 whitespace-pre-wrap text-sm leading-relaxed">
+                  {request.description}
+                </p>
               </div>
             )}
           </div>
@@ -254,8 +251,10 @@ const handleAcceptInterest = async (interestId: number) => {
           <button
             onClick={toggleBids}
             disabled={loadingBids}
-            className={`px-3 py-1 rounded text-sm ${
-              loadingBids ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700 text-white'
+            className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+              loadingBids 
+                ? 'bg-gray-400 cursor-not-allowed' 
+                : 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm'
             }`}
           >
             {showBids ? 'Hide Bids' : 'View Bids'} ({bidsCount})
@@ -263,6 +262,7 @@ const handleAcceptInterest = async (interestId: number) => {
         </div>
       </div>
 
+      {/* Rest of your component remains the same - bids and interests sections */}
       {showBids && (
         <div className="mt-4 pt-4 border-t">
           {loadingBids ? (
@@ -284,7 +284,6 @@ const handleAcceptInterest = async (interestId: number) => {
                 >
                   <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
                     <div className="flex-1">
-                      {/* Updated bid price display to use KSh formatting */}
                       <h4 className="font-semibold text-green-600">{formatPrice(bid.price)}</h4>
                       <p className="text-sm text-gray-600 mt-1">
                         From: {bid.provider?.firstName} {bid.provider?.lastName}
@@ -319,8 +318,9 @@ const handleAcceptInterest = async (interestId: number) => {
           )}
         </div>
       )}
+
       {/* Interests section */}
- {request.interests && request.interests.length > 0 && (
+      {request.interests && request.interests.length > 0 && (
         <div className="border-t border-gray-200 p-4">
           <h3 className="text-sm font-medium text-gray-900 mb-2">
             Expressed Interests ({request.interests.length})
@@ -367,7 +367,6 @@ const handleAcceptInterest = async (interestId: number) => {
                       <p className="text-xs text-gray-500">
                         Expressed on: {format(new Date(interest.createdAt), 'MMM dd, yyyy h:mm a')}
                       </p>
-                      {/* Add proposed price display if it exists */}
                       {interest.proposedPrice && (
                         <p className="text-sm font-medium text-green-600 mt-1">
                           Proposed: {formatPrice(interest.proposedPrice)}
@@ -387,65 +386,65 @@ const handleAcceptInterest = async (interestId: number) => {
                   </div>
                   
                   {request.status === 'open' && !isAccepted && !isRejected && (
-  <div className="flex space-x-2">
-    <button
-      onClick={() => handleAcceptInterest(interest.id)}
-      disabled={isProcessing === 'accept'}
-      className={`
-        inline-flex items-center px-3 py-1.5 border border-transparent 
-        text-xs font-medium rounded-md shadow-sm 
-        ${isProcessing === 'accept' 
-          ? 'bg-green-400 cursor-not-allowed' 
-          : 'bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500'
-        }
-        text-white
-      `}
-    >
-      {isProcessing === 'accept' ? (
-        <>
-          <svg className="animate-spin -ml-1 mr-2 h-3 w-3 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
-          Accepting...
-        </>
-      ) : 'Accept'}
-    </button>
-    
-    <button
-      onClick={() => handleRejectInterest(interest.id)}
-      disabled={isProcessing === 'reject'}
-      className={`
-        inline-flex items-center px-3 py-1.5 border border-gray-300 
-        text-xs font-medium rounded-md shadow-sm 
-        ${isProcessing === 'reject' 
-          ? 'bg-gray-200 cursor-not-allowed' 
-          : 'bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
-        }
-        text-gray-700
-      `}
-    >
-      {isProcessing === 'reject' ? (
-        <>
-          <svg className="animate-spin -ml-1 mr-2 h-3 w-3 text-gray-700" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
-          Rejecting...
-        </>
-      ) : 'Reject'}
-    </button>
-  </div>
-)}
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => handleAcceptInterest(interest.id)}
+                        disabled={isProcessing === 'accept'}
+                        className={`
+                          inline-flex items-center px-3 py-1.5 border border-transparent 
+                          text-xs font-medium rounded-md shadow-sm 
+                          ${isProcessing === 'accept' 
+                            ? 'bg-green-400 cursor-not-allowed' 
+                            : 'bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500'
+                          }
+                          text-white
+                        `}
+                      >
+                        {isProcessing === 'accept' ? (
+                          <>
+                            <svg className="animate-spin -ml-1 mr-2 h-3 w-3 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Accepting...
+                          </>
+                        ) : 'Accept'}
+                      </button>
+                      
+                      <button
+                        onClick={() => handleRejectInterest(interest.id)}
+                        disabled={isProcessing === 'reject'}
+                        className={`
+                          inline-flex items-center px-3 py-1.5 border border-gray-300 
+                          text-xs font-medium rounded-md shadow-sm 
+                          ${isProcessing === 'reject' 
+                            ? 'bg-gray-200 cursor-not-allowed' 
+                            : 'bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
+                          }
+                          text-gray-700
+                        `}
+                      >
+                        {isProcessing === 'reject' ? (
+                          <>
+                            <svg className="animate-spin -ml-1 mr-2 h-3 w-3 text-gray-700" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Rejecting...
+                          </>
+                        ) : 'Reject'}
+                      </button>
+                    </div>
+                  )}
                   
                   {isAccepted && interest.chatRoomId && (
-  <Link
-    to={`/chat/${interest.chatRoomId}`}
-    className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-  >
-    Chat Now
-  </Link>
-)}
+                    <Link
+                      to={`/chat/${interest.chatRoomId}`}
+                      className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    >
+                      Chat Now
+                    </Link>
+                  )}
                 </div>
               );
             })}

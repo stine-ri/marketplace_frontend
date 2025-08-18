@@ -124,6 +124,7 @@ const ProductManagement = () => {
     'Furniture',
     'Sports',
     'Beauty',
+    'art',
     'Other'
   ];
 

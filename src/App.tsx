@@ -23,14 +23,13 @@ import { ChatWindow } from './components/Chat/ChatWindow';
 import { ToastContainer } from 'react-toastify';
 import { ProductDetail } from './components/NewFeature/ProductDetail';
 import 'react-toastify/dist/ReactToastify.css';
+
 export function App() {
   return (
     <Router>
       <AuthProvider>
         <DataProvider>
-          <WebSocketProvider>
-            <AppContent />
-          </WebSocketProvider>
+           <WebSocketWrapper />
         </DataProvider>
       </AuthProvider>
       <ToastContainer />
@@ -38,72 +37,70 @@ export function App() {
   );
 }
 
-function AppContent() {
+function WebSocketWrapper() {
   const { user } = useAuth();
-
+  
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50">
-      <Navbar>
-        {user && <NotificationBell />}
-      </Navbar>
-      
-      <main className="flex-grow">
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/providers" element={<ProvidersList />} />
-          <Route path="/providers/public/:id" element={<ProviderPublicProfile />} />
-          <Route path="/services" element={<ServicesProductsComponent />} />
-          <Route path="/products" element={<Product/>} />
-          <Route path="/help" element={<Help/>} />
-          <Route path="/become-seller" element={<Seller/>} />
-          <Route path="/chat" element={<ChatList />} />
-          <Route path="/chat/:chatRoomId" element={<ChatWindow />} />
-          <Route path="/products/:id" element={<ProductDetail />} />
-          {/* Provider Dashboard Route */}
-          <Route
-            path="/provider/dashboard"
-            element={
-              <ProtectedRoute requiredRole="service_provider">
-                <ProviderDashboard />
-              </ProtectedRoute>
-            }
-          />
-          
-          {/* Admin Dashboard Route */}
-          <Route
-            path="/admin/dashboard"
-            element={
-              <ProtectedRoute requiredRole="admin">
-                <AdminPanel />
-              </ProtectedRoute>
-            }
-          />
-          
-          {/* Alternative admin route (in case your login uses /admin) */}
-          <Route
-            path="/admin/dashboard"
-            element={
-              <ProtectedRoute requiredRole="admin">
-                <AdminPanel />
-              </ProtectedRoute>
-            }
-          />
-          
-          {/* Add client dashboard route if needed */}
-          <Route
-            path="/client/dashboard"
-            element={
-              <ProtectedRoute requiredRole="client">
-                <ClientDashboard/>
-              </ProtectedRoute>
-            }
-          />
-        </Routes>
-      </main>
+    <WebSocketProvider userId={user?.userId}>
+      <div className="flex flex-col min-h-screen bg-gray-50">
+        <Navbar>
+          {user && <NotificationBell userId={user.userId} />}
+        </Navbar>
+        <AppContent />
+        <Footer />
+      </div>
+    </WebSocketProvider>
+  );
+}
 
-      <Footer />
-    </div>
+
+function AppContent() {
+  return (
+    <main className="flex-grow">
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/providers" element={<ProvidersList />} />
+        <Route path="/providers/public/:id" element={<ProviderPublicProfile />} />
+        <Route path="/services" element={<ServicesProductsComponent />} />
+        <Route path="/products" element={<Product/>} />
+        <Route path="/help" element={<Help/>} />
+        <Route path="/become-seller" element={<Seller/>} />
+        <Route path="/chat" element={<ChatList />} />
+        <Route path="/chat/:chatRoomId" element={<ChatWindow />} />
+        <Route path="/products/:id" element={<ProductDetail />} />
+        
+        {/* Provider Dashboard Route */}
+        <Route
+          path="/provider/dashboard"
+          element={
+            <ProtectedRoute requiredRole="service_provider">
+              <ProviderDashboard />
+            </ProtectedRoute>
+          }
+        />
+        
+        {/* Admin Dashboard Route */}
+        <Route
+          path="/admin/dashboard"
+          element={
+            <ProtectedRoute requiredRole="admin">
+              <AdminPanel />
+            </ProtectedRoute>
+          }
+        />
+        
+        {/* Client dashboard route */}
+        <Route
+          path="/client/dashboard"
+          element={
+            <ProtectedRoute requiredRole="client">
+              <ClientDashboard/>
+            </ProtectedRoute>
+          }
+        />
+      </Routes>
+    </main>
   );
 }

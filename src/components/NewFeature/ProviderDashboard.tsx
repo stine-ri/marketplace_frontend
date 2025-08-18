@@ -654,31 +654,41 @@ const sendChatMessage = useCallback(async () => {
     loadData();
   }, [fetchAvailableRequests, fetchMyBids, fetchRequests, fetchMyInterests]);
 
-  useEffect(() => {
-    if (!lastMessage) return;
+useEffect(() => {
+  if (!lastMessage) return;
 
-    try {
-      const data = JSON.parse(lastMessage.data);
-      if (data.type === 'new_request') {
-        setAvailableRequests(prev => [data.request, ...prev]);
-      } else if (data.type === 'bid_accepted' || data.type === 'bid_rejected') {
-        setMyBids(prev => prev.map(bid => 
-          bid.id === data.bidId ? { ...bid, status: data.status } : bid
-        ));
-      } else if (data.type === 'bid_status_updated') {
-        setMyBids(prev => prev.map(bid => 
-          bid.id === data.bidId ? { 
-            ...bid, 
-            status: data.status,
-            canEdit: data.status === 'pending' && !bid.request?.status?.includes('closed'),
-            canWithdraw: ['pending', 'accepted'].includes(data.status) && !bid.request?.status?.includes('closed')
-          } : bid
-        ));
-      }
-    } catch (error) {
-      console.error('WebSocket error:', error);
+  try {
+    // Check if data is already an object or needs parsing
+    let data;
+    if (typeof lastMessage.data === 'string') {
+      data = JSON.parse(lastMessage.data);
+    } else {
+      data = lastMessage.data;
     }
-  }, [lastMessage]);
+
+    if (data.type === 'new_request') {
+      setAvailableRequests(prev => [data.request, ...prev]);
+    } else if (data.type === 'bid_accepted' || data.type === 'bid_rejected') {
+      setMyBids(prev => prev.map(bid => 
+        bid.id === data.bidId ? { ...bid, status: data.status } : bid
+      ));
+    } else if (data.type === 'bid_status_updated') {
+      setMyBids(prev => prev.map(bid => 
+        bid.id === data.bidId ? { 
+          ...bid, 
+          status: data.status,
+          canEdit: data.status === 'pending' && !bid.request?.status?.includes('closed'),
+          canWithdraw: ['pending', 'accepted'].includes(data.status) && !bid.request?.status?.includes('closed')
+        } : bid
+      ));
+    }
+  } catch (error) {
+    console.error('WebSocket error:', error);
+    // Add more detailed logging to help debug
+    console.error('lastMessage.data type:', typeof lastMessage.data);
+    console.error('lastMessage.data value:', lastMessage.data);
+  }
+}, [lastMessage]);
 
   useEffect(() => {
     if (!socket || !provider?.isProfileComplete) return;
@@ -1080,8 +1090,8 @@ const handleRefresh = async () => {
           <div>
             <h3 className="font-medium text-gray-900">Timing</h3>
             <div className="mt-2 bg-yellow-50 p-3 rounded">
-              <p>Posted: {formatDate(request.createdAt)}</p>
-              {request.deadline && <p className="mt-1">Deadline: {formatDate(request.deadline)}</p>}
+<p>Posted: {formatDate(request.createdAt)}</p>
+{request.deadline && <p className="mt-1">Deadline: {formatDate(request.deadline)}</p>}
             </div>
           </div>
 
@@ -1987,3 +1997,7 @@ function BidCard({ bid, onEdit, onWithdraw, onView }: {
     </div>
   );
 }
+
+
+
+

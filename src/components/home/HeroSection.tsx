@@ -127,7 +127,7 @@ const handleSearch = async () => {
           </h1>
           <p className="text-xl mb-8 text-blue-100">
             Discover local service providers and unique products from sellers
-            around the world.
+            around you.
           </p>
           
           {/* Search Bar */}

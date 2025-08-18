@@ -1,8 +1,8 @@
 // src/hooks/useNotifications.ts
 import { useState, useEffect, useCallback } from 'react';
-import type { Notification } from '../types/types';
-import api from '../api/api';
-import { useWebSocketContext } from '../context/WebSocketContext';
+import type { Notification } from '../../types/types';
+import api from '../../api/api';
+import { useWebSocketContext } from '../../context/WebSocketContext';
 
 interface UseNotificationsReturn {
   notifications: Notification[];
@@ -21,7 +21,7 @@ export default function useNotifications(userId?: number): UseNotificationsRetur
   const { socket } = useWebSocketContext();
 
   const playNotificationSound = useCallback(() => {
-    const audio = new Audio('/notification-sound.mp3');
+    const audio = new Audio('api/notification-sound.mp3');
     audio.play().catch((e) => console.log('Audio play failed:', e));
   }, []);
 
@@ -66,7 +66,7 @@ useEffect(() => {
     );
     
     // API call to mark as read on server
-    api.patch(`/notifications/${id}/read`).catch(err => {
+    api.patch(`api/notifications/${id}/read`).catch(err => {
       console.error('Failed to mark notification as read:', err);
     });
   }, []);
@@ -78,7 +78,7 @@ useEffect(() => {
     );
     
     // API call to mark all as read on server
-    api.patch('/notifications/read-all').catch(err => {
+    api.patch('api/notifications/read-all').catch(err => {
       console.error('Failed to mark all notifications as read:', err);
     });
   }, []);
@@ -92,9 +92,7 @@ useEffect(() => {
       try {
         setIsLoading(true);
         setError(null);
-        const response = await api.get<Notification[]>('/notifications', {
-          params: { userId }
-        });
+        const response = await api.get<Notification[]>('api/notifications');
         setNotifications(response.data);
       } catch (err) {
         setError('Failed to load notifications');

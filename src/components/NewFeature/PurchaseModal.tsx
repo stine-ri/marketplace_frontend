@@ -3,26 +3,12 @@ import { Dialog, Transition } from '@headlessui/react';
 import { Fragment } from 'react';
 import { XMarkIcon, ShoppingCartIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-toastify';
-
-interface Product {
-  id: number;
-  name: string;
-  price: string;
-  description: string;
-  images: string[];
-  stock?: number;
-  provider: {
-    firstName: string;
-    lastName: string;
-    rating?: number;
-    profileImageUrl?: string;
-  };
-}
+import { Product } from '../../types/types'; 
 
 interface PurchaseModalProps {
   isOpen: boolean;
   onClose: () => void;
-  product: Product | null;
+  product: Product | null; // Now uses the centralized Product type
   onPurchase: (productId: number, purchaseData: {
     quantity: number;
     paymentMethod: string;

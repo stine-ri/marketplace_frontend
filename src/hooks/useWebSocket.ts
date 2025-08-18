@@ -3,23 +3,6 @@ import type { Notification } from '../types/types';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 
-interface NotificationOptions {
-  body?: string;
-  icon?: string;
-  image?: string;
-  badge?: string;
-  vibrate?: number[];
-  tag?: string;
-  renotify?: boolean;
-  silent?: boolean;
-  sound?: string;
-  noscreen?: boolean;
-  sticky?: boolean;
-  dir?: 'auto' | 'ltr' | 'rtl';
-  lang?: string;
-  timestamp?: number;
-}
-
 type WebSocketMessage = {
   type: string;
   data: any;
@@ -27,146 +10,302 @@ type WebSocketMessage = {
 
 const MAX_RECONNECT_ATTEMPTS = 5;
 const RECONNECT_INTERVAL = 5000;
+const IS_DEVELOPMENT = import.meta.env.DEV;
+// Consider making this configurable via environment variable
+const DISABLE_WS_IN_DEV = import.meta.env.VITE_WS_DISABLE_IN_DEV === 'true'; // Set to false when you want to test WebSocket in dev
+
+// Add this helper at the top
+function getWsUrl(): string {
+  let url = import.meta.env.VITE_WS_URL;
+
+  if (!url) {
+    // fallback for local dev (same host as frontend)
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    return `${protocol}//${window.location.host}`;
+  }
+
+  // Normalize if someone accidentally used http/https
+  if (url.startsWith("http://")) {
+    url = url.replace("http://", "ws://");
+  }
+  if (url.startsWith("https://")) {
+    url = url.replace("https://", "wss://");
+  }
+
+  return url;
+}
 
 export default function useWebSocket(userId?: number) {
-  const url = import.meta.env.VITE_WS_URL;
+  const url = getWsUrl(); 
   const { user, token } = useAuth();
 
   const [socket, setSocket] = useState<WebSocket | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
   const reconnectTimerRef = useRef<number>();
   const [lastMessage, setLastMessage] = useState<any>(null);
+  const socketRef = useRef<WebSocket | null>(null);
+  const isConnectingRef = useRef(false);
 
-// Update the handleMessage function in useWebSocket.ts
 const handleMessage = useCallback((event: MessageEvent) => {
   try {
-    const message: WebSocketMessage = JSON.parse(event.data);
+    let rawData = event.data;
+    let parsed: WebSocketMessage;
+
+    // Handle case where data is already an object
+    if (typeof rawData === 'object' && !(rawData instanceof Blob)) {
+      if (rawData.type) { // If it looks like our message format
+        parsed = rawData;
+      } else {
+        // Try to stringify and parse to ensure consistency
+        try {
+          rawData = JSON.stringify(rawData);
+          parsed = JSON.parse(rawData);
+        } catch {
+          console.error("Could not process incoming object:", rawData);
+          return;
+        }
+      }
+    } else if (typeof rawData === 'string') {
+      // Normal JSON parsing for string data
+      try {
+        parsed = JSON.parse(rawData);
+      } catch (e) {
+        console.error("Failed to parse WebSocket data. Raw:", rawData);
+        return;
+      }
+    } else {
+      console.error("Unsupported WebSocket message type:", typeof rawData);
+      return;
+    }
+
+    const message: WebSocketMessage = parsed;
     setLastMessage(message);
 
     switch (message.type) {
-      case 'notification':
-      case 'new_notification': {
+      case "notification":
+      case "new_notification": {
         const notification = message.data as Notification;
         setNotifications(prev => [notification, ...prev]);
-        // ... existing notification code ...
         break;
       }
 
-      case 'initial_notifications': {
+      case "initial_notifications": {
         if (Array.isArray(message.data)) {
           setNotifications(message.data);
         }
         break;
       }
 
-      case 'new_message': {
-        // Handle incoming chat messages
-        const { chatRoomId, message: chatMessage } = message.data;
-        // Update your chat state here
-        console.log('New message received:', chatMessage);
+      case "new_message": {
+        const { message: chatMessage } = message.data;
+        console.log("New message received:", chatMessage);
         break;
       }
 
-      case 'interest_accepted': {
-        // Handle when a client accepts the provider's interest
-        const { requestId, chatRoomId } = message.data;
+      case "interest_accepted": {
+        const { requestId } = message.data;
         toast.success(`Your interest in request #${requestId} was accepted!`);
-        // You might want to fetch the chat room details here
         break;
       }
 
-      case 'chat_room_created': {
-        // Handle when a new chat room is created for an accepted interest
-        const { chatRoom } = message.data;
-        // Update your chat rooms state
-        console.log('New chat room created:', chatRoom);
+      case "chat_room_created": {
+        console.log("New chat room created:", message.data.chatRoom);
+        break;
+      }
+
+      case "auth_success": {
+        console.log("Authenticated successfully:", message.data);
         break;
       }
 
       default:
-        console.warn('Unhandled message type:', message.type);
+        console.warn("Unhandled message type:", message.type, "with data:", message.data);
     }
   } catch (error) {
-    console.error('WebSocket message error:', error);
+    console.error("WebSocket message handling error:", error);
   }
 }, []);
 
+
   const cleanup = useCallback(() => {
-    if (socket) {
-      socket.onopen = null;
-      socket.onmessage = null;
-      socket.onclose = null;
-      socket.onerror = null;
-      if (socket.readyState === WebSocket.OPEN) {
-        socket.close();
-      }
-    }
     if (reconnectTimerRef.current) {
       clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = undefined;
     }
-  }, [socket]);
-
-  const connect = useCallback(() => {
-    cleanup();
-
-    if (!url || !token || reconnectAttempt > MAX_RECONNECT_ATTEMPTS) return;
-
-    const ws = new WebSocket(url);
-    ws.onopen = () => {
-      console.log('WebSocket connected');
-      setSocket(ws);
-      setIsConnected(true);
-      setReconnectAttempt(0);
-
-      ws.send(JSON.stringify({ type: 'auth', token }));
-    };
-
-    ws.onmessage = handleMessage;
-
-    ws.onclose = () => {
-      console.log('WebSocket disconnected');
-      setIsConnected(false);
-
-      if (reconnectAttempt < MAX_RECONNECT_ATTEMPTS) {
-        const delay = Math.min(
-          RECONNECT_INTERVAL * Math.pow(2, reconnectAttempt),
-          RECONNECT_INTERVAL * 10
-        );
-        reconnectTimerRef.current = window.setTimeout(() => {
-          setReconnectAttempt(prev => prev + 1);
-          connect();
-        }, delay);
+    
+    if (socketRef.current) {
+      socketRef.current.onopen = null;
+      socketRef.current.onmessage = null;
+      socketRef.current.onclose = null;
+      socketRef.current.onerror = null;
+      
+      if (socketRef.current.readyState === WebSocket.OPEN) {
+        socketRef.current.close();
       }
-    };
+      
+      socketRef.current = null;
+    }
+    
+    setSocket(null);
+    setIsConnected(false);
+    isConnectingRef.current = false;
+  }, []);
 
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
-      ws.close();
-    };
-
-    setSocket(ws);
-  }, [url, token, handleMessage, reconnectAttempt, cleanup]);
-
+  // Main connection effect
   useEffect(() => {
-    if (!url || !token || !user) return;
-    connect();
-    return () => cleanup();
-  }, [url, token, user, connect, cleanup]);
+    // Skip WebSocket connection in development if disabled
+    if (IS_DEVELOPMENT && DISABLE_WS_IN_DEV) {
+      console.log('WebSocket disabled in development mode');
+      setConnectionError('WebSocket disabled in development');
+      return;
+    }
+
+    // Clear any previous error
+    setConnectionError(null);
+
+    // Validate environment
+    if (!url) {
+      setConnectionError('WebSocket URL not configured (VITE_WS_URL)');
+      console.error('VITE_WS_URL environment variable not set');
+      return;
+    }
+
+    if (!token) {
+      setConnectionError('No authentication token available');
+      console.warn('No authentication token - WebSocket connection skipped');
+      return;
+    }
+
+    if (!user) {
+      setConnectionError('No user data available');
+      console.warn('No user data - WebSocket connection skipped');
+      return;
+    }
+
+    // Don't connect if already connected or connecting
+    if (socketRef.current?.readyState === WebSocket.OPEN || isConnectingRef.current) {
+      return;
+    }
+
+    // Don't connect if exceeded max attempts
+    if (reconnectAttempt > MAX_RECONNECT_ATTEMPTS) {
+      setConnectionError(`Max reconnection attempts exceeded (${MAX_RECONNECT_ATTEMPTS})`);
+      console.error('Max WebSocket reconnection attempts reached');
+      return;
+    }
+
+    console.log(`Attempting WebSocket connection to: ${url} (attempt ${reconnectAttempt + 1})`);
+    isConnectingRef.current = true;
+
+    try {
+      const ws = new WebSocket(url);
+      socketRef.current = ws;
+
+      // Connection timeout
+      const connectionTimeout = setTimeout(() => {
+        if (ws.readyState === WebSocket.CONNECTING) {
+          console.error('WebSocket connection timeout');
+          ws.close();
+          setConnectionError('Connection timeout');
+        }
+      }, 10000); // 10 second timeout
+      
+      ws.onopen = () => {
+        clearTimeout(connectionTimeout);
+        console.log('WebSocket connected successfully');
+        setSocket(ws);
+        setIsConnected(true);
+        setReconnectAttempt(0);
+        setConnectionError(null);
+        isConnectingRef.current = false;
+        
+        // Send authentication
+        ws.send(JSON.stringify({ type: 'auth', token }));
+      };
+
+      ws.onmessage = handleMessage;
+
+      ws.onclose = (event) => {
+        clearTimeout(connectionTimeout);
+        console.log(`WebSocket disconnected - Code: ${event.code}, Reason: ${event.reason || 'No reason provided'}`);
+        
+        setIsConnected(false);
+        setSocket(null);
+        socketRef.current = null;
+        isConnectingRef.current = false;
+
+        // Set error message based on close code
+        switch (event.code) {
+          case 1000:
+            setConnectionError(null); // Normal closure
+            break;
+          case 1006:
+            setConnectionError('Connection failed - Server may be unreachable');
+            break;
+          case 1011:
+            setConnectionError('Server error encountered');
+            break;
+          case 1012:
+            setConnectionError('Server restarting');
+            break;
+          default:
+            setConnectionError(`Connection closed unexpectedly (Code: ${event.code})`);
+        }
+
+        // Only reconnect if it wasn't a manual close and we haven't exceeded attempts
+        if (event.code !== 1000 && reconnectAttempt < MAX_RECONNECT_ATTEMPTS) {
+          const delay = Math.min(
+            RECONNECT_INTERVAL * Math.pow(2, reconnectAttempt),
+            RECONNECT_INTERVAL * 10
+          );
+          
+          console.log(`Scheduling reconnection in ${delay}ms (attempt ${reconnectAttempt + 1}/${MAX_RECONNECT_ATTEMPTS})`);
+          
+          reconnectTimerRef.current = window.setTimeout(() => {
+            setReconnectAttempt(prev => prev + 1);
+          }, delay);
+        } else if (reconnectAttempt >= MAX_RECONNECT_ATTEMPTS) {
+          console.error('Max reconnection attempts reached, giving up');
+        }
+      };
+
+      ws.onerror = (error) => {
+        clearTimeout(connectionTimeout);
+        console.error('WebSocket error occurred:', error);
+        setConnectionError('WebSocket connection error');
+        isConnectingRef.current = false;
+        
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.close();
+        }
+      };
+    } catch (error) {
+      console.error('Failed to create WebSocket:', error);
+      setConnectionError('Failed to create WebSocket connection');
+      isConnectingRef.current = false;
+    }
+
+    return cleanup;
+  }, [url, token, user, handleMessage, cleanup, reconnectAttempt]);
 
   const sendMessage = useCallback((message: object) => {
-    if (socket && socket.readyState === WebSocket.OPEN) {
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
       try {
-        socket.send(JSON.stringify(message));
+        socketRef.current.send(JSON.stringify(message));
         return true;
       } catch (error) {
         console.error('WebSocket send error:', error);
+        setConnectionError('Failed to send message');
         return false;
       }
+    } else {
+      console.warn('Cannot send message - WebSocket not connected');
+      return false;
     }
-    return false;
-  }, [socket]);
+  }, []);
 
   const markAsRead = useCallback((notificationId: number) => {
     setNotifications(prev =>
@@ -180,6 +319,15 @@ const handleMessage = useCallback((event: MessageEvent) => {
     sendMessage({ type: 'mark_all_read' });
   }, [sendMessage]);
 
+  // Manual reconnect function
+  const reconnect = useCallback(() => {
+    if (reconnectAttempt < MAX_RECONNECT_ATTEMPTS) {
+      cleanup();
+      setReconnectAttempt(0);
+      setConnectionError(null);
+    }
+  }, [cleanup, reconnectAttempt]);
+
   return {
     socket,
     notifications,
@@ -189,6 +337,8 @@ const handleMessage = useCallback((event: MessageEvent) => {
     markAllAsRead,
     unreadCount: notifications.filter(n => !n.isRead).length,
     reconnectAttempt,
-    lastMessage
+    lastMessage,
+    connectionError,
+    reconnect
   };
 }

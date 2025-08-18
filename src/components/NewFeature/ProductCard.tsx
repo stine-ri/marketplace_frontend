@@ -2,22 +2,9 @@ import React from 'react';
 import { StarIcon, ShoppingCartIcon, UserIcon } from '@heroicons/react/24/outline';
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 import { formatPrice } from '../../utilis/priceFormatter';
-
+import { Product } from '../../types/types'; 
 interface ProductCardProps {
-  product: {
-    id: number;
-    name: string;
-    price: string;
-    description?: string;
-    images: string[];
-    stock?: number;
-    provider: {
-      firstName?: string;
-      lastName?: string;
-      rating?: number;
-      profileImageUrl?: string;
-    };
-  };
+  product: Product;
   onViewDetails: (product: any) => void;  // New prop for view details
   onPurchase: (product: any) => void;     // New prop for purchase
   showPurchaseButton?: boolean;

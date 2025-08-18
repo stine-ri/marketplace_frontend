@@ -4,22 +4,8 @@ import { useEffect, useState } from 'react';
 import api from '../../api/api';
 import { StarIcon } from '@heroicons/react/24/solid';
 import { formatPrice } from '../../utilis/priceFormatter';
+import { Product } from '../../types/types'; 
 
-interface Provider {
-  firstName: string;
-  lastName: string;
-  rating: number;
-  profileImageUrl?: string;
-}
-
-interface Product {
-  id: number;
-  name: string;
-  price: string;
-  description: string;
-  images: string[];
-  provider: Provider;
-}
 
 export const ProductDetail = () => {
   const { id } = useParams<{ id: string }>();
