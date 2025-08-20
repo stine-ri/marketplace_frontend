@@ -24,10 +24,11 @@ interface College {
   name: string;
 }
 
-interface Service {
+interface Category {
   id: number;
   name: string;
-  category: string;
+  description?: string;
+  isActive: boolean;
 }
 
 export const ProductFilterModal = ({
@@ -38,7 +39,7 @@ export const ProductFilterModal = ({
 }: ProductFilterModalProps) => {
   const [filters, setFilters] = useState(currentFilters);
   const [colleges, setColleges] = useState<College[]>([]);
-  const [categories, setCategories] = useState<string[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState({
     colleges: false,
     categories: false
@@ -90,18 +91,16 @@ export const ProductFilterModal = ({
       setError(prev => ({ ...prev, categories: '' }));
       
       const headers = getAuthHeaders();
-      const response = await fetch(`${BASE_URL}/api/services`, { headers });
+      const response = await fetch(`${BASE_URL}/api/admin/categories`, { headers });
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const services: Service[] = await response.json();
-      // Extract unique categories from services
-      const uniqueCategories = Array.from(
-        new Set(services.map(service => service.category).filter(Boolean))
-      );
-      setCategories(uniqueCategories);
+      const categoriesData: Category[] = await response.json();
+      // Filter only active categories
+      const activeCategories = categoriesData.filter(category => category.isActive);
+      setCategories(activeCategories);
     } catch (err) {
       console.error('Error fetching categories:', err);
       setError(prev => ({ ...prev, categories: 'Failed to load categories' }));
@@ -165,8 +164,8 @@ export const ProductFilterModal = ({
               >
                 <option value="">All Categories</option>
                 {categories.map((category) => (
-                  <option key={category} value={category}>
-                    {category}
+                  <option key={category.id} value={category.id}>
+                    {category.name}
                   </option>
                 ))}
               </select>

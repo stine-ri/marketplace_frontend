@@ -2,18 +2,18 @@ import { useState, useEffect } from 'react';
 import { PencilIcon, TrashIcon, EyeIcon, ArrowUpIcon, ArrowDownIcon, ArchiveBoxIcon, PhotoIcon } from '@heroicons/react/24/outline';
 import { ProductUploadModal } from '../NewFeature/ProductModal';
 import { toast } from 'react-toastify';
-import { Product, ProductSale } from '../../types/types';
+import { Product, ProductSale, Category } from '../../types/types'; // Add Category import
 import { formatPrice } from '../../utilis/priceFormatter';
+
 export const ProductManagementSection = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [sales, setSales] = useState<ProductSale[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]); // Add categories state
   const [loading, setLoading] = useState(true);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'products' | 'sales'>('products');
   const [productStatusFilter, setProductStatusFilter] = useState<'all' | 'published' | 'draft' | 'archived'>('all');
   const [saleStatusFilter, setSaleStatusFilter] = useState<'all' | 'pending' | 'completed' | 'cancelled'>('all');
-
-
 
   const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com';
 
@@ -26,6 +26,26 @@ export const ProductManagementSection = () => {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'
     };
+  };
+
+  // Fetch categories
+  const fetchCategories = async () => {
+    try {
+      const headers = getAuthHeaders();
+      const response = await fetch(`${BASE_URL}/api/admin/categories`, {
+        headers
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setCategories(data);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+      toast.error('Failed to load categories');
+    }
   };
 
   const fetchProducts = async () => {
@@ -85,6 +105,7 @@ export const ProductManagementSection = () => {
   useEffect(() => {
     if (activeTab === 'products') {
       fetchProducts();
+      fetchCategories(); // Fetch categories when products tab is active
     } else {
       fetchSales();
     }
@@ -92,6 +113,13 @@ export const ProductManagementSection = () => {
 
   const handleProductCreated = (newProduct: Product) => {
     setProducts(prev => [newProduct, ...prev]);
+  };
+
+  // Get category name from ID
+  const getCategoryName = (categoryId: number | null) => {
+    if (!categoryId) return 'Uncategorized';
+    const category = categories.find(c => c.id === categoryId);
+    return category ? category.name : 'Unknown Category';
   };
 
   const updateProductStatus = async (productId: number, status: 'published' | 'draft' | 'archived') => {
@@ -161,8 +189,6 @@ export const ProductManagementSection = () => {
       toast.error('Failed to update sale status');
     }
   };
-
-
 
   const filteredProducts = products.filter(product => 
     productStatusFilter === 'all' || product.status === productStatusFilter
@@ -247,6 +273,9 @@ export const ProductManagementSection = () => {
                       Stock
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Category
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Actions
                     </th>
                   </tr>
@@ -267,7 +296,7 @@ export const ProductManagementSection = () => {
                           </div>
                           <div className="ml-4">
                             <div className="text-sm font-medium text-gray-900">{product.name}</div>
-                            <div className="text-sm text-gray-500">{product.category}</div>
+                            <div className="text-sm text-gray-500">{product.description.substring(0, 50)}...</div>
                           </div>
                         </div>
                       </td>
@@ -280,11 +309,14 @@ export const ProductManagementSection = () => {
                           {product.status}
                         </span>
                       </td>
-                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-  {formatPrice(product.price)}
-</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {formatPrice(product.price)}
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {product.stock ?? 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {getCategoryName(product.categoryId)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex space-x-2">
@@ -401,8 +433,8 @@ export const ProductManagementSection = () => {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-  {formatPrice(sale.totalPrice)}
-</td>
+                        {formatPrice(sale.totalPrice)}
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                           sale.status === 'completed' ? 'bg-green-100 text-green-800' :
@@ -445,6 +477,7 @@ export const ProductManagementSection = () => {
         isOpen={showUploadModal}
         onClose={() => setShowUploadModal(false)}
         onProductCreated={handleProductCreated}
+        categories={categories} // Pass categories to the modal
       />
     </div>
   );

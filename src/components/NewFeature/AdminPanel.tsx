@@ -1,7 +1,7 @@
 // src/components/AdminPanel.tsx - Updated with Support Management
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Service, College } from '../../types/types';
+import { Service, College, Category } from '../../types/types';
 import { getAuthHeaders, isAdmin } from '../../utilis/auth';
 import UserManagement from './UserManagement';
 import BidManagement from '../NewFeature/BidsManagement';
@@ -23,21 +23,25 @@ import {
   FiDollarSign,
   FiMessageSquare,
   FiShoppingBag,
-  FiMessageCircle
+  FiMessageCircle,
+  FiTag 
 } from 'react-icons/fi';
 
 const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com';
 
-type AdminSection = 'services' | 'colleges' | 'users' | 'bids' | 'requests' | 'products' | 'interests' | 'support' | 'settings';
+type AdminSection = 'services' | 'colleges' | 'users' | 'bids' | 'requests' | 'products' |'categories' | 'interests' | 'support' | 'settings';
 
 export default function AdminPanel() {
   const [services, setServices] = useState<Service[]>([]);
   const [colleges, setColleges] = useState<College[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]); 
   const [newService, setNewService] = useState('');
   const [newServiceCategory, setNewServiceCategory] = useState('');
   const [newCollege, setNewCollege] = useState('');
+  const [newCategory, setNewCategory] = useState('');
+  const [newCategoryDescription, setNewCategoryDescription] = useState('');
   const [activeSection, setActiveSection] = useState<AdminSection>('services');
-  const [activeTab, setActiveTab] = useState<'services' | 'colleges'>('services');
+  const [activeTab, setActiveTab] = useState<'services' | 'colleges' | 'categories'>('services');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -50,7 +54,7 @@ export default function AdminPanel() {
       setError('Access denied. Admin privileges required.');
       return;
     }
-    if (activeSection === 'services' || activeSection === 'colleges') {
+    if (activeSection === 'services' || activeSection === 'colleges' || activeSection === 'categories') {
       fetchAllData();
     }
   }, [activeSection]);
@@ -60,12 +64,14 @@ export default function AdminPanel() {
     setIsLoading(true);
     setError(null);
     try {
-      const [servicesRes, collegesRes] = await Promise.all([
+      const [servicesRes, collegesRes, categoriesRes] = await Promise.all([
         axios.get<Service[]>(`${baseURL}/api/services`, { headers: getAuthHeaders() }),
-        axios.get<College[]>(`${baseURL}/api/colleges`, { headers: getAuthHeaders() })
+        axios.get<College[]>(`${baseURL}/api/colleges`, { headers: getAuthHeaders() }),
+         axios.get<Category[]>(`${baseURL}/api/admin/categories`, { headers: getAuthHeaders() })
       ]);
       setServices(servicesRes.data);
       setColleges(collegesRes.data);
+      setCategories(categoriesRes.data);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to load data. Please try again.');
       console.error('Error fetching data:', err);
@@ -141,7 +147,42 @@ export default function AdminPanel() {
     }
   };
 
-  const handleBulkDelete = async () => {
+  // Add category functions
+  const handleAddCategory = async () => {
+    if (!newCategory.trim()) {
+      setError('Category name cannot be empty');
+      return;
+    }
+    
+    try {
+      const res = await axios.post<Category>(`${baseURL}/api/admin/categories`, { 
+        name: newCategory.trim(),
+        description: newCategoryDescription.trim() || undefined
+      }, { headers: getAuthHeaders() });
+      setCategories([...categories, res.data]);
+      setNewCategory('');
+      setNewCategoryDescription('');
+      setError(null);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to add category');
+      console.error('Error adding category:', err);
+    }
+  };
+
+  const handleDeleteCategory = async (id: number) => {
+    if (!window.confirm('Are you sure you want to delete this category?')) return;
+    
+    try {
+      await axios.delete(`${baseURL}/api/admin/categories/${id}`, { headers: getAuthHeaders() });
+      setCategories(categories.filter(category => category.id !== id));
+      setSelectedItems(selectedItems.filter(itemId => itemId !== id));
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to delete category');
+      console.error('Error deleting category:', err);
+    }
+  };
+
+ const handleBulkDelete = async () => {
     if (!window.confirm(`Are you sure you want to delete ${selectedItems.length} items?`)) return;
     
     try {
@@ -151,12 +192,20 @@ export default function AdminPanel() {
           { headers: getAuthHeaders() }
         );
         setServices(services.filter(service => !selectedItems.includes(service.id)));
-      } else {
+      } else if (activeTab === 'colleges') {
         await axios.post(`${baseURL}/api/colleges/bulk-delete`, 
           { ids: selectedItems }, 
           { headers: getAuthHeaders() }
         );
         setColleges(colleges.filter(college => !selectedItems.includes(college.id)));
+      } else if (activeTab === 'categories') {
+        // Bulk delete for categories
+        await Promise.all(
+          selectedItems.map(id => 
+            axios.delete(`${baseURL}/api/admin/categories/${id}`, { headers: getAuthHeaders() })
+          )
+        );
+        setCategories(categories.filter(category => !selectedItems.includes(category.id)));
       }
       setSelectedItems([]);
     } catch (err: any) {
@@ -164,19 +213,32 @@ export default function AdminPanel() {
     }
   };
 
-  const handleExport = () => {
-    const data = activeTab === 'services' ? services : colleges;
-    const headers = activeTab === 'services' 
-      ? ['ID', 'Name', 'Category'] 
-      : ['ID', 'Name', 'Location'];
+
+ const handleExport = () => {
+    let data, headers;
+    
+    if (activeTab === 'services') {
+      data = services;
+      headers = ['ID', 'Name', 'Category'];
+    } else if (activeTab === 'colleges') {
+      data = colleges;
+      headers = ['ID', 'Name', 'Location'];
+    } else {
+      data = categories;
+      headers = ['ID', 'Name', 'Description', 'Status'];
+    }
     
     const csvContent = [
       headers.join(','),
-      ...data.map(item => 
-        activeTab === 'services'
-          ? `${item.id},"${item.name}","${(item as Service).category || ''}"`
-          : `${item.id},"${item.name}","${(item as College).location || ''}"`
-      )
+      ...data.map(item => {
+        if (activeTab === 'services') {
+          return `${item.id},"${item.name}","${(item as Service).category || ''}"`;
+        } else if (activeTab === 'colleges') {
+          return `${item.id},"${item.name}","${(item as College).location || ''}"`;
+        } else {
+          return `${item.id},"${item.name}","${(item as Category).description || ''}","${(item as Category).isActive ? 'Active' : 'Inactive'}"`;
+        }
+      })
     ].join('\n');
     
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -192,14 +254,19 @@ export default function AdminPanel() {
     (service.category && service.category.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  const filteredColleges = colleges.filter(college => 
+   const filteredColleges = colleges.filter(college => 
     college.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (college.location && college.location.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
+  const filteredCategories = categories.filter(category => 
+    category.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (category.description && category.description.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
+
   // Menu items including Support Management
   const menuItems = [
-    { id: 'services', label: 'Services & Colleges', icon: FiPackage },
+    { id: 'services', label: 'Services & Categories', icon: FiPackage },
     { id: 'products', label: 'Product Management', icon: FiShoppingBag },
     { id: 'users', label: 'User Management', icon: FiUsers },
     { id: 'requests', label: 'Request Management', icon: FiMessageSquare },
@@ -324,7 +391,7 @@ export default function AdminPanel() {
               </div>
             </div>
           ) : (
-            // Services & Colleges Management
+            // Services, Colleges & Categories Management
             <div className="p-6 space-y-6">
               {/* Search and Controls */}
               <div className="flex flex-col md:flex-row gap-4">
@@ -384,6 +451,19 @@ export default function AdminPanel() {
                     }}
                   >
                     Colleges
+                  </button>
+                  <button
+                    className={`py-2 px-4 font-medium text-sm md:text-base rounded-t-lg transition ${
+                      activeTab === 'categories' 
+                        ? 'border-b-2 border-blue-500 text-blue-600 bg-blue-50' 
+                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                    }`}
+                    onClick={() => {
+                      setActiveTab('categories');
+                      setSelectedItems([]);
+                    }}
+                  >
+                    Categories
                   </button>
                 </div>
               </div>
@@ -502,7 +582,7 @@ export default function AdminPanel() {
                     )}
                   </div>
                 </div>
-              ) : (
+             ) : activeTab === 'colleges' ? (
                 <div className="space-y-6">
                   <div className="bg-white p-4 md:p-6 rounded-lg shadow-sm border">
                     <h2 className="text-xl font-semibold mb-4 text-gray-800">Add New College</h2>
@@ -600,7 +680,131 @@ export default function AdminPanel() {
                     )}
                   </div>
                 </div>
-              )}
+              ) : activeTab === 'categories' ? (
+                // Categories content
+                <div className="space-y-6">
+                  <div className="bg-white p-4 md:p-6 rounded-lg shadow-sm border">
+                    <h2 className="text-xl font-semibold mb-4 text-gray-800">Add New Category</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Category Name</label>
+                        <input
+                          type="text"
+                          placeholder="Enter category name"
+                          className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                          value={newCategory}
+                          onChange={(e) => setNewCategory(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                        <input
+                          type="text"
+                          placeholder="Enter description"
+                          className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                          value={newCategoryDescription}
+                          onChange={(e) => setNewCategoryDescription(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleAddCategory}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition shadow-sm"
+                    >
+                      Add Category
+                    </button>
+                  </div>
+
+                  <div className="bg-white p-4 md:p-6 rounded-lg shadow-sm border">
+                    <h2 className="text-xl font-semibold mb-4 text-gray-800">Current Categories</h2>
+                    {filteredCategories.length === 0 ? (
+                      <div className="text-center py-8">
+                        <FiTag className="mx-auto text-gray-400 text-4xl mb-2" />
+                        <p className="text-gray-500">No categories available</p>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-10">
+                                <input
+                                  type="checkbox"
+                                  className="rounded focus:ring-blue-500"
+                                  checked={selectedItems.length === filteredCategories.length && filteredCategories.length > 0}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedItems(filteredCategories.map(c => c.id));
+                                    } else {
+                                      setSelectedItems([]);
+                                    }
+                                  }}
+                                />
+                              </th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Name
+                              </th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Description
+                              </th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Status
+                              </th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Actions
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {filteredCategories.map(category => (
+                              <tr key={category.id} className="hover:bg-gray-50">
+                                <td className="px-4 py-4 whitespace-nowrap">
+                                  <input
+                                    type="checkbox"
+                                    className="rounded focus:ring-blue-500"
+                                    checked={selectedItems.includes(category.id)}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setSelectedItems([...selectedItems, category.id]);
+                                      } else {
+                                        setSelectedItems(selectedItems.filter(id => id !== category.id));
+                                      }
+                                    }}
+                                  />
+                                </td>
+                                <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                  {category.name}
+                                </td>
+                                <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  {category.description || '-'}
+                                </td>
+                                <td className="px-4 py-4 whitespace-nowrap">
+                                  <span className={`px-2 py-1 text-xs rounded-full ${
+                                    category.isActive 
+                                      ? 'bg-green-100 text-green-800' 
+                                      : 'bg-red-100 text-red-800'
+                                  }`}>
+                                    {category.isActive ? 'Active' : 'Inactive'}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  <button
+                                    onClick={() => handleDeleteCategory(category.id)}
+                                    className="flex items-center text-red-600 hover:text-red-900 px-2 py-1 rounded-lg hover:bg-red-50 transition"
+                                  >
+                                    <FiTrash2 className="mr-1" size={14} /> Delete
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+
             </div>
           )}
         </div>

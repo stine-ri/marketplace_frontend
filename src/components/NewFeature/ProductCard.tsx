@@ -5,8 +5,8 @@ import { formatPrice } from '../../utilis/priceFormatter';
 import { Product } from '../../types/types'; 
 interface ProductCardProps {
   product: Product;
-  onViewDetails: (product: any) => void;  // New prop for view details
-  onPurchase: (product: any) => void;     // New prop for purchase
+  onViewDetails: (product: any) => void; 
+  onPurchase: (product: any) => void;     
   showPurchaseButton?: boolean;
 }
 

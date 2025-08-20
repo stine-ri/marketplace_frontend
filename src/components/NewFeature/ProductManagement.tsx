@@ -24,6 +24,7 @@ import {
 } from 'react-icons/fi';
 import { useMediaQuery } from 'react-responsive';
 import { useAuth } from '../../context/AuthContext';
+import { Category } from '../../types/types'; // Import Category from types
 
 const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com';
 
@@ -86,6 +87,7 @@ const formatPrice = (price: string | number | undefined | null): string => {
   
   return `KSh ${numericPrice.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
 };
+
 const ProductManagement = () => {
   const [activeTab, setActiveTab] = useState<'products' | 'stats'>('products');
   const [products, setProducts] = useState<Product[]>([]);
@@ -112,27 +114,44 @@ const ProductManagement = () => {
   });
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  
+  // Use the imported Category interface
+  const [categories, setCategories] = useState<Category[]>([]);
 
   const isMobile = useMediaQuery({ maxWidth: 640 });
   const isTablet = useMediaQuery({ minWidth: 641, maxWidth: 1024 });
   const { token, logout } = useAuth();
-
-  const categories = [
-    'Electronics',
-    'Books',
-    'Clothing',
-    'Furniture',
-    'Sports',
-    'Beauty',
-    'art',
-    'Other'
-  ];
 
   const statusOptions = [
     { value: 'published', label: 'Published' },
     { value: 'draft', label: 'Draft' },
     { value: 'archived', label: 'Archived' }
   ];
+
+  // Add fetchCategories function
+  const fetchCategories = async () => {
+    try {
+      const response = await axios.get(`${baseURL}/api/admin/categories`, { 
+        headers: getAuthHeaders() 
+      });
+      setCategories(response.data);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'products') {
+      fetchProducts();
+      fetchCategories(); // Fetch categories when products tab is active
+    } else {
+      fetchStats();
+    }
+  }, [activeTab, currentPage, token]);
+
+  useEffect(() => {
+    filterProducts();
+  }, [products, searchTerm, categoryFilter, statusFilter]);
 
   const transformProduct = (product: any): Product => {
     return {
@@ -149,66 +168,52 @@ const ProductManagement = () => {
     };
   };
 
-  useEffect(() => {
-    if (activeTab === 'products') {
-      fetchProducts();
-    } else {
-      fetchStats();
-    }
-  }, [activeTab, currentPage, token]);
-
-  useEffect(() => {
-    filterProducts();
-  }, [products, searchTerm, categoryFilter, statusFilter]);
-
-
-const fetchProducts = async () => {
-  setIsLoading(true);
-  setError(null);
-  
-  try {
-    if (!token) {
-      throw new Error('No authentication token available');
-    }
-
-    const response = await axios.get(`${baseURL}/api/admin/product`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      params: {
-        page: currentPage,
-        limit: isMobile ? 5 : isTablet ? 10 : 15
-      }
-    });
-
-    // Debug: Log the full response
-    console.log('API Response:', response.data);
-
-    // Check the response structure
-    if (!response.data.data) {
-      throw new Error('Unexpected API response structure');
-    }
-
-    const transformedProducts = response.data.data.map(transformProduct);
-    setProducts(transformedProducts);
-    setTotalPages(response.data.pagination?.totalPages || 1);
+  const fetchProducts = async () => {
+    setIsLoading(true);
+    setError(null);
     
-  } catch (err: any) {
-    console.error('Error fetching products:', err);
-    if (err.response?.status === 401) {
-      setError('Your session has expired. Please login again.');
-      logout();
-    } else {
-      setError(err.response?.data?.message || 
-              err.message || 
-              'Failed to fetch products');
-    }
-  } finally {
-    setIsLoading(false);
-  }
-};
+    try {
+      if (!token) {
+        throw new Error('No authentication token available');
+      }
 
+      const response = await axios.get(`${baseURL}/api/admin/product`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        params: {
+          page: currentPage,
+          limit: isMobile ? 5 : isTablet ? 10 : 15
+        }
+      });
+
+      // Debug: Log the full response
+      console.log('API Response:', response.data);
+
+      // Check the response structure
+      if (!response.data.data) {
+        throw new Error('Unexpected API response structure');
+      }
+
+      const transformedProducts = response.data.data.map(transformProduct);
+      setProducts(transformedProducts);
+      setTotalPages(response.data.pagination?.totalPages || 1);
+      
+    } catch (err: any) {
+      console.error('Error fetching products:', err);
+      if (err.response?.status === 401) {
+        setError('Your session has expired. Please login again.');
+        logout();
+      } else {
+        setError(err.response?.data?.message || 
+                err.message || 
+                'Failed to fetch products');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const fetchStats = async () => {
     setIsLoading(true);
@@ -677,7 +682,7 @@ const fetchProducts = async () => {
                 Statistics
               </div>
             </button>
-          </div>
+        </div>
         </div>
 
         {activeTab === 'products' && (
@@ -753,7 +758,7 @@ const fetchProducts = async () => {
               >
                 <option value="">All Categories</option>
                 {categories.map(category => (
-                  <option key={category} value={category}>{category}</option>
+                  <option key={category.id} value={category.name}>{category.name}</option>
                 ))}
               </select>
               <select
@@ -791,7 +796,7 @@ const fetchProducts = async () => {
                     Clear filters
                   </button>
                 ) : null}
-              </div>
+            </div>
             ) : isMobile ? (
               <div className="p-2">
                 {filteredProducts.map(product => (
@@ -949,114 +954,125 @@ const fetchProducts = async () => {
                 </div>
               ) : (
                 <form onSubmit={modalMode === 'create' ? handleCreateProduct : handleUpdateProduct} className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Product Name *</label>
-                      <input
-                        type="text"
-                        className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        value={formData.name}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Price *</label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        value={formData.price}
-                        onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })}
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
-                      <select
-                        className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        value={formData.category}
-                        onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                        required
-                      >
-                        <option value="">Select Category</option>
-                        {categories.map(category => (
-                          <option key={category} value={category}>{category}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Status *</label>
-                      <select
-                        className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        value={formData.status}
-                        onChange={(e) => setFormData({ 
-                          ...formData, 
-                          status: e.target.value as 'draft' | 'published' | 'archived' 
-                        })}
-                        required
-                      >
-                        {statusOptions.map(option => (
-                          <option key={option.value} value={option.value}>{option.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Stock</label>
-                      <input
-                        type="number"
-                        min="0"
-                        className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        value={formData.stock}
-                        onChange={(e) => setFormData({ ...formData, stock: parseInt(e.target.value) || 0 })}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Provider ID *</label>
-                      <input
-                        type="number"
-                        min="1"
-                        className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        value={formData.providerId}
-                        onChange={(e) => setFormData({ ...formData, providerId: parseInt(e.target.value) || 0 })}
-                        required
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Description *</label>
-                      <textarea
-                        rows={4}
-                        className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        value={formData.description}
-                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                        required
-                      />
-                    </div>
-                  </div>
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">Product Name *</label>
+      <input
+        type="text"
+        className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        value={formData.name}
+        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+        required
+      />
+    </div>
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">Price *</label>
+      <input
+  type="number"
+  min="0"
+  step="0.01"
+  className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+  value={formData.price === 0 ? '' : formData.price} // Show empty string for 0
+  onChange={(e) => setFormData({ 
+    ...formData, 
+    price: e.target.value === '' ? 0 : parseFloat(e.target.value) 
+  })}
+  required
+/>
+    </div>
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
+      <select
+        className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        value={formData.category}
+        onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+        required
+      >
+        <option value="">Select Category</option>
+        {categories.map(category => (
+          <option key={category.id} value={category.name}>
+            {category.name}
+          </option>
+        ))}
+      </select>
+    </div>
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">Status *</label>
+      <select
+        className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        value={formData.status}
+        onChange={(e) => setFormData({ 
+          ...formData, 
+          status: e.target.value as 'draft' | 'published' | 'archived' 
+        })}
+        required
+      >
+        {statusOptions.map(option => (
+          <option key={option.value} value={option.value}>{option.label}</option>
+        ))}
+      </select>
+    </div>
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">Stock</label>
+     <input
+  type="number"
+  min="0"
+  className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+  value={formData.stock === 0 ? '' : formData.stock} // Show empty string for 0
+  onChange={(e) => setFormData({ 
+    ...formData, 
+    stock: e.target.value === '' ? 0 : parseInt(e.target.value) 
+  })}
+/>
+    </div>
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">Provider ID *</label>
+   <input
+  type="number"
+  min="1"
+  className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+  value={formData.providerId === 0 ? '' : formData.providerId} // Show empty string for 0
+  onChange={(e) => setFormData({ 
+    ...formData, 
+    providerId: e.target.value === '' ? 0 : parseInt(e.target.value) 
+  })}
+  required
+/>
+    </div>
+    <div className="md:col-span-2">
+      <label className="block text-sm font-medium text-gray-700 mb-1">Description *</label>
+      <textarea
+        rows={4}
+        className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        value={formData.description}
+        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+        required
+      />
+    </div>
+  </div>
 
-                  <div className="flex justify-end space-x-3 pt-4 border-t">
-                    <button
-                      type="button"
-                      onClick={closeModal}
-                      className="px-4 py-2 text-gray-700 border rounded-lg hover:bg-gray-50 transition"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={isLoading}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
-                    >
-                      {isLoading ? (
-                        <span className="flex items-center">
-                          <FiLoader className="animate-spin mr-2" />
-                          {modalMode === 'create' ? 'Creating...' : 'Updating...'}
-                        </span>
-                      ) : modalMode === 'create' ? 'Create Product' : 'Update Product'}
-                    </button>
-                  </div>
-                </form>
+  <div className="flex justify-end space-x-3 pt-4 border-t">
+    <button
+      type="button"
+      onClick={closeModal}
+      className="px-4 py-2 text-gray-700 border rounded-lg hover:bg-gray-50 transition"
+    >
+      Cancel
+    </button>
+    <button
+      type="submit"
+      disabled={isLoading}
+      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
+    >
+      {isLoading ? (
+        <span className="flex items-center">
+          <FiLoader className="animate-spin mr-2" />
+          {modalMode === 'create' ? 'Creating...' : 'Updating...'}
+        </span>
+      ) : modalMode === 'create' ? 'Create Product' : 'Update Product'}
+    </button>
+  </div>
+</form>
               )}
             </div>
           </div>

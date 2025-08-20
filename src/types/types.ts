@@ -238,8 +238,13 @@ export interface CreateBidPayload {
   price: number;
   message?: string;
 }
-// Add these to your existing types
-// In src/types/types.ts, replace the existing Product interface with this complete version:
+
+
+export interface Review {
+  user: string;
+  comment: string;
+  rating: number;
+}
 
 export interface Product {
   id: number;
@@ -248,24 +253,34 @@ export interface Product {
   description: string;
   price: string;
   images: string[];
-  category: string;
+  categoryId: number | null; 
   stock?: number;
   status: 'draft' | 'published' | 'archived';
   createdAt: string;
   updatedAt: string;
-  
+
   // Legacy/compatibility properties
   image?: string | null; 
   primaryImage?: string | null;  
   imageUrl?: string | null;      
-  
+
   provider: {
     firstName: string;
     lastName: string;
     rating?: number;
-    profileImageUrl?: string | null | undefined; // Support all possible types
+    profileImageUrl?: string | null | undefined;
   };
+
+  // 🔹 Newly added optional properties
+  featured?: boolean;
+  originalPrice?: number;
+  location?: string;
+  rating?: number;
+  reviews?: Review[];
+  tags?: string[];
+  inStock?: boolean; // alias for stock
 }
+
 
 export interface ProductSale {
   id: number;
@@ -326,4 +341,12 @@ export type CombinedChatRoom = ChatRoom & {
 export interface InterestWithChatRoom extends Interest {
   chatRoom: ChatRoom;
   request: Request;
+}
+export interface Category {
+  id: number;
+  name: string;
+  description?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 }

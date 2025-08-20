@@ -2,35 +2,31 @@ import { useState } from 'react';
 import { Dialog } from '@headlessui/react';
 import { XMarkIcon, PhotoIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-toastify';
-import { Product } from '../../types/types';
+import { Product, Category } from '../../types/types';
 
 interface ProductUploadModalProps {
   isOpen: boolean;
   onClose: () => void;
   onProductCreated: (product: Product) => void;
+  categories: Category[];
 }
 
-export const ProductUploadModal = ({ isOpen, onClose, onProductCreated }: ProductUploadModalProps) => {
+export const ProductUploadModal = ({ 
+  isOpen, 
+  onClose, 
+  onProductCreated,
+  categories 
+}: ProductUploadModalProps) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
-  const [category, setCategory] = useState('');
+  const [category, setCategory] = useState(''); // Changed to category
   const [stock, setStock] = useState('');
   const [images, setImages] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com';
-
-  const getAuthHeaders = () => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      throw new Error('No authentication token found');
-    }
-    return {
-      'Authorization': `Bearer ${token}`
-    };
-  };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -57,7 +53,7 @@ export const ProductUploadModal = ({ isOpen, onClose, onProductCreated }: Produc
     e.preventDefault();
     
     // Validate required fields
-    if (!name.trim() || !description.trim() || !price.trim() || !category.trim()) {
+    if (!name.trim() || !description.trim() || !price.trim() || !category) {
       toast.error('Please fill in all required fields');
       return;
     }
@@ -80,8 +76,8 @@ export const ProductUploadModal = ({ isOpen, onClose, onProductCreated }: Produc
       const formData = new FormData();
       formData.append('name', name.trim());
       formData.append('description', description.trim());
-      formData.append('price', priceNumber.toString()); // Ensure we send as string
-      formData.append('category', category.trim());
+      formData.append('price', priceNumber.toString());
+      formData.append('category', category); // Changed to category
       
       if (stock) formData.append('stock', stock.trim());
       
@@ -116,10 +112,9 @@ export const ProductUploadModal = ({ isOpen, onClose, onProductCreated }: Produc
 
       const data = await response.json();
       
-      // Ensure price is a number when passing to parent component
       onProductCreated({
         ...data,
-        price: parseFloat(data.price) // Convert to number here
+        price: parseFloat(data.price)
       });
       
       toast.success('Product created successfully!');
@@ -150,18 +145,11 @@ export const ProductUploadModal = ({ isOpen, onClose, onProductCreated }: Produc
     setName('');
     setDescription('');
     setPrice('');
-    setCategory('');
+    setCategory(''); // Reset to empty string
     setStock('');
     setImages([]);
     previews.forEach(preview => URL.revokeObjectURL(preview));
     setPreviews([]);
-  };
-
-  // Format price for display (adds decimal places if missing)
-  const formatPriceDisplay = (value: string) => {
-    if (!value) return value;
-    if (value.includes('.')) return value;
-    return `${value}.00`;
   };
 
   return (
@@ -204,14 +192,12 @@ export const ProductUploadModal = ({ isOpen, onClose, onProductCreated }: Produc
                     min="0"
                     value={price}
                     onChange={(e) => {
-                      // Ensure valid number input
                       const value = e.target.value;
                       if (value === '' || /^\d*\.?\d*$/.test(value)) {
                         setPrice(value);
                       }
                     }}
                     onBlur={(e) => {
-                      // Format on blur to show 2 decimal places
                       if (e.target.value && !isNaN(parseFloat(e.target.value))) {
                         setPrice(parseFloat(e.target.value).toFixed(2));
                       }
@@ -223,13 +209,19 @@ export const ProductUploadModal = ({ isOpen, onClose, onProductCreated }: Produc
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Category*</label>
-                  <input
-                    type="text"
+                  <select
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
                     className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                     required
-                  />
+                  >
+                    <option value="">Select a category</option>
+                    {categories.map((categoryItem) => (
+                      <option key={categoryItem.id} value={categoryItem.name}>
+                        {categoryItem.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
               
@@ -244,7 +236,6 @@ export const ProductUploadModal = ({ isOpen, onClose, onProductCreated }: Produc
                 />
               </div>
               
-              {/* Rest of your form remains the same */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Images*</label>
                 <div className="mt-1 flex justify-center rounded-md border-2 border-dashed border-gray-300 px-6 pt-5 pb-6">

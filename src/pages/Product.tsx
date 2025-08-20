@@ -1,24 +1,73 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Filter, Grid, List, Star, Heart, ShoppingCart, MapPin, Eye, ChevronDown, SlidersHorizontal } from 'lucide-react';
 
-interface Product {
-  id: string;
+// Define interfaces to match the backend data structure
+export interface Review {
+  user: string;
+  comment: string;
+  rating: number;
+}
+
+export interface Product {
+  id: number;
+  providerId: number;
   name: string;
-  description?: string;
+  description: string;
   price: string;
-  originalPrice?: number;
-  rating?: number;
-  reviews?: number;
   images: string[];
-  category?: string;
+  categoryId: number | null; 
+  stock?: number;
+  status: 'draft' | 'published' | 'archived';
+  createdAt: string;
+  updatedAt: string;
+
+  // Legacy/compatibility properties
+  image?: string | null; 
+  primaryImage?: string | null;  
+  imageUrl?: string | null;      
+
+  provider: {
+    firstName: string;
+    lastName: string;
+    rating?: number;
+    profileImageUrl?: string | null | undefined;
+  };
+
+  // Optional properties
+  featured?: boolean;
+  originalPrice?: number;
+  location?: string;
+  rating?: number;
+  reviews?: Review[];
   tags?: string[];
   inStock?: boolean;
-  shipping?: string;
-  featured?: boolean;
+}
+
+export interface Category {
+  id: number;
+  name: string;
+  count?: number;
+}
+
+// Internal component interface for formatted products
+interface FormattedProduct {
+  id: string;
+  name: string;
+  description: string;
+  price: string;
+  originalPrice?: string | null;
+  rating: number;
+  reviews: number; // Changed to number for review count
+  images: string[];
+  category: string;
+  tags: string[];
+  inStock: boolean;
+  shipping: string;
+  featured: boolean;
   createdAt: string;
   status: string;
-  location?: string;
-  provider?: string;
+  location: string;
+  provider: string; // Changed to string for display
 }
 
 const ProductsComponent = () => {
@@ -26,98 +75,144 @@ const ProductsComponent = () => {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [viewMode, setViewMode] = useState('grid');
   const [showFilters, setShowFilters] = useState(false);
-  const [priceRange, setPriceRange] = useState([0, 10000]); // Increased max range
+  const [priceRange, setPriceRange] = useState([0, 10000000]);
   const [sortBy, setSortBy] = useState('popular');
-  const [products, setProducts] = useState<Product[]>([]);
+  const [allProducts, setAllProducts] = useState<Product[]>([]); // Store all products
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const categories = [
-    { id: 'all', name: 'All Products', count: 2840 },
-    { id: 'electronics', name: 'Electronics', count: 456 },
-    { id: 'fashion', name: 'Fashion', count: 678 },
-    { id: 'home', name: 'Home & Garden', count: 389 },
-    { id: 'crafts', name: 'Handmade Crafts', count: 234 },
-    { id: 'books', name: 'Books', count: 567 },
-    { id: 'sports', name: 'Sports & Outdoors', count: 345 },
-    { id: 'beauty', name: 'Beauty & Health', count: 289 }
-  ];
+  const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com';
 
   const showLoginMessage = () => {
     alert("Kindly login or register to view or purchase our products");
   };
 
-  // Fetch products from backend
-  useEffect(() => {
-    const fetchProducts = async () => {
-      try {
-        setLoading(true);
-        console.log('Fetching products...'); // Add this line
-        
-        let endpoint = 'https://mkt-backend-sz2s.onrender.com/api/products';
-        let params = {};
-        
-        if (searchQuery) {
-          endpoint = 'https://mkt-backend-sz2s.onrender.com/api/products/search';
-          params = { q: searchQuery.toLowerCase() };
-        }
-        
-        if (selectedCategory !== 'all') {
-          endpoint = 'https://mkt-backend-sz2s.onrender.com/api/products/search';
-          params = { ...params, category: selectedCategory };
-        }
-
-        const queryString = new URLSearchParams(params).toString();
-        const url = queryString ? `${endpoint}?${queryString}` : endpoint;
-        
-        console.log('API URL:', url); // Add this line
-        
-        const response = await fetch(url);
-        console.log('Response status:', response.status); // Add this line
-        
-        if (!response.ok) {
-          throw new Error('Failed to fetch products');
-        }
-        
-        const data = await response.json();
-        console.log('Received data:', data); // Add this line
-        
-        setProducts(data);
-        setError(null);
-      } catch (err) {
-        console.error('Error:', err); // Make sure this is logging
-        if (err instanceof Error) {
-          setError(err.message);
-        } else {
-          setError(String(err));
-        }
-      } finally {
-        setLoading(false);
-        console.log('Loading complete'); // Add this line
+  // Fetch categories from backend
+  const fetchCategories = async () => {
+    try {
+      const response = await fetch(`${BASE_URL}/api/public/categories`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch categories');
       }
-    };
+      
+      const data = await response.json();
+      setCategories(data);
+    } catch (err) {
+      console.error('Error fetching categories:', err);
+      setCategories([]);
+    }
+  };
 
-    const debounceTimer = setTimeout(() => {
-      fetchProducts();
-    }, 500);
+  // Fetch ALL products from backend (no filtering at API level)
+  const fetchAllProducts = async () => {
+    try {
+      setLoading(true);
+      
+      // Always fetch all products without any filters
+      const response = await fetch(`${BASE_URL}/api/products`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch products');
+      }
+      
+      const data = await response.json();
+    
+      setAllProducts(data); // Store all products
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching products:', err);
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError(String(err));
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    return () => clearTimeout(debounceTimer);
-  }, [searchQuery, selectedCategory]);
+  // Client-side filtering function
+  const getFilteredProducts = () => {
+    let filtered = [...allProducts];
 
-  const filteredProducts = products.filter(product => {
-    const price = parseFloat(product.price);
-    // Add debug logging to see what's happening
-    console.log(`Product: ${product.name}, Price: ${price}, Range: ${priceRange[0]}-${priceRange[1]}, Included: ${price >= priceRange[0] && price <= priceRange[1]}`);
-    return price >= priceRange[0] && price <= priceRange[1];
-  });
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(product => 
+        product.name.toLowerCase().includes(query) ||
+        product.description.toLowerCase().includes(query) ||
+        (product.provider.firstName && product.provider.firstName.toLowerCase().includes(query)) ||
+        (product.provider.lastName && product.provider.lastName.toLowerCase().includes(query))
+      );
+    }
+
+    // Apply category filter
+    if (selectedCategory !== 'all') {
+      filtered = filtered.filter(product => 
+        product.categoryId?.toString() === selectedCategory
+      );
+    }
+
+    // Apply price range filter
+    filtered = filtered.filter(product => {
+      const price = parseFloat(product.price);
+      return price >= priceRange[0] && price <= priceRange[1];
+    });
+
+    return filtered;
+  };
+
+  // Get categories with correct counts based on filtered products
+  const getCategoriesWithCounts = () => {
+    const filteredBySearchOnly = searchQuery.trim() 
+      ? allProducts.filter(product => {
+          const query = searchQuery.toLowerCase();
+          return product.name.toLowerCase().includes(query) ||
+                 product.description.toLowerCase().includes(query) ||
+                 (product.provider.firstName && product.provider.firstName.toLowerCase().includes(query)) ||
+                 (product.provider.lastName && product.provider.lastName.toLowerCase().includes(query));
+        })
+      : allProducts;
+
+    // Count products in each category (excluding category filter to show accurate counts)
+    const categoryCounts = categories.map(cat => {
+      const count = filteredBySearchOnly.filter(product => 
+        product.categoryId?.toString() === cat.id.toString()
+      ).length;
+      return {
+        id: cat.id.toString(),
+        name: cat.name,
+        count
+      };
+    });
+
+    // Add "All Products" category with total count
+    return [
+      { 
+        id: 'all', 
+        name: 'All Products', 
+        count: filteredBySearchOnly.length 
+      },
+      ...categoryCounts
+    ];
+  };
+
+  useEffect(() => {
+    fetchCategories();
+    fetchAllProducts(); // Fetch all products once when component mounts
+  }, []);
+
+  const filteredProducts = getFilteredProducts();
 
   const sortedProducts = filteredProducts.sort((a, b) => {
-     const priceA = parseFloat(a.price);
-  const priceB = parseFloat(b.price);
+    const priceA = parseFloat(a.price);
+    const priceB = parseFloat(b.price);
 
-      switch (sortBy) {
-    case 'price-low': return priceA - priceB;
-    case 'price-high': return priceB - priceA;
+    switch (sortBy) {
+      case 'price-low': return priceA - priceB;
+      case 'price-high': return priceB - priceA;
       case 'rating':
         return (b.rating ?? 0) - (a.rating ?? 0);
       case 'newest':
@@ -128,49 +223,54 @@ const ProductsComponent = () => {
   });
 
   // Format product data to match our component's expectations
-  const formatProduct = (product: any): Product => {
-    // Create a fallback image using a data URL (this will always work)
+  const formatProduct = (product: Product): FormattedProduct => {
     const fallbackImage = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgZmlsbD0iI2Y4ZjlmYSIvPgogIDx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IiM2YjczODAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIwLjNlbSI+Tm8gSW1hZ2UgQXZhaWxhYmxlPC90ZXh0Pgo8L3N2Zz4K';
     
     // Helper function to format provider name
-    const formatProviderName = (providerName: string | undefined) => {
-      if (!providerName) return 'Registered Provider';
+    const formatProviderName = (provider: Product['provider']) => {
+      if (!provider) return 'Registered Provider';
       
-      // If it's 'unknown provider' or similar, return 'Registered Provider'
-      if (providerName.toLowerCase().includes('unknown') || 
-          providerName.toLowerCase().includes('default') ||
-          providerName.trim() === '') {
-        return 'Registered Provider';
+      const firstName = provider.firstName || '';
+      const lastName = provider.lastName || '';
+      
+      if (firstName || lastName) {
+        return `${firstName} ${lastName}`.trim();
       }
       
-      // Otherwise return the actual provider name
-      return providerName;
+      return 'Registered Provider';
+    };
+    
+    // Helper function to get review count
+    const getReviewCount = (reviews?: Review[]) => {
+      if (Array.isArray(reviews)) {
+        return reviews.length;
+      }
+      return Math.floor(Math.random() * 100) + 10;
     };
     
     return {
-      id: product.id,
-      name: product.name,
+      id: product.id.toString(),
+      name: product.name || 'Unnamed Product',
       description: product.description || '',
       price: product.price || '0',
-      originalPrice: product.originalPrice || null,
-      rating: product.rating ? Number(product.rating) : 4.5, // Default rating for demo
-      reviews: product.reviews ? Number(product.reviews) : Math.floor(Math.random() * 100) + 10, // Random reviews for demo
-      images: Array.isArray(product.images) && product.images.length > 0 ? product.images : [fallbackImage], // Fallback image
-      category: product.category || 'uncategorized',
-      tags: Array.isArray(product.tags) ? product.tags : ['new', 'popular'], // Default tags
+      originalPrice: product.originalPrice ? product.originalPrice.toString() : null,
+      rating: product.rating ? Number(product.rating) : 4.5,
+      reviews: getReviewCount(product.reviews),
+      images: Array.isArray(product.images) && product.images.length > 0 ? product.images : [fallbackImage],
+      category: product.categoryId?.toString() || 'uncategorized',
+      tags: Array.isArray(product.tags) ? product.tags : ['new', 'popular'],
       inStock: product.inStock ?? (product.stock ? product.stock > 0 : true),
-      shipping: '', // Remove shipping info
-      featured: product.featured || Math.random() > 0.7, // Random featured for demo
+      shipping: '',
+      featured: product.featured || Math.random() > 0.7,
       createdAt: product.createdAt || new Date().toISOString(),
       status: product.status || 'published',
-      location: product.location || 'Nairobi, Kenya', // Default location
+      location: product.location || 'Nairobi, Kenya',
       provider: formatProviderName(product.provider)
     };
   };
 
   // Enhanced price formatting for KSH
   const formatPrice = (price: string | number) => {
-    // Convert to number if it's a string
     const amount = typeof price === 'string' ? parseFloat(price) : price;
     return new Intl.NumberFormat('en-KE', {
       style: 'currency',
@@ -180,6 +280,7 @@ const ProductsComponent = () => {
   };
 
   const formattedProducts = sortedProducts.map(formatProduct);
+  const allCategoriesWithCounts = getCategoriesWithCounts();
 
   if (loading) {
     return (
@@ -269,12 +370,12 @@ const ProductsComponent = () => {
               <div className="mb-8">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Categories</h3>
                 <div className="space-y-2">
-                  {categories.map(category => (
+                  {allCategoriesWithCounts.map(category => (
                     <button
                       key={category.id}
-                      onClick={() => setSelectedCategory(category.id)}
+                      onClick={() => setSelectedCategory(category.id.toString())}
                       className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
-                        selectedCategory === category.id
+                        selectedCategory === category.id.toString()
                           ? 'bg-blue-50 text-blue-600 font-medium'
                           : 'text-gray-600 hover:bg-gray-50'
                       }`}
@@ -337,7 +438,7 @@ const ProductsComponent = () => {
           <div className="flex-1">
             <div className="flex items-center justify-between mb-6">
               <p className="text-gray-600">
-                Showing {formattedProducts.length} of {products.length} products
+                Showing {formattedProducts.length} of {allProducts.length} products
               </p>
             </div>
 
@@ -437,7 +538,7 @@ const ProductsComponent = () => {
                           </span>
                           {product.originalPrice && (
                             <span className="text-sm text-gray-500 line-through">
-                                  {formatPrice(product.originalPrice)}
+                              {formatPrice(product.originalPrice)}
                             </span>
                           )}
                         </div>
@@ -542,12 +643,6 @@ const ProductsComponent = () => {
                             </div>
                             
                             <div className="flex gap-2">
-                              <button 
-                                className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                                onClick={showLoginMessage}
-                              >
-                                <Heart className="w-5 h-5 text-gray-600" />
-                              </button>
                               <button 
                                 className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
                                 onClick={showLoginMessage}
