@@ -407,7 +407,7 @@ const ServicesProductsComponent = () => {
               <span className="block text-yellow-300">In One Place</span>
             </h1>
             <p className="text-lg md:text-xl lg:text-2xl mb-8 text-blue-100 max-w-3xl mx-auto">
-              Discover trusted local service providers and unique products from verified sellers around the world.
+              Discover trusted local service providers and unique products from verified sellers around you.
             </p>
             
             {/* Tab Navigation */}
