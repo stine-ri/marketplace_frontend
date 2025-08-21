@@ -11,7 +11,7 @@ interface ClientRequestCardProps {
   request: ClientRequest;
   bidsCount: string;
   bids: Bid[];
-  status?: "pending" | "accepted" | "open" | "closed";
+  status?: "pending" | "accepted" | "open" | "closed"|"completed";
   interests?: Interest[];
   allowBids?: boolean;
   allowInterests?: boolean;

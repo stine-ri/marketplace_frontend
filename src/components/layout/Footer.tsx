@@ -31,28 +31,18 @@ export const Footer = () => {
             <h3 className="text-lg font-semibold mb-4">Quick Links</h3>
             <ul className="space-y-2">
               <li>
-                <a href="#" className="text-gray-300 hover:text-white">
-                  About Us
-                </a>
-              </li>
-              <li>
-                <a href="#" className="text-gray-300 hover:text-white">
+                <a href="/services" className="text-gray-300 hover:text-white">
                   Services
                 </a>
               </li>
               <li>
-                <a href="#" className="text-gray-300 hover:text-white">
+                <a href="/products" className="text-gray-300 hover:text-white">
                   Products
                 </a>
               </li>
               <li>
-                <a href="#" className="text-gray-300 hover:text-white">
+                <a href="/become-seller" className="text-gray-300 hover:text-white">
                   Become a Seller
-                </a>
-              </li>
-              <li>
-                <a href="#" className="text-gray-300 hover:text-white">
-                  Careers
                 </a>
               </li>
             </ul>
@@ -62,28 +52,8 @@ export const Footer = () => {
             <h3 className="text-lg font-semibold mb-4">Support</h3>
             <ul className="space-y-2">
               <li>
-                <a href="#" className="text-gray-300 hover:text-white">
+                <a href="/help" className="text-gray-300 hover:text-white">
                   Help Center
-                </a>
-              </li>
-              <li>
-                <a href="#" className="text-gray-300 hover:text-white">
-                  Safety Center
-                </a>
-              </li>
-              <li>
-                <a href="#" className="text-gray-300 hover:text-white">
-                  Community Guidelines
-                </a>
-              </li>
-              <li>
-                <a href="#" className="text-gray-300 hover:text-white">
-                  FAQs
-                </a>
-              </li>
-              <li>
-                <a href="#" className="text-gray-300 hover:text-white">
-                  Contact Us
                 </a>
               </li>
             </ul>
@@ -95,12 +65,12 @@ export const Footer = () => {
               <div className="flex items-start">
                 <MapPin size={20} className="mr-2 mt-1 flex-shrink-0" />
                 <span className="text-gray-300">
-                  123 Market Street, Suite 456, San Francisco, CA 94103
+                  Nairobi,Kenya
                 </span>
               </div>
               <div className="flex items-center">
                 <Phone size={20} className="mr-2 flex-shrink-0" />
-                <span className="text-gray-300">(123) 456-7890</span>
+                <span className="text-gray-300">(+254) 702727450</span>
               </div>
               <div className="flex items-center">
                 <Mail size={20} className="mr-2 flex-shrink-0" />

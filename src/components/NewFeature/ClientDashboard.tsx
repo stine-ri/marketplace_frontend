@@ -368,7 +368,7 @@ export function ClientDashboard() {
           req.id === requestId
             ? {
                 ...req, // Preserve all original request data
-                status: 'closed',
+                status: 'completed',
                 bids: req.bids?.map((bid: Bid) =>
                   bid.id === bidId
                     ? { ...bid, status: 'accepted' }
@@ -438,11 +438,11 @@ export function ClientDashboard() {
     }
   };
 
-  const filteredRequests = requests.filter(request =>
-    activeTab === 'active'
-      ? request.status === 'open' || request.status === 'pending'
-      : request.status === 'closed' || request.status === 'accepted'
-  );
+ const filteredRequests = requests.filter(request =>
+  activeTab === 'active'
+    ? request.status === 'open' || request.status === 'pending'
+    : request.status === 'closed' || request.status === 'accepted' || request.status === 'completed' // Add 'completed'
+);
 
   const handleAcceptInterest = async (requestId: number, interestId: number) => {
     try {
@@ -469,6 +469,7 @@ export function ClientDashboard() {
           req.id === requestId
             ? {
                 ...req,
+                status: 'completed',
                 interests: req.interests?.map(interest =>
                   interest.id === interestId
                     ? {
@@ -840,12 +841,12 @@ export function ClientDashboard() {
   }, [fetchUserTestimonials]);
 
   // Function to check if user can leave a review
-  const canLeaveReview = (request: any) => {
-    return (
-      request.status === 'closed' && 
-      !userTestimonials.some(t => t.requestId === request.id)
-    );
-  };
+ const canLeaveReview = (request: any) => {
+  return (
+    (request.status === 'closed' || request.status === 'completed') && 
+    !userTestimonials.some(t => t.requestId === request.id)
+  );
+};
 
   // Add this function to handle review button click
   const handleLeaveReview = (request: any) => {

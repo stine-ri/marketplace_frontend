@@ -70,7 +70,7 @@ export interface Request {
   specialRequirements?: string;
   notes?: string;
   collegeFilterId?: number;
-  status: 'open' | 'closed' | 'pending' | 'accepted';
+  status: 'open' | 'closed' | 'pending' | 'accepted'|'completed';
   createdAt: string;
   updated_at:string;
   interests?: Interest[]; 
