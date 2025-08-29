@@ -35,6 +35,10 @@ export default function Login() {
           case 'provider':
             navigate('/provider/dashboard');
             break;
+          case 'product_seller':
+          case 'seller':
+            navigate('/seller/dashboard'); 
+            break;
           case 'client':
           case 'customer':
             navigate('/client/dashboard');
@@ -117,6 +121,15 @@ export default function Login() {
             Register now
           </button>
         </div>
+       
+<div className="text-center text-sm text-gray-600 mt-4">
+  <button
+    onClick={() => navigate('/forgot-password')}
+    className="font-medium text-blue-600 hover:text-blue-500"
+  >
+    Forgot your password?
+  </button>
+</div>
       </div>
     </div>
   );

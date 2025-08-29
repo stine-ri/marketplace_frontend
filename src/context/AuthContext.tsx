@@ -5,7 +5,7 @@ import { AxiosError } from 'axios';
 import { decodeToken } from '../utilis/token';
 
 // Types
-type Role = 'admin' | 'service_provider' | 'client';
+export type Role = 'admin' | 'service_provider' | 'client' | 'product_seller';
 
 export type UserType = {
   userId: number;
@@ -167,63 +167,83 @@ const login = async (email: string, password: string): Promise<UserType> => {
 };
 
   // Register
-  const register = async (formData: {
-    full_name: string;
-    email: string;
-    contact_phone: string;
-    address: string;
-    role: Role;
-    password: string;
+const register = async (formData: {
+  full_name: string;
+  email: string;
+  contact_phone: string;
+  address: string;
+  role: Role;
+  password: string;
 }): Promise<UserType> => {
-    setLoading(true);
-    setError(null);
-    try {
-        const { data } = await api.post('/api/register', {
-            full_name: formData.full_name,
-            email: formData.email,
-            contact_phone: formData.contact_phone,
-            address: formData.address,
-            role: formData.role,
-            password: formData.password,
-            confirmPassword: formData.password // Add this line
-        });
-        
-        if (!data.token || !data.user) {
-            throw new Error('Registration response incomplete');
-        }
-
-        const userData: UserType = {
-            ...data.user,
-            providerId: data.user.providerId || null,
-            providerProfile: null
-        };
-
-        setUser(userData);
-        setToken(data.token);
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(userData));
-        return userData;
-    } catch (err) {
-        let errorMessage = 'Registration failed';
-        
-        if (err instanceof AxiosError) {
-            errorMessage = err.response?.data?.error || 
-                         err.response?.data?.message || 
-                         'Registration failed';
-            
-            // Log detailed error for debugging
-            console.error('Registration error details:', {
-                status: err.response?.status,
-                data: err.response?.data,
-                headers: err.response?.headers
-            });
-        }
-
-        setError(errorMessage);
-        throw new Error(errorMessage);
-    } finally {
-        setLoading(false);
+  setLoading(true);
+  setError(null);
+  try {
+    const requestPayload = {
+      full_name: formData.full_name,
+      email: formData.email,
+      contact_phone: formData.contact_phone,
+      address: formData.address,
+      role: formData.role,
+      password: formData.password,
+      confirmPassword: formData.password 
+    };
+    
+    // console.log('Sending registration request with payload:', requestPayload);
+    
+    const { data } = await api.post('/api/register', requestPayload);
+    
+    // console.log('Registration response:', data);
+    
+    if (!data.token || !data.user) {
+      throw new Error('Registration response incomplete');
     }
+
+    const userData: UserType = {
+      ...data.user,
+      providerId: data.user.providerId || null,
+      providerProfile: null
+    };
+
+    setUser(userData);
+    setToken(data.token);
+    localStorage.setItem('token', data.token);
+    localStorage.setItem('user', JSON.stringify(userData));
+    return userData;
+  } catch (err) {
+    let errorMessage = 'Registration failed';
+    
+    if (err instanceof AxiosError) {
+      console.error('Full Axios error response:', err.response);
+      
+      // Extract the actual error message from the backend
+      const responseData = err.response?.data;
+      
+      if (responseData) {
+        // Try different possible error message formats
+        errorMessage = 
+          responseData.error || 
+          responseData.message || 
+          responseData.details ||
+          (typeof responseData === 'string' ? responseData : 'Registration failed');
+        
+        // Handle validation errors with multiple fields
+        if (responseData.errors && typeof responseData.errors === 'object') {
+          errorMessage = Object.entries(responseData.errors)
+            .map(([field, error]) => `${field}: ${error}`)
+            .join(', ');
+        }
+      }
+      
+      console.error('Parsed error message:', errorMessage);
+    } else if (err instanceof Error) {
+      errorMessage = err.message;
+    }
+
+    setError(errorMessage);
+    throw new Error(errorMessage);
+  } finally {
+    setLoading(false);
+  }
 };
 
   // Logout

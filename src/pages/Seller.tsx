@@ -1,4 +1,4 @@
-import { Store, User, TrendingUp, Users, Award, Shield, BarChart3, Settings, Eye, Clock, CheckCircle, DollarSign, Globe, Zap, Heart, Star, Briefcase, Smile } from 'lucide-react';
+import { Store, User, TrendingUp, Users, Award, Shield, BarChart3, Settings, Eye, Clock, CheckCircle, DollarSign, Globe, Zap, Heart, Star, Briefcase, Smile, Package, Box, Tag } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
@@ -36,7 +36,7 @@ const BecomeSellerNavbarContent = () => {
                 <div className="w-3 h-3 bg-green-500 rounded-full flex items-center justify-center animate-pulse">
                   <DollarSign className="w-2 h-2 text-white" />
                 </div>
-                <span className="text-sm font-bold text-green-700">$2M+</span>
+                <span className="text-sm font-bold text-green-700">ksh 2M+</span>
               </div>
               <span className="text-xs text-gray-600">Earned</span>
             </div>
@@ -77,7 +77,7 @@ const BecomeSellerNavbarContent = () => {
           </div>
           <div className="flex items-center gap-1 px-2 py-1">
             <DollarSign className="w-3 h-3 text-green-500" />
-            <span className="text-xs font-bold text-green-700">$2M+</span>
+            <span className="text-xs font-bold text-green-700">ksh 2M+</span>
           </div>
         </div>
 
@@ -301,6 +301,50 @@ const BecomeSellerNavbarContent = () => {
           <button className="flex items-center gap-1 bg-gradient-to-r from-green-100 to-blue-100 hover:from-green-200 hover:to-blue-200 text-green-700 px-2 py-1 rounded-full transition-colors shadow-sm">
             <TrendingUp className="w-3 h-3" />
             <span>View Stats</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+if (user.role === 'product_seller') {
+    return (
+      <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-2 bg-gradient-to-r from-orange-50 to-amber-50 px-3 py-2 rounded-lg border border-orange-200 shadow-sm hover:shadow-md transition-shadow">
+          <div className="w-8 h-8 bg-gradient-to-r from-orange-500 to-amber-500 rounded-full flex items-center justify-center shadow-md">
+            <Package className="w-4 h-4 text-white" />
+          </div>
+          <div className="flex flex-col">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-gray-800">
+                Welcome back, {firstName}
+              </span>
+              <span className="hidden sm:inline-block bg-gradient-to-r from-orange-100 to-amber-100 text-orange-700 px-2 py-1 text-xs rounded-full font-medium shadow-sm">
+                Product Seller
+              </span>
+            </div>
+            <p className="text-xs text-gray-600 hidden md:block">
+              Manage your products and track your sales performance
+            </p>
+          </div>
+        </div>
+        
+        {/* Product seller quick stats */}
+        <div className="hidden lg:flex items-center gap-3 text-xs text-gray-600">
+          <div className="flex items-center gap-1 bg-green-50 px-2 py-1 rounded-full border border-green-100">
+            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+            <span>Active</span>
+          </div>
+          <div className="flex items-center gap-1 bg-blue-50 px-2 py-1 rounded-full border border-blue-100">
+            <Box className="w-3 h-3 text-blue-500" />
+            <span>24 Products</span>
+          </div>
+          <div className="flex items-center gap-1 bg-purple-50 px-2 py-1 rounded-full border border-purple-100">
+            <Tag className="w-3 h-3 text-purple-500" />
+            <span>15 Orders</span>
+          </div>
+          <button className="flex items-center gap-1 bg-gradient-to-r from-orange-100 to-amber-100 hover:from-orange-200 hover:to-amber-200 text-orange-700 px-2 py-1 rounded-full transition-colors shadow-sm">
+            <TrendingUp className="w-3 h-3" />
+            <span>Sales Dashboard</span>
           </button>
         </div>
       </div>

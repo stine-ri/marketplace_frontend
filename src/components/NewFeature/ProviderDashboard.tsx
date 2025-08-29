@@ -336,7 +336,7 @@ export function ProviderDashboard() {
   const [myBids, setMyBids] = useState<ExtendedBid[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'available' | 'mybids' | 'requests' | 'myinterests' | 'products' | 'chat'>('available');
+  const [activeTab, setActiveTab] = useState<'available' | 'mybids' | 'requests' | 'myinterests' | 'chat'>('available');
 
   const [showNotifications, setShowNotifications] = useState(false);
   const [userLocation, setUserLocation] = useState<Location | null>(null);
@@ -1307,12 +1307,7 @@ export function ProviderDashboard() {
                 >
                   Messages ({chatRooms.filter(r => (r.unreadCount ?? 0) > 0).length})
                 </button>
-                <button
-                  onClick={() => setActiveTab('products')}
-                  className={`${activeTab === 'products' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
-                >
-                  My Products
-                </button>
+               
               </nav>
             </div>
 
@@ -1582,7 +1577,7 @@ export function ProviderDashboard() {
                   </div>
                 )}
 
-                {activeTab === 'products' && <ProductManagementSection />}
+         
 
                 {activeTab === 'chat' && (
                   <div className="space-y-4">

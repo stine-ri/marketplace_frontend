@@ -1,4 +1,4 @@
-// src/components/AdminPanel.tsx - Updated with Support Management
+// src/components/AdminPanel.tsx - Enhanced with Admin Notifications and Better Error Handling
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Service, College, Category } from '../../types/types';
@@ -9,6 +9,9 @@ import RequestManagement from '../NewFeature/RequestManagement';
 import ProductManagement from './ProductManagement';
 import InterestsManagement from './InterestManagement';
 import SupportManagement from './SupportManagement';
+import { showToast } from '../../utilis/toast';
+import { toast } from 'react-hot-toast';
+import AdminSettings from './AdminSettings';
 import { 
   FiSearch, 
   FiTrash2, 
@@ -24,12 +27,28 @@ import {
   FiMessageSquare,
   FiShoppingBag,
   FiMessageCircle,
-  FiTag 
+  FiTag,
+  FiBell,
+  FiEdit2,
+  FiRefreshCw
 } from 'react-icons/fi';
 
 const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com';
 
 type AdminSection = 'services' | 'colleges' | 'users' | 'bids' | 'requests' | 'products' |'categories' | 'interests' | 'support' | 'settings';
+
+// Admin Notification System
+interface AdminNotification {
+  id: string;
+  type: 'error' | 'warning' | 'info';
+  title: string;
+  message: string;
+  timestamp: Date;
+  action?: {
+    label: string;
+    handler: () => void;
+  };
+}
 
 export default function AdminPanel() {
   const [services, setServices] = useState<Service[]>([]);
@@ -47,7 +66,54 @@ export default function AdminPanel() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedItems, setSelectedItems] = useState<number[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-   
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [collegeToDelete, setCollegeToDelete] = useState<College | null>(null);
+  
+  // Admin notifications state
+  const [notifications, setNotifications] = useState<AdminNotification[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  
+  // Editing states
+  const [editingItem, setEditingItem] = useState<{type: 'service' | 'college' | 'category', id: number} | null>(null);
+  const [editValue, setEditValue] = useState('');
+
+  // Admin notification helper
+  const addAdminNotification = (notification: Omit<AdminNotification, 'id' | 'timestamp'>) => {
+    const newNotification: AdminNotification = {
+      ...notification,
+      id: Date.now().toString(),
+      timestamp: new Date()
+    };
+    setNotifications(prev => [newNotification, ...prev].slice(0, 10)); // Keep last 10 notifications
+  };
+
+  // Enhanced error reporting function
+  const reportToAdmin = async (issue: string, details: any) => {
+    try {
+      // Send to admin endpoint (you'll need to implement this on your backend)
+      await axios.post(`${baseURL}/api/admin/notifications`, {
+        type: 'system_issue',
+        title: 'Database Constraint Violation',
+        message: issue,
+        details: details,
+        timestamp: new Date().toISOString()
+      }, { headers: getAuthHeaders() });
+      
+      // Add to local notifications
+      addAdminNotification({
+        type: 'error',
+        title: 'Database Issue Reported',
+        message: issue,
+        action: {
+          label: 'View User Management',
+          handler: () => setActiveSection('users')
+        }
+      });
+    } catch (err) {
+      console.error('Failed to report to admin:', err);
+    }
+  };
+
   // Check admin access
   useEffect(() => {
     if (!isAdmin()) {
@@ -59,7 +125,7 @@ export default function AdminPanel() {
     }
   }, [activeSection]);
 
-  // Fetch all data for services and colleges
+  // Fetch all data for services, colleges, and categories
   const fetchAllData = async () => {
     setIsLoading(true);
     setError(null);
@@ -67,13 +133,19 @@ export default function AdminPanel() {
       const [servicesRes, collegesRes, categoriesRes] = await Promise.all([
         axios.get<Service[]>(`${baseURL}/api/services`, { headers: getAuthHeaders() }),
         axios.get<College[]>(`${baseURL}/api/colleges`, { headers: getAuthHeaders() }),
-         axios.get<Category[]>(`${baseURL}/api/admin/categories`, { headers: getAuthHeaders() })
+        axios.get<Category[]>(`${baseURL}/api/admin/categories`, { headers: getAuthHeaders() })
       ]);
       setServices(servicesRes.data);
       setColleges(collegesRes.data);
       setCategories(categoriesRes.data);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to load data. Please try again.');
+      const errorMessage = err.response?.data?.message || 'Failed to load data. Please try again.';
+      setError(errorMessage);
+      addAdminNotification({
+        type: 'error',
+        title: 'Data Loading Failed',
+        message: errorMessage
+      });
       console.error('Error fetching data:', err);
     } finally {
       setIsLoading(false);
@@ -95,21 +167,50 @@ export default function AdminPanel() {
       setNewService('');
       setNewServiceCategory('');
       setError(null);
+      showToast.success('Service added successfully');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to add service');
+      const errorMessage = err.response?.data?.message || 'Failed to add service';
+      setError(errorMessage);
+      showToast.error(errorMessage);
       console.error('Error adding service:', err);
     }
   };
 
   const handleDeleteService = async (id: number) => {
-    if (!window.confirm('Are you sure you want to delete this service?')) return;
+    const serviceName = services.find(s => s.id === id)?.name || 'this service';
+    
+    if (!window.confirm(`Are you sure you want to delete "${serviceName}"?`)) return;
     
     try {
+      const loadingToast = toast.loading(`Deleting "${serviceName}"...`);
+      
       await axios.delete(`${baseURL}/api/services/${id}`, { headers: getAuthHeaders() });
+      
+      toast.dismiss(loadingToast);
+      showToast.success(`"${serviceName}" has been successfully deleted`);
+      
       setServices(services.filter(service => service.id !== id));
       setSelectedItems(selectedItems.filter(itemId => itemId !== id));
+      
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to delete service');
+      toast.dismiss();
+      
+      if (err.response?.status === 409) {
+        const errorMessage = `Cannot delete "${serviceName}" because it's being used by active service providers.`;
+        showToast.error(errorMessage);
+        addAdminNotification({
+          type: 'warning',
+          title: 'Service Deletion Blocked',
+          message: errorMessage,
+          action: {
+            label: 'Manage Users',
+            handler: () => setActiveSection('users')
+          }
+        });
+      } else {
+        showToast.error('Failed to delete service. Please try again.');
+      }
+      
       console.error('Error deleting service:', err);
     }
   };
@@ -122,32 +223,93 @@ export default function AdminPanel() {
     
     try {
       const res = await axios.post<College>(`${baseURL}/api/colleges`, { 
-        name: newCollege,
+        name: newCollege.trim(),
         location: ''
       }, { headers: getAuthHeaders() });
       setColleges([...colleges, res.data]);
       setNewCollege('');
       setError(null);
+      showToast.success('College added successfully');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to add college');
+      const errorMessage = err.response?.data?.message || 'Failed to add college';
+      setError(errorMessage);
+      showToast.error(errorMessage);
       console.error('Error adding college:', err);
     }
   };
 
+  const openDeleteModal = (college: College) => {
+    setCollegeToDelete(college);
+    setShowDeleteModal(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!collegeToDelete) return;
+    
+    await handleDeleteCollege(collegeToDelete.id);
+    setShowDeleteModal(false);
+    setCollegeToDelete(null);
+  };
+
   const handleDeleteCollege = async (id: number) => {
-    if (!window.confirm('Are you sure you want to delete this college?')) return;
+    const collegeName = colleges.find(c => c.id === id)?.name || 'this college';
     
     try {
-      await axios.delete(`${baseURL}/api/colleges/${id}`, { headers: getAuthHeaders() });
+      const loadingToast = toast.loading(`Deleting "${collegeName}"...`);
+      
+      const response = await axios.delete(`${baseURL}/api/colleges/${id}`, { 
+        headers: getAuthHeaders() 
+      });
+      
+      toast.dismiss(loadingToast);
+      showToast.success(`"${collegeName}" has been successfully deleted`);
+      
       setColleges(colleges.filter(college => college.id !== id));
       setSelectedItems(selectedItems.filter(itemId => itemId !== id));
+      
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to delete college');
+      toast.dismiss();
+      
+      if (err.response?.status === 409) {
+        const providerCount = err.response.data?.providerCount || 0;
+        const errorMessage = `Cannot delete "${collegeName}" - it has ${providerCount} associated service provider${providerCount !== 1 ? 's' : ''}`;
+        
+        showToast.error(errorMessage);
+        
+        // Report this foreign key constraint issue to admin
+        await reportToAdmin(
+          `Foreign Key Constraint Violation: College "${collegeName}" cannot be deleted due to ${providerCount} associated providers`,
+          {
+            collegeId: id,
+            collegeName: collegeName,
+            providerCount: providerCount,
+            error: err.response.data
+          }
+        );
+        
+      } else if (err.response?.status === 404) {
+        showToast.warning(`"${collegeName}" was not found. It may have already been deleted.`);
+        setColleges(colleges.filter(college => college.id !== id));
+      } else {
+        const genericError = 'An unexpected error occurred while deleting the college.';
+        showToast.error(genericError);
+        
+        // Report unexpected errors
+        await reportToAdmin(
+          `Unexpected error deleting college "${collegeName}"`,
+          {
+            collegeId: id,
+            collegeName: collegeName,
+            error: err.response?.data || err.message
+          }
+        );
+      }
+      
       console.error('Error deleting college:', err);
     }
   };
 
-  // Add category functions
+  // Enhanced category functions with better error handling
   const handleAddCategory = async () => {
     if (!newCategory.trim()) {
       setError('Category name cannot be empty');
@@ -163,80 +325,159 @@ export default function AdminPanel() {
       setNewCategory('');
       setNewCategoryDescription('');
       setError(null);
+      showToast.success('Category added successfully');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to add category');
+      const errorMessage = err.response?.data?.message || 'Failed to add category';
+      setError(errorMessage);
+      showToast.error(errorMessage);
       console.error('Error adding category:', err);
     }
   };
 
   const handleDeleteCategory = async (id: number) => {
-    if (!window.confirm('Are you sure you want to delete this category?')) return;
+    const categoryName = categories.find(c => c.id === id)?.name || 'this category';
+    
+    if (!window.confirm(`Are you sure you want to delete "${categoryName}"?`)) return;
     
     try {
+      const loadingToast = toast.loading(`Deleting "${categoryName}"...`);
+      
       await axios.delete(`${baseURL}/api/admin/categories/${id}`, { headers: getAuthHeaders() });
+      
+      toast.dismiss(loadingToast);
+      showToast.success(`"${categoryName}" has been successfully deleted`);
+      
       setCategories(categories.filter(category => category.id !== id));
       setSelectedItems(selectedItems.filter(itemId => itemId !== id));
+      
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to delete category');
+      toast.dismiss();
+      
+      if (err.response?.status === 409) {
+        const errorMessage = `Cannot delete "${categoryName}" because it's being used by existing services or products.`;
+        showToast.error(errorMessage);
+        
+        await reportToAdmin(
+          `Foreign Key Constraint: Category "${categoryName}" cannot be deleted due to dependencies`,
+          {
+            categoryId: id,
+            categoryName: categoryName,
+            error: err.response.data
+          }
+        );
+      } else {
+        showToast.error('Failed to delete category. Please try again.');
+      }
+      
       console.error('Error deleting category:', err);
     }
   };
 
- const handleBulkDelete = async () => {
+  // Enhanced bulk delete with better error handling
+  const handleBulkDelete = async () => {
     if (!window.confirm(`Are you sure you want to delete ${selectedItems.length} items?`)) return;
+    
+    const loadingToast = toast.loading(`Deleting ${selectedItems.length} items...`);
+    let successCount = 0;
+    let errorCount = 0;
+    const errors: string[] = [];
     
     try {
       if (activeTab === 'services') {
-        await axios.post(`${baseURL}/api/services/bulk-delete`, 
-          { ids: selectedItems }, 
-          { headers: getAuthHeaders() }
-        );
-        setServices(services.filter(service => !selectedItems.includes(service.id)));
+        for (const id of selectedItems) {
+          try {
+            await axios.delete(`${baseURL}/api/services/${id}`, { headers: getAuthHeaders() });
+            successCount++;
+          } catch (err: any) {
+            errorCount++;
+            const serviceName = services.find(s => s.id === id)?.name || `Service ${id}`;
+            errors.push(`${serviceName}: ${err.response?.data?.message || 'Unknown error'}`);
+          }
+        }
+        setServices(services.filter(service => !selectedItems.includes(service.id) || errors.some(e => e.includes(service.name))));
+        
       } else if (activeTab === 'colleges') {
-        await axios.post(`${baseURL}/api/colleges/bulk-delete`, 
-          { ids: selectedItems }, 
-          { headers: getAuthHeaders() }
-        );
-        setColleges(colleges.filter(college => !selectedItems.includes(college.id)));
+        for (const id of selectedItems) {
+          try {
+            await axios.delete(`${baseURL}/api/colleges/${id}`, { headers: getAuthHeaders() });
+            successCount++;
+          } catch (err: any) {
+            errorCount++;
+            const collegeName = colleges.find(c => c.id === id)?.name || `College ${id}`;
+            errors.push(`${collegeName}: ${err.response?.data?.message || 'Unknown error'}`);
+          }
+        }
+        setColleges(colleges.filter(college => !selectedItems.includes(college.id) || errors.some(e => e.includes(college.name))));
+        
       } else if (activeTab === 'categories') {
-        // Bulk delete for categories
-        await Promise.all(
-          selectedItems.map(id => 
-            axios.delete(`${baseURL}/api/admin/categories/${id}`, { headers: getAuthHeaders() })
-          )
-        );
-        setCategories(categories.filter(category => !selectedItems.includes(category.id)));
+        for (const id of selectedItems) {
+          try {
+            await axios.delete(`${baseURL}/api/admin/categories/${id}`, { headers: getAuthHeaders() });
+            successCount++;
+          } catch (err: any) {
+            errorCount++;
+            const categoryName = categories.find(c => c.id === id)?.name || `Category ${id}`;
+            errors.push(`${categoryName}: ${err.response?.data?.message || 'Unknown error'}`);
+          }
+        }
+        setCategories(categories.filter(category => !selectedItems.includes(category.id) || errors.some(e => e.includes(category.name))));
       }
+      
+      toast.dismiss(loadingToast);
+      
+      if (errorCount === 0) {
+        showToast.success(`Successfully deleted all ${successCount} items`);
+      } else if (successCount > 0) {
+        showToast.warning(`Deleted ${successCount} items, ${errorCount} failed`);
+        
+        // Report bulk delete issues
+        await reportToAdmin(
+          `Bulk delete partially failed: ${errorCount} items could not be deleted`,
+          { errors, successCount, errorCount }
+        );
+      } else {
+        showToast.error(`Failed to delete any items`);
+      }
+      
       setSelectedItems([]);
+      
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to delete items');
+      toast.dismiss(loadingToast);
+      showToast.error('Bulk delete operation failed');
+      console.error('Bulk delete error:', err);
     }
   };
 
-
- const handleExport = () => {
-    let data, headers;
+  // Enhanced export function
+  const handleExport = () => {
+    let data, headers, filename;
     
     if (activeTab === 'services') {
       data = services;
-      headers = ['ID', 'Name', 'Category'];
+      headers = ['ID', 'Name', 'Category', 'Created Date'];
+      filename = `services-${new Date().toISOString().slice(0,10)}.csv`;
     } else if (activeTab === 'colleges') {
       data = colleges;
-      headers = ['ID', 'Name', 'Location'];
+      headers = ['ID', 'Name', 'Location', 'Provider Count'];
+      filename = `colleges-${new Date().toISOString().slice(0,10)}.csv`;
     } else {
       data = categories;
-      headers = ['ID', 'Name', 'Description', 'Status'];
+      headers = ['ID', 'Name', 'Description', 'Status', 'Created Date'];
+      filename = `categories-${new Date().toISOString().slice(0,10)}.csv`;
     }
     
     const csvContent = [
       headers.join(','),
       ...data.map(item => {
         if (activeTab === 'services') {
-          return `${item.id},"${item.name}","${(item as Service).category || ''}"`;
+          const service = item as Service;
+          return `${service.id},"${service.name}","${service.category || ''}","${new Date().toISOString()}"`;
         } else if (activeTab === 'colleges') {
-          return `${item.id},"${item.name}","${(item as College).location || ''}"`;
+          const college = item as College;
+          return `${college.id},"${college.name}","${college.location || ''}",""`;
         } else {
-          return `${item.id},"${item.name}","${(item as Category).description || ''}","${(item as Category).isActive ? 'Active' : 'Inactive'}"`;
+          const category = item as Category;
+          return `${category.id},"${category.name}","${category.description || ''}","${category.isActive ? 'Active' : 'Inactive'}","${new Date().toISOString()}"`;
         }
       })
     ].join('\n');
@@ -245,16 +486,19 @@ export default function AdminPanel() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${activeTab}-${new Date().toISOString().slice(0,10)}.csv`;
+    link.download = filename;
     link.click();
+    
+    showToast.success(`Exported ${data.length} ${activeTab} to ${filename}`);
   };
 
+  // Filter functions
   const filteredServices = services.filter(service => 
     service.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (service.category && service.category.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-   const filteredColleges = colleges.filter(college => 
+  const filteredColleges = colleges.filter(college => 
     college.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (college.location && college.location.toLowerCase().includes(searchTerm.toLowerCase()))
   );
@@ -264,7 +508,7 @@ export default function AdminPanel() {
     (category.description && category.description.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  // Menu items including Support Management
+  // Menu items
   const menuItems = [
     { id: 'services', label: 'Services & Categories', icon: FiPackage },
     { id: 'products', label: 'Product Management', icon: FiShoppingBag },
@@ -354,18 +598,94 @@ export default function AdminPanel() {
               </h1>
             </div>
             
-            {error && (
-              <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg flex items-center">
-                <FiAlertCircle className="mr-2" />
-                {error}
-                <button 
-                  onClick={() => setError(null)}
-                  className="ml-2 text-red-500 hover:text-red-700"
+            <div className="flex items-center gap-4">
+              {/* Admin Notifications */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowNotifications(!showNotifications)}
+                  className="relative p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition"
                 >
-                  <FiX size={16} />
+                  <FiBell size={20} />
+                  {notifications.length > 0 && (
+                    <span className="absolute -top-1 -right-1 h-4 w-4 bg-red-500 text-white rounded-full text-xs flex items-center justify-center">
+                      {notifications.length > 9 ? '9+' : notifications.length}
+                    </span>
+                  )}
                 </button>
+                
+                {showNotifications && (
+                  <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border z-50 max-h-96 overflow-y-auto">
+                    <div className="p-4 border-b">
+                      <h3 className="font-semibold text-gray-800">Admin Notifications</h3>
+                    </div>
+                    {notifications.length === 0 ? (
+                      <div className="p-4 text-center text-gray-500">
+                        No notifications
+                      </div>
+                    ) : (
+                      <div className="divide-y">
+                        {notifications.map((notification) => (
+                          <div key={notification.id} className="p-4 hover:bg-gray-50">
+                            <div className="flex items-start gap-3">
+                              <div className={`p-1 rounded-full ${
+                                notification.type === 'error' ? 'bg-red-100' :
+                                notification.type === 'warning' ? 'bg-yellow-100' : 'bg-blue-100'
+                              }`}>
+                                <FiAlertCircle className={`w-4 h-4 ${
+                                  notification.type === 'error' ? 'text-red-600' :
+                                  notification.type === 'warning' ? 'text-yellow-600' : 'text-blue-600'
+                                }`} />
+                              </div>
+                              <div className="flex-1">
+                                <h4 className="font-medium text-gray-800 text-sm">{notification.title}</h4>
+                                <p className="text-gray-600 text-sm mt-1">{notification.message}</p>
+                                <p className="text-xs text-gray-400 mt-2">
+                                  {notification.timestamp.toLocaleTimeString()}
+                                </p>
+                                {notification.action && (
+                                  <button
+                                    onClick={() => {
+                                      notification.action?.handler();
+                                      setShowNotifications(false);
+                                    }}
+                                    className="mt-2 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 transition"
+                                  >
+                                    {notification.action.label}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {notifications.length > 0 && (
+                      <div className="p-4 border-t">
+                        <button
+                          onClick={() => setNotifications([])}
+                          className="w-full text-center text-sm text-gray-500 hover:text-gray-700"
+                        >
+                          Clear all notifications
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-            )}
+
+              {error && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg flex items-center max-w-md">
+                  <FiAlertCircle className="mr-2 flex-shrink-0" />
+                  <span className="text-sm">{error}</span>
+                  <button 
+                    onClick={() => setError(null)}
+                    className="ml-2 text-red-500 hover:text-red-700 flex-shrink-0"
+                  >
+                    <FiX size={16} />
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -383,15 +703,10 @@ export default function AdminPanel() {
             <InterestsManagement />
           ) : activeSection === 'support' ? (
             <SupportManagement />
-          ) : activeSection === 'settings' ? (
-            <div className="p-6">
-              <div className="bg-white rounded-lg shadow-sm border p-6">
-                <h3 className="text-lg font-semibold mb-4">System Settings</h3>
-                <p className="text-gray-600">Settings panel coming soon...</p>
-              </div>
-            </div>
-          ) : (
-            // Services, Colleges & Categories Management
+           ) : activeSection === 'settings' ? (
+  <AdminSettings />
+) : (
+            // Services, Colleges & Categories Management (existing content with enhancements)
             <div className="p-6 space-y-6">
               {/* Search and Controls */}
               <div className="flex flex-col md:flex-row gap-4">
@@ -411,7 +726,7 @@ export default function AdminPanel() {
                       onClick={handleBulkDelete}
                       className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition shadow-sm"
                     >
-                      <FiTrash2 size={16} /> Delete Selected
+                      <FiTrash2 size={16} /> Delete Selected ({selectedItems.length})
                     </button>
                   )}
                   <button
@@ -419,6 +734,12 @@ export default function AdminPanel() {
                     className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition shadow-sm"
                   >
                     <FiDownload size={16} /> Export
+                  </button>
+                  <button
+                    onClick={fetchAllData}
+                    className="flex items-center gap-2 bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition shadow-sm"
+                  >
+                    <FiRefreshCw size={16} /> Refresh
                   </button>
                 </div>
               </div>
@@ -437,7 +758,7 @@ export default function AdminPanel() {
                       setSelectedItems([]);
                     }}
                   >
-                    Services
+                    Services ({services.length})
                   </button>
                   <button
                     className={`py-2 px-4 font-medium text-sm md:text-base rounded-t-lg transition ${
@@ -450,7 +771,7 @@ export default function AdminPanel() {
                       setSelectedItems([]);
                     }}
                   >
-                    Colleges
+                    Colleges ({colleges.length})
                   </button>
                   <button
                     className={`py-2 px-4 font-medium text-sm md:text-base rounded-t-lg transition ${
@@ -463,7 +784,7 @@ export default function AdminPanel() {
                       setSelectedItems([]);
                     }}
                   >
-                    Categories
+                    Categories ({categories.length})
                   </button>
                 </div>
               </div>
@@ -485,6 +806,7 @@ export default function AdminPanel() {
                           className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                           value={newService}
                           onChange={(e) => setNewService(e.target.value)}
+                          onKeyPress={(e) => e.key === 'Enter' && handleAddService()}
                         />
                       </div>
                       <div>
@@ -495,6 +817,7 @@ export default function AdminPanel() {
                           className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                           value={newServiceCategory}
                           onChange={(e) => setNewServiceCategory(e.target.value)}
+                          onKeyPress={(e) => e.key === 'Enter' && handleAddService()}
                         />
                       </div>
                     </div>
@@ -507,11 +830,26 @@ export default function AdminPanel() {
                   </div>
 
                   <div className="bg-white p-4 md:p-6 rounded-lg shadow-sm border">
-                    <h2 className="text-xl font-semibold mb-4 text-gray-800">Current Services</h2>
+                    <div className="flex justify-between items-center mb-4">
+                      <h2 className="text-xl font-semibold text-gray-800">Current Services</h2>
+                      <div className="text-sm text-gray-500">
+                        Showing {filteredServices.length} of {services.length} services
+                      </div>
+                    </div>
                     {filteredServices.length === 0 ? (
                       <div className="text-center py-8">
                         <FiPackage className="mx-auto text-gray-400 text-4xl mb-2" />
-                        <p className="text-gray-500">No services available</p>
+                        <p className="text-gray-500">
+                          {searchTerm ? 'No services match your search' : 'No services available'}
+                        </p>
+                        {searchTerm && (
+                          <button
+                            onClick={() => setSearchTerm('')}
+                            className="text-blue-600 hover:text-blue-800 text-sm mt-2"
+                          >
+                            Clear search
+                          </button>
+                        )}
                       </div>
                     ) : (
                       <div className="overflow-x-auto">
@@ -531,6 +869,9 @@ export default function AdminPanel() {
                                     }
                                   }}
                                 />
+                              </th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                ID
                               </th>
                               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 Name
@@ -560,19 +901,61 @@ export default function AdminPanel() {
                                     }}
                                   />
                                 </td>
+                                <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  #{service.id}
+                                </td>
                                 <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                  {service.name}
+                                  {editingItem?.type === 'service' && editingItem?.id === service.id ? (
+                                    <input
+                                      type="text"
+                                      value={editValue}
+                                      onChange={(e) => setEditValue(e.target.value)}
+                                      onKeyPress={(e) => {
+                                        if (e.key === 'Enter') {
+                                          // Handle save edit
+                                          setEditingItem(null);
+                                          // Add API call to update service
+                                        }
+                                      }}
+                                      onBlur={() => setEditingItem(null)}
+                                      className="w-full p-1 border rounded"
+                                      autoFocus
+                                    />
+                                  ) : (
+                                    <span 
+                                      onDoubleClick={() => {
+                                        setEditingItem({type: 'service', id: service.id});
+                                        setEditValue(service.name);
+                                      }}
+                                      className="cursor-pointer hover:bg-gray-100 px-1 py-0.5 rounded"
+                                    >
+                                      {service.name}
+                                    </span>
+                                  )}
                                 </td>
                                 <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                                  {service.category || '-'}
+                                  {service.category || (
+                                    <span className="text-gray-400 italic">No category</span>
+                                  )}
                                 </td>
                                 <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                                  <button
-                                    onClick={() => handleDeleteService(service.id)}
-                                    className="flex items-center text-red-600 hover:text-red-900 px-2 py-1 rounded-lg hover:bg-red-50 transition"
-                                  >
-                                    <FiTrash2 className="mr-1" size={14} /> Delete
-                                  </button>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={() => {
+                                        setEditingItem({type: 'service', id: service.id});
+                                        setEditValue(service.name);
+                                      }}
+                                      className="flex items-center text-blue-600 hover:text-blue-900 px-2 py-1 rounded-lg hover:bg-blue-50 transition"
+                                    >
+                                      <FiEdit2 className="mr-1" size={14} /> Edit
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteService(service.id)}
+                                      className="flex items-center text-red-600 hover:text-red-900 px-2 py-1 rounded-lg hover:bg-red-50 transition"
+                                    >
+                                      <FiTrash2 className="mr-1" size={14} /> Delete
+                                    </button>
+                                  </div>
                                 </td>
                               </tr>
                             ))}
@@ -605,11 +988,41 @@ export default function AdminPanel() {
                   </div>
 
                   <div className="bg-white p-4 md:p-6 rounded-lg shadow-sm border">
-                    <h2 className="text-xl font-semibold mb-4 text-gray-800">Current Colleges</h2>
+                    <div className="flex justify-between items-center mb-4">
+                      <h2 className="text-xl font-semibold text-gray-800">Current Colleges</h2>
+                      <div className="text-sm text-gray-500">
+                        Showing {filteredColleges.length} of {colleges.length} colleges
+                      </div>
+                    </div>
+                    
+                    {/* Warning message for foreign key constraints */}
+                    <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <div className="flex items-start">
+                        <FiAlertCircle className="text-yellow-600 mt-0.5 mr-2 flex-shrink-0" size={16} />
+                        <div className="text-sm">
+                          <p className="text-yellow-800 font-medium">Important Note:</p>
+                          <p className="text-yellow-700 mt-1">
+                            Colleges with associated service providers cannot be deleted due to database constraints. 
+                            Please reassign or remove providers in User Management first.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    
                     {filteredColleges.length === 0 ? (
                       <div className="text-center py-8">
                         <FiHome className="mx-auto text-gray-400 text-4xl mb-2" />
-                        <p className="text-gray-500">No colleges available</p>
+                        <p className="text-gray-500">
+                          {searchTerm ? 'No colleges match your search' : 'No colleges available'}
+                        </p>
+                        {searchTerm && (
+                          <button
+                            onClick={() => setSearchTerm('')}
+                            className="text-blue-600 hover:text-blue-800 text-sm mt-2"
+                          >
+                            Clear search
+                          </button>
+                        )}
                       </div>
                     ) : (
                       <div className="overflow-x-auto">
@@ -629,6 +1042,9 @@ export default function AdminPanel() {
                                     }
                                   }}
                                 />
+                              </th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                ID
                               </th>
                               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 Name
@@ -658,19 +1074,60 @@ export default function AdminPanel() {
                                     }}
                                   />
                                 </td>
+                                <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  #{college.id}
+                                </td>
                                 <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                  {college.name}
+                                  {editingItem?.type === 'college' && editingItem?.id === college.id ? (
+                                    <input
+                                      type="text"
+                                      value={editValue}
+                                      onChange={(e) => setEditValue(e.target.value)}
+                                      onKeyPress={(e) => {
+                                        if (e.key === 'Enter') {
+                                          setEditingItem(null);
+                                          // Add API call to update college
+                                        }
+                                      }}
+                                      onBlur={() => setEditingItem(null)}
+                                      className="w-full p-1 border rounded"
+                                      autoFocus
+                                    />
+                                  ) : (
+                                    <span 
+                                      onDoubleClick={() => {
+                                        setEditingItem({type: 'college', id: college.id});
+                                        setEditValue(college.name);
+                                      }}
+                                      className="cursor-pointer hover:bg-gray-100 px-1 py-0.5 rounded"
+                                    >
+                                      {college.name}
+                                    </span>
+                                  )}
                                 </td>
                                 <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                                  {college.location || '-'}
+                                  {college.location || (
+                                    <span className="text-gray-400 italic">No location</span>
+                                  )}
                                 </td>
                                 <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                                  <button
-                                    onClick={() => handleDeleteCollege(college.id)}
-                                    className="flex items-center text-red-600 hover:text-red-900 px-2 py-1 rounded-lg hover:bg-red-50 transition"
-                                  >
-                                    <FiTrash2 className="mr-1" size={14} /> Delete
-                                  </button>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={() => {
+                                        setEditingItem({type: 'college', id: college.id});
+                                        setEditValue(college.name);
+                                      }}
+                                      className="flex items-center text-blue-600 hover:text-blue-900 px-2 py-1 rounded-lg hover:bg-blue-50 transition"
+                                    >
+                                      <FiEdit2 className="mr-1" size={14} /> Edit
+                                    </button>
+                                    <button
+                                      onClick={() => openDeleteModal(college)}
+                                      className="flex items-center text-red-600 hover:text-red-900 px-2 py-1 rounded-lg hover:bg-red-50 transition"
+                                    >
+                                      <FiTrash2 className="mr-1" size={14} /> Delete
+                                    </button>
+                                  </div>
                                 </td>
                               </tr>
                             ))}
@@ -681,7 +1138,6 @@ export default function AdminPanel() {
                   </div>
                 </div>
               ) : activeTab === 'categories' ? (
-                // Categories content
                 <div className="space-y-6">
                   <div className="bg-white p-4 md:p-6 rounded-lg shadow-sm border">
                     <h2 className="text-xl font-semibold mb-4 text-gray-800">Add New Category</h2>
@@ -694,6 +1150,7 @@ export default function AdminPanel() {
                           className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                           value={newCategory}
                           onChange={(e) => setNewCategory(e.target.value)}
+                          onKeyPress={(e) => e.key === 'Enter' && handleAddCategory()}
                         />
                       </div>
                       <div>
@@ -704,6 +1161,7 @@ export default function AdminPanel() {
                           className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                           value={newCategoryDescription}
                           onChange={(e) => setNewCategoryDescription(e.target.value)}
+                          onKeyPress={(e) => e.key === 'Enter' && handleAddCategory()}
                         />
                       </div>
                     </div>
@@ -716,11 +1174,26 @@ export default function AdminPanel() {
                   </div>
 
                   <div className="bg-white p-4 md:p-6 rounded-lg shadow-sm border">
-                    <h2 className="text-xl font-semibold mb-4 text-gray-800">Current Categories</h2>
+                    <div className="flex justify-between items-center mb-4">
+                      <h2 className="text-xl font-semibold text-gray-800">Current Categories</h2>
+                      <div className="text-sm text-gray-500">
+                        Showing {filteredCategories.length} of {categories.length} categories
+                      </div>
+                    </div>
                     {filteredCategories.length === 0 ? (
                       <div className="text-center py-8">
                         <FiTag className="mx-auto text-gray-400 text-4xl mb-2" />
-                        <p className="text-gray-500">No categories available</p>
+                        <p className="text-gray-500">
+                          {searchTerm ? 'No categories match your search' : 'No categories available'}
+                        </p>
+                        {searchTerm && (
+                          <button
+                            onClick={() => setSearchTerm('')}
+                            className="text-blue-600 hover:text-blue-800 text-sm mt-2"
+                          >
+                            Clear search
+                          </button>
+                        )}
                       </div>
                     ) : (
                       <div className="overflow-x-auto">
@@ -740,6 +1213,9 @@ export default function AdminPanel() {
                                     }
                                   }}
                                 />
+                              </th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                ID
                               </th>
                               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 Name
@@ -772,11 +1248,41 @@ export default function AdminPanel() {
                                     }}
                                   />
                                 </td>
+                                <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  #{category.id}
+                                </td>
                                 <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                  {category.name}
+                                  {editingItem?.type === 'category' && editingItem?.id === category.id ? (
+                                    <input
+                                      type="text"
+                                      value={editValue}
+                                      onChange={(e) => setEditValue(e.target.value)}
+                                      onKeyPress={(e) => {
+                                        if (e.key === 'Enter') {
+                                          setEditingItem(null);
+                                          // Add API call to update category
+                                        }
+                                      }}
+                                      onBlur={() => setEditingItem(null)}
+                                      className="w-full p-1 border rounded"
+                                      autoFocus
+                                    />
+                                  ) : (
+                                    <span 
+                                      onDoubleClick={() => {
+                                        setEditingItem({type: 'category', id: category.id});
+                                        setEditValue(category.name);
+                                      }}
+                                      className="cursor-pointer hover:bg-gray-100 px-1 py-0.5 rounded"
+                                    >
+                                      {category.name}
+                                    </span>
+                                  )}
                                 </td>
                                 <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                                  {category.description || '-'}
+                                  {category.description || (
+                                    <span className="text-gray-400 italic">No description</span>
+                                  )}
                                 </td>
                                 <td className="px-4 py-4 whitespace-nowrap">
                                   <span className={`px-2 py-1 text-xs rounded-full ${
@@ -788,12 +1294,23 @@ export default function AdminPanel() {
                                   </span>
                                 </td>
                                 <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                                  <button
-                                    onClick={() => handleDeleteCategory(category.id)}
-                                    className="flex items-center text-red-600 hover:text-red-900 px-2 py-1 rounded-lg hover:bg-red-50 transition"
-                                  >
-                                    <FiTrash2 className="mr-1" size={14} /> Delete
-                                  </button>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={() => {
+                                        setEditingItem({type: 'category', id: category.id});
+                                        setEditValue(category.name);
+                                      }}
+                                      className="flex items-center text-blue-600 hover:text-blue-900 px-2 py-1 rounded-lg hover:bg-blue-50 transition"
+                                    >
+                                      <FiEdit2 className="mr-1" size={14} /> Edit
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteCategory(category.id)}
+                                      className="flex items-center text-red-600 hover:text-red-900 px-2 py-1 rounded-lg hover:bg-red-50 transition"
+                                    >
+                                      <FiTrash2 className="mr-1" size={14} /> Delete
+                                    </button>
+                                  </div>
                                 </td>
                               </tr>
                             ))}
@@ -805,6 +1322,58 @@ export default function AdminPanel() {
                 </div>
               ) : null}
 
+              {/* Delete College Modal */}
+              {showDeleteModal && collegeToDelete && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                  <div className="bg-white rounded-lg p-6 max-w-md w-full">
+                    <div className="flex items-center mb-4">
+                      <FiAlertCircle className="text-red-600 mr-3" size={24} />
+                      <h3 className="text-lg font-semibold text-gray-800">
+                        Confirm Deletion
+                      </h3>
+                    </div>
+                                          <div className="mb-6">
+                      <p className="text-gray-600 mb-3">
+                        Are you sure you want to delete <strong>"{collegeToDelete.name}"</strong>?
+                      </p>
+                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                        <div className="flex items-start">
+                          <FiAlertCircle className="text-yellow-600 mt-0.5 mr-2 flex-shrink-0" size={16} />
+                          <div className="text-sm text-yellow-800">
+                            <p className="font-medium mb-1">Warning:</p>
+                            <p>If this college has associated service providers, the deletion will fail due to database constraints. You'll need to reassign those providers first in User Management.</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-3">
+                      <button
+                        onClick={() => {
+                          setShowDeleteModal(false);
+                          setCollegeToDelete(null);
+                        }}
+                        className="px-4 py-2 text-gray-600 hover:text-gray-800 rounded-lg border border-gray-300 hover:bg-gray-50 transition"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleConfirmDelete}
+                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+                      >
+                        Delete College
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Click outside notifications to close */}
+              {showNotifications && (
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setShowNotifications(false)}
+                />
+              )}
             </div>
           )}
         </div>

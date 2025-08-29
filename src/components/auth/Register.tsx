@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { FaEye, FaEyeSlash } from 'react-icons/fa';
-type Role = 'admin' | 'service_provider' | 'client';
+
+// Use the Role type from AuthContext to avoid type conflicts
+import type { Role } from '../../context/AuthContext';
 
 export default function Register() {
   const [formData, setFormData] = useState({
@@ -127,6 +129,7 @@ export default function Register() {
             >
               <option value="client">Client</option>
               <option value="service_provider">Service Provider</option>
+              <option value="product_seller">Product Seller</option>
               <option value="admin">Administrator</option>
             </select>
           </div>
