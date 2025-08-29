@@ -20,7 +20,7 @@ export default function ForgotPassword() {
     setLoading(true);
     setError('');
     try {
-      const response = await fetch(`${BASE_URL}/api/auth/send-reset-sms`, {
+      const response = await fetch(`https://mkt-backend-sz2s.onrender.com/api/auth/send-reset-sms`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -46,7 +46,7 @@ export default function ForgotPassword() {
     setLoading(true);
     setError('');
     try {
-      const response = await fetch(`${BASE_URL}/api/auth/verify-sms-code`, {
+      const response = await fetch(`https://mkt-backend-sz2s.onrender.com/api/auth/verify-sms-code`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -82,7 +82,7 @@ export default function ForgotPassword() {
     setLoading(true);
     setError('');
     try {
-      const response = await fetch(`${BASE_URL}/api/auth/reset-password`, {
+      const response = await fetch(`https://mkt-backend-sz2s.onrender.com/api/auth/reset-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
