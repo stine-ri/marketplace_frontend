@@ -4,6 +4,7 @@ import { isTokenExpired } from '../utilis/token';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com',
+   timeout: 10000,
 });
 // Add to your API service
 // In your api.ts file

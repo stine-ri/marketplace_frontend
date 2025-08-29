@@ -13,11 +13,14 @@ export default function ForgotPassword() {
   const [message, setMessage] = useState('');
   const navigate = useNavigate();
 
+  // Get base URL from environment variable with fallback
+  const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com';
+
   const sendVerificationCode = async () => {
     setLoading(true);
     setError('');
     try {
-      const response = await fetch('/api/auth/send-reset-sms', {
+      const response = await fetch(`${BASE_URL}/api/auth/send-reset-sms`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -43,7 +46,7 @@ export default function ForgotPassword() {
     setLoading(true);
     setError('');
     try {
-      const response = await fetch('/api/auth/verify-sms-code', {
+      const response = await fetch(`${BASE_URL}/api/auth/verify-sms-code`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -79,7 +82,7 @@ export default function ForgotPassword() {
     setLoading(true);
     setError('');
     try {
-      const response = await fetch('/api/auth/reset-password', {
+      const response = await fetch(`${BASE_URL}/api/auth/reset-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

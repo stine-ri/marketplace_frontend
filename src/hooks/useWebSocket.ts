@@ -117,7 +117,7 @@ const handleMessage = useCallback((event: MessageEvent) => {
       }
 
       case "auth_success": {
-        console.log("Authenticated successfully:", message.data);
+        console.log("Authenticated successfully");
         break;
       }
 

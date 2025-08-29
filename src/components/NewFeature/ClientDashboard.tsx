@@ -322,7 +322,7 @@ export function ClientDashboard() {
       // const data = JSON.parse(lastMessage.data);
       
       // Use lastMessage directly since it's already the parsed WebSocketMessage object
-      console.log('WebSocket message:', lastMessage); // Debug log
+      // console.log('WebSocket message:', lastMessage); // Debug log
       
       if (lastMessage.type === 'new_interest') {
         console.log('Processing new interest:', lastMessage); // Debug log

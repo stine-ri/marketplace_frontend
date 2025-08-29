@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../api/api';
-import { useAuth } from '../../context/AuthContext';
+import { useAuthCheck } from '../../hooks/useAuth';
 import { ClockIcon, CheckIcon } from '@heroicons/react/24/outline';
 
 interface ChatMessage {
@@ -38,24 +38,37 @@ const WS_BASE_URL = API_BASE_URL.replace('http', 'ws');
 export function ChatList() {
   const [chatRooms, setChatRooms] = useState<ChatRoom[]>([]);
   const [loading, setLoading] = useState(true);
-  const { user } = useAuth();
+  const [error, setError] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isAuthenticated = useAuthCheck();
 
-  // WebSocket setup function
-  const setupWebSocket = () => {
-    const token = localStorage.getItem('token');
-    if (!token || !user?.userId) return;
+  // TODO: Replace this with your actual user fetching logic (e.g., from context or props)
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
 
-    // Close existing connection if any
+  const cleanupWebSocket = useCallback(() => {
     if (wsRef.current) {
       wsRef.current.close();
+      wsRef.current = null;
     }
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+  }, []);
+
+  const setupWebSocket = useCallback(() => {
+    cleanupWebSocket();
+
+    const token = localStorage.getItem('token');
+    if (!token || !isAuthenticated) return;
 
     const wsUrl = `${WS_BASE_URL}/api/chat/updates?token=${token}`;
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
       console.log('Chat list WebSocket connected');
+      setError(null);
     };
 
     ws.onmessage = (event) => {
@@ -65,46 +78,18 @@ export function ChatList() {
         if (data.type === 'new_message') {
           setChatRooms(prev => prev.map(room => {
             if (room.id === data.chatRoomId) {
-              const newMessage: ChatMessage = {
-                content: data.message.content,
-                createdAt: data.message.createdAt,
-                read: data.message.read || false,
-                senderId: data.message.senderId,
-                ...(data.message.id && { id: data.message.id })
-              };
-
-              const updatedRoom: ChatRoom = {
+              return {
                 ...room,
-                lastMessage: newMessage,
-                unreadCount: data.message.senderId !== user.userId 
+                lastMessage: {
+                  content: data.message.content,
+                  createdAt: data.message.createdAt,
+                  read: data.message.read || false,
+                  senderId: data.message.senderId,
+                },
+                unreadCount: data.message.senderId !== data.userId 
                   ? (room.unreadCount || 0) + 1 
                   : room.unreadCount
               };
-              return updatedRoom;
-            }
-            return room;
-          }));
-        } else if (data.type === 'message_read') {
-          setChatRooms(prev => prev.map(room => {
-            if (room.id === data.chatRoomId && room.lastMessage) {
-              // Only update if we have a lastMessage and it matches the read message
-              const shouldUpdateLastMessage = 
-                (room.lastMessage.id && room.lastMessage.id === data.messageId) ||
-                (!room.lastMessage.id && data.messageId);
-
-              if (shouldUpdateLastMessage) {
-                const updatedLastMessage: ChatMessage = {
-                  ...room.lastMessage,
-                  read: true
-                };
-
-                const updatedRoom: ChatRoom = {
-                  ...room,
-                  lastMessage: updatedLastMessage,
-                  unreadCount: Math.max(0, (room.unreadCount || 1) - 1)
-                };
-                return updatedRoom;
-              }
             }
             return room;
           }));
@@ -116,60 +101,73 @@ export function ChatList() {
 
     ws.onerror = (error) => {
       console.error('Chat list WebSocket error:', error);
+      setError('Connection error');
     };
 
     ws.onclose = () => {
       console.log('Chat list WebSocket disconnected');
-      // Exponential backoff for reconnection
-      setTimeout(() => {
-        if (user?.userId && localStorage.getItem('token')) {
-          setupWebSocket();
-        }
-      }, 5000);
+      if (isAuthenticated) {
+        reconnectTimeoutRef.current = setTimeout(() => setupWebSocket(), 5000);
+      }
     };
 
     wsRef.current = ws;
-  };
+  }, [isAuthenticated, cleanupWebSocket]);
 
-  // Initialize WebSocket connection
+  const fetchChatRooms = useCallback(async () => {
+    if (!isAuthenticated) return;
+
+    try {
+      setLoading(true);
+      const response = await api.get('/api/chat');
+      setChatRooms(response.data.map((room: ChatRoom) => ({
+        ...room,
+        unreadCount: room.lastMessage && 
+                    !room.lastMessage.read && 
+                    room.lastMessage.senderId !== room.client?.id ? 1 : 0
+      })));
+    } catch (error) {
+      console.error('Error fetching chat rooms:', error);
+      setError('Failed to load chats');
+    } finally {
+      setLoading(false);
+    }
+  }, [isAuthenticated]);
+
   useEffect(() => {
-    setupWebSocket();
+    if (isAuthenticated) {
+      fetchChatRooms();
+      setupWebSocket();
+    }
 
     return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
+      cleanupWebSocket();
     };
-  }, [user?.userId]);
+  }, [isAuthenticated, fetchChatRooms, setupWebSocket, cleanupWebSocket]);
 
-  // Fetch initial chat rooms
-  useEffect(() => {
-    const fetchChatRooms = async () => {
-      try {
-        const response = await api.get('/api/chat');
-        setChatRooms(response.data.map((room: ChatRoom) => ({
-          ...room,
-          unreadCount: room.lastMessage && 
-                      !room.lastMessage.read && 
-                      room.lastMessage.senderId !== user?.userId ? 1 : 0
-        })));
-      } catch (error) {
-        console.error('Error fetching chat rooms:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (user?.userId) {
-      fetchChatRooms();
-    }
-  }, [user?.userId]);
+  if (!isAuthenticated) {
+    return null;
+  }
 
   if (loading) {
     return (
       <div className="p-4 flex justify-center items-center">
         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
         <span className="ml-2">Loading chats...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4 text-center text-red-500">
+        <p>{error}</p>
+        <button 
+          onClick={fetchChatRooms}
+          className="mt-2 px-4 py-2 bg-blue-500 text-white rounded"
+        >
+          Retry
+        </button>
       </div>
     );
   }

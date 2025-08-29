@@ -595,7 +595,7 @@ export function ProviderDashboard() {
       });
 
       setMyInterests(Array.isArray(response.data.data) ? response.data.data : []);
-      console.log('Fetched interests:', response.data);
+     
     } catch (error) {
       console.error('Error fetching my interests:', error);
     }
