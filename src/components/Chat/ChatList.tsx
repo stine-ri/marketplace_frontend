@@ -147,8 +147,7 @@ export function ChatList() {
 
 if (!isAuthenticated) {
   console.log('ChatList: User not authenticated');
-  console.log('Token:', localStorage.getItem('token'));
-  console.log('User:', localStorage.getItem('user'));
+ 
   return null;
 }
 
