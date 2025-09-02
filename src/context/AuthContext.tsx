@@ -8,6 +8,7 @@ import { decodeToken } from '../utilis/token';
 export type Role = 'admin' | 'service_provider' | 'client' | 'product_seller';
 
 export type UserType = {
+  id: number;
   userId: number;
   email: string;
   role: Role;

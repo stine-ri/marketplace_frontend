@@ -145,9 +145,12 @@ export function ChatList() {
     };
   }, [isAuthenticated, fetchChatRooms, setupWebSocket, cleanupWebSocket]);
 
-  if (!isAuthenticated) {
-    return null;
-  }
+if (!isAuthenticated) {
+  console.log('ChatList: User not authenticated');
+  console.log('Token:', localStorage.getItem('token'));
+  console.log('User:', localStorage.getItem('user'));
+  return null;
+}
 
   if (loading) {
     return (

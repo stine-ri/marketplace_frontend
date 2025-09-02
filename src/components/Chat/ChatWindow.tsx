@@ -168,6 +168,9 @@ export function ChatWindow() {
 
   // Fetch chat data
   const fetchChatData = useCallback(async () => {
+     console.log('Fetching chat data for room:', chatRoomId);
+  console.log('User ID:', user?.userId);
+  console.log('Token exists:', !!localStorage.getItem('token'));
     if (!chatRoomId || !user?.userId) {
       setError('Invalid chat room or user');
       setLoading(false);
