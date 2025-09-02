@@ -74,7 +74,7 @@ export const Footer = () => {
               </div>
               <div className="flex items-center">
                 <Mail size={20} className="mr-2 flex-shrink-0" />
-                <span className="text-gray-300">support@Quisells.com</span>
+                <span className="text-gray-300">ombongidiaz@gmail.com</span>
               </div>
             </div>
           </div>
