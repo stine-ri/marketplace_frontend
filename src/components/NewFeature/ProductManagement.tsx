@@ -188,8 +188,6 @@ const ProductManagement = () => {
         }
       });
 
-      // Debug: Log the full response
-      console.log('API Response:', response.data);
 
       // Check the response structure
       if (!response.data.data) {

@@ -178,7 +178,7 @@ export default function BidManagement() {
         throw new Error('No authentication token found');
       }
 
-      console.log('Fetching all bids...');
+    
       
       // 2. Make request to admin endpoint with query parameters
       const params = new URLSearchParams({
@@ -197,7 +197,7 @@ export default function BidManagement() {
         }
       });
       
-      console.log('Bids fetched:', response.data.data);
+     
       setBids(response.data.data);
       setPagination(prev => ({
         ...prev,

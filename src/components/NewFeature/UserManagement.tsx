@@ -115,15 +115,14 @@ export default function UserManagement() {
     setIsLoading(true);
     setError(null);
     try {
-      console.log('Fetching users...');
       const response = await axios.get<BackendUser[]>(`${baseURL}/api/users`, {
         headers: getAuthHeaders()
       });
-      console.log('Raw backend users:', response.data);
+   
       
       // Normalize backend response to frontend format
       const normalizedUsers = response.data.map(normalizeUser);
-      console.log('Normalized users:', normalizedUsers);
+    
       
       setUsers(normalizedUsers);
     } catch (err: any) {

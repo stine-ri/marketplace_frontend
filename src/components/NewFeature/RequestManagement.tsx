@@ -204,17 +204,6 @@ const fetchRequests = async () => {
   setIsLoading(true);
   setError(null);
   try {
-    // Debug log to verify the exact request being made
-    console.log('Making request to:', `${baseURL}/api/admin/requests`, {
-      params: {
-        page: pagination.page,
-        limit: pagination.limit,
-        status: statusFilter !== 'all' ? statusFilter : undefined,
-        search: searchTerm || undefined
-      },
-      headers: getAuthHeaders()
-    });
-
     const response = await axios.get(`${baseURL}/api/admin/bids/requests`, {
       headers: getAuthHeaders(),
       params: {
