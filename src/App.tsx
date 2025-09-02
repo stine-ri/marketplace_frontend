@@ -95,7 +95,7 @@ function AppContent() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/providers" element={<ProvidersList />} />
+       <Route path="/providers" element={<ProvidersList />} />
         <Route path="/providers/public/:id" element={<ProviderPublicProfile />} />
         <Route path="/services" element={<ServicesProductsComponent />} />
         <Route path="/products" element={<Product/>} />

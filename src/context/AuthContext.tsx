@@ -71,6 +71,7 @@ interface AuthContextType {
   logout: () => void;
   loading: boolean;
   error: string | null;
+  hydrated: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -257,7 +258,7 @@ const register = async (formData: {
 
   return (
     <AuthContext.Provider
-      value={{ user, token, login, register, logout, loading, error }}
+      value={{ user, token, login, register, logout, loading, error, hydrated  }}
     >
       {children}
     </AuthContext.Provider>
@@ -268,22 +269,23 @@ const register = async (formData: {
 export function useAuth(): AuthContextType & { isPublic: boolean } {
   const context = useContext(AuthContext);
   if (!context) {
-    return {
-      user: null,
-      token: null,
-      login: async () => {
-        throw new Error('Login not available in public mode');
-      },
-      register: async () => {
-        throw new Error('Register not available in public mode');
-      },
-       logout: () => {
-  // No-op in public mode
-},
-      loading: false,
-      error: null,
-      isPublic: true,
-    };
+return {
+  user: null,
+  token: null,
+  login: async () => {
+    throw new Error('Login not available in public mode');
+  },
+  register: async () => {
+    throw new Error('Register not available in public mode');
+  },
+  logout: () => {
+    // No-op in public mode
+  },
+  loading: false,
+  error: null,
+  hydrated: false,
+  isPublic: true,
+};
   }
 
   return {

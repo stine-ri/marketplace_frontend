@@ -20,7 +20,7 @@ export default function ForgotPassword() {
     setLoading(true);
     setError('');
     try {
-      const response = await fetch(`https://mkt-backend-sz2s.onrender.com/api/auth/send-reset-sms`, {
+      const response = await fetch(`${BASE_URL}/api/auth/send-reset-sms`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -46,7 +46,7 @@ export default function ForgotPassword() {
     setLoading(true);
     setError('');
     try {
-      const response = await fetch(`https://mkt-backend-sz2s.onrender.com/api/auth/verify-sms-code`, {
+      const response = await fetch(`${BASE_URL}/api/auth/verify-sms-code`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -68,41 +68,75 @@ export default function ForgotPassword() {
     setLoading(false);
   };
 
-  const resetPassword = async () => {
-    if (newPassword !== confirmPassword) {
-      setError('Passwords do not match');
-      return;
-    }
+ const resetPassword = async () => {
+  if (newPassword !== confirmPassword) {
+    setError('Passwords do not match');
+    return;
+  }
 
-    if (newPassword.length < 6) {
-      setError('Password must be at least 6 characters long');
-      return;
-    }
+  if (newPassword.length < 6) {
+    setError('Password must be at least 6 characters long');
+    return;
+  }
 
-    setLoading(true);
-    setError('');
-    try {
-      const response = await fetch(`https://mkt-backend-sz2s.onrender.com/api/auth/reset-password`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ resetToken, newPassword }),
-      });
+  setLoading(true);
+  setError('');
+  try {
+    const response = await fetch(`${BASE_URL}/api/auth/reset-password`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ resetToken, newPassword }),
+    });
 
-      const data = await response.json();
+    const data = await response.json();
 
-      if (response.ok) {
-        setMessage('Password reset successfully! Redirecting to login...');
-        setTimeout(() => navigate('/login'), 2000);
+    if (response.ok) {
+      // ✅ The backend now returns user info in the reset response
+      const userEmail = data.user?.email;
+
+      if (userEmail) {
+        // Try to auto-login with the new password
+        try {
+          const loginResponse = await fetch(`${BASE_URL}/api/login`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              email: userEmail,
+              password: newPassword
+            }),
+          });
+          
+          if (loginResponse.ok) {
+            const loginData = await loginResponse.json();
+            localStorage.setItem('token', loginData.token);
+            localStorage.setItem('user', JSON.stringify(loginData.user));
+            
+            setMessage('Password reset successfully! You have been automatically logged in.');
+            setTimeout(() => navigate('/login'), 2000);
+          } else {
+            setMessage('Password reset successfully! Please login with your new password.');
+            setTimeout(() => navigate('/login'), 2000);
+          }
+        } catch (loginError) {
+          setMessage('Password reset successfully! Please login with your new password.');
+          setTimeout(() => navigate('/login'), 2000);
+        }
       } else {
-        setError(data.error || 'Failed to reset password');
+        setMessage('Password reset successfully! Please login with your new password.');
+        setTimeout(() => navigate('/login'), 2000);
       }
-    } catch (err) {
-      setError('Network error. Please try again.');
+    } else {
+      setError(data.error || 'Failed to reset password');
     }
-    setLoading(false);
-  };
+  } catch (err) {
+    setError('Network error. Please try again.');
+  }
+  setLoading(false);
+};
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">

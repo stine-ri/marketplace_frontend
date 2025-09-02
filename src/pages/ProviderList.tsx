@@ -8,39 +8,63 @@ import { AxiosError } from 'axios';
 
 const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com';
 
-// Price formatting utility functions
+// Enhanced price formatting utility functions
 const formatPrice = (price: string | number | undefined | null): string => {
   // Handle undefined/null cases
-  if (price === undefined || price === null) {
-    return 'KSh 0.00';
+  if (price === undefined || price === null || price === '') {
+    return 'Price not set';
   }
 
   // Convert to number if it's a string
-  const numericPrice = typeof price === 'string' ? parseFloat(price) : price;
+  let numericPrice: number;
+  if (typeof price === 'string') {
+    // Remove any existing currency symbols and commas
+    const cleanPrice = price.replace(/[KSh,\s]/g, '');
+    numericPrice = parseFloat(cleanPrice);
+  } else {
+    numericPrice = price;
+  }
 
   // Handle NaN cases
-  if (isNaN(numericPrice)) {
-    return 'KSh 0.00';
+  if (isNaN(numericPrice) || numericPrice <= 0) {
+    return 'Price not set';
   }
 
   // Format with KSh prefix and comma separators
-  return `KSh ${numericPrice.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
+  return `KSh ${numericPrice.toLocaleString('en-KE', { 
+    minimumFractionDigits: 2, 
+    maximumFractionDigits: 2 
+  })}`;
 };
 
-const formatPriceRange = (prices: (number | undefined)[]): string => {
-  // Filter out undefined/null values and ensure we have valid numbers
-  const validPrices = prices.filter((price): price is number => 
-    price !== undefined && price !== null && !isNaN(price)
-  );
+const formatPriceRange = (services: Service[] | undefined): string => {
+  if (!services || services.length === 0) {
+    return 'No services listed';
+  }
+
+  // Get valid prices from services
+  const validPrices = services
+    .map(service => {
+      if (service.price === undefined || service.price === null) return null;
+      const price = typeof service.price === 'string'
+        ? parseFloat((service.price as string).replace(/[KSh,\s]/g, ''))
+        : service.price;
+      return isNaN(price) || price <= 0 ? null : price;
+    })
+    .filter((price): price is number => price !== null);
   
-  if (validPrices.length === 0) return 'Price not set';
+  if (validPrices.length === 0) {
+    return 'Prices not set';
+  }
   
   const min = Math.min(...validPrices);
   const max = Math.max(...validPrices);
   
-  return min === max 
-    ? formatPrice(min)
-    : `${formatPrice(min)} - ${formatPrice(max)}`;
+  if (min === max) {
+    return formatPrice(min);
+  } else {
+    return `${formatPrice(min)} - ${formatPrice(max)}`;
+  }
 };
 
 export default function ProvidersList() {
@@ -77,17 +101,36 @@ export default function ProvidersList() {
       const processedProviders = (providersRes.data?.data || []).map((provider: any) => ({
         ...provider,
         id: provider.id.toString(),
-        services: (provider.services || []).map((service: any) => ({
-          ...service,
-          price: service.price !== undefined && service.price !== null 
-            ? Number(service.price) 
-            : undefined
-        })),
+        services: (provider.services || []).map((service: any) => {
+          let processedPrice = service.price;
+          
+          // Handle different price formats
+          if (service.price !== undefined && service.price !== null && service.price !== '') {
+            if (typeof service.price === 'string') {
+              // Remove currency symbols and parse
+              const cleanPrice = service.price.replace(/[KSh,\s]/g, '');
+              processedPrice = parseFloat(cleanPrice);
+              if (isNaN(processedPrice)) {
+                processedPrice = undefined;
+              }
+            } else if (typeof service.price === 'number') {
+              processedPrice = service.price;
+            }
+          } else {
+            processedPrice = undefined;
+          }
+
+          return {
+            ...service,
+            price: processedPrice
+          };
+        }),
         rating: provider.rating || 0,
         completedRequests: provider.completedRequests || 0,
         college: provider.college || null
       }));
 
+      console.log('Processed providers:', processedProviders.slice(0, 2)); // Debug log
       setAllProviders(processedProviders);
       setFilteredProviders(processedProviders);
       setServices(servicesRes.data);
@@ -144,7 +187,7 @@ export default function ProvidersList() {
       const min = Number(filters.minPrice);
       results = results.filter(provider => 
         provider.services?.some(service => 
-          service.price && service.price >= min
+          service.price !== undefined && service.price !== null && service.price >= min
         )
       );
     }
@@ -153,26 +196,35 @@ export default function ProvidersList() {
       const max = Number(filters.maxPrice);
       results = results.filter(provider => 
         provider.services?.some(service => 
-          service.price && service.price <= max
+          service.price !== undefined && service.price !== null && service.price <= max
         )
       );
     }
 
+    // Enhanced sorting with better price handling
     switch (filters.sortBy) {
       case 'rating-desc':
         results.sort((a, b) => (b.rating || 0) - (a.rating || 0));
         break;
       case 'price-asc':
         results.sort((a, b) => {
-          const aMinPrice = Math.min(...(a.services?.map(s => s.price || Infinity) || [Infinity]));
-          const bMinPrice = Math.min(...(b.services?.map(s => s.price || Infinity) || [Infinity]));
+          const aValidPrices = a.services?.map(s => s.price).filter((p): p is number => typeof p === 'number' && !isNaN(p)) || [];
+          const bValidPrices = b.services?.map(s => s.price).filter((p): p is number => typeof p === 'number' && !isNaN(p)) || [];
+          
+          const aMinPrice = aValidPrices.length > 0 ? Math.min(...aValidPrices) : Infinity;
+          const bMinPrice = bValidPrices.length > 0 ? Math.min(...bValidPrices) : Infinity;
+          
           return aMinPrice - bMinPrice;
         });
         break;
       case 'price-desc':
         results.sort((a, b) => {
-          const aMaxPrice = Math.max(...(a.services?.map(s => s.price || -Infinity) || [-Infinity]));
-          const bMaxPrice = Math.max(...(b.services?.map(s => s.price || -Infinity) || [-Infinity]));
+          const aValidPrices = a.services?.map(s => s.price).filter((p): p is number => typeof p === 'number' && !isNaN(p)) || [];
+          const bValidPrices = b.services?.map(s => s.price).filter((p): p is number => typeof p === 'number' && !isNaN(p)) || [];
+          
+          const aMaxPrice = aValidPrices.length > 0 ? Math.max(...aValidPrices) : -1;
+          const bMaxPrice = bValidPrices.length > 0 ? Math.max(...bValidPrices) : -1;
+          
           return bMaxPrice - aMaxPrice;
         });
         break;
@@ -456,14 +508,12 @@ export default function ProvidersList() {
                       </span>
                     </div>
                     
-                    {/* Price Range - Updated to use KSh */}
-                    {provider.services && provider.services.length > 0 && (
-                      <div className="mt-1">
-                        <span className="text-xs sm:text-sm font-medium">
-                          {formatPriceRange(provider.services.map(s => s.price))}
-                        </span>
-                      </div>
-                    )}
+                    {/* Price Range - Enhanced display */}
+                    <div className="mt-2">
+                      <span className="text-sm font-medium text-green-600 bg-green-50 px-2 py-1 rounded">
+                        {formatPriceRange(provider.services)}
+                      </span>
+                    </div>
                     
                     {/* Bio */}
                     {provider.bio && (
@@ -472,23 +522,25 @@ export default function ProvidersList() {
                       </p>
                     )}
                     
-                    {/* Services Offered - Updated to use KSh */}
+                    {/* Services Offered - Enhanced with better price display */}
                     {provider.services && provider.services.length > 0 && (
                       <div className="mt-3 sm:mt-4">
                         <h4 className="text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Services Offered</h4>
-                        <div className="flex flex-wrap gap-1 sm:gap-2">
+                        <div className="space-y-1">
                           {provider.services.slice(0, 3).map(service => (
-                            <span 
-                              key={service.id}
-                              className="px-2 py-1 text-xs sm:text-sm bg-blue-100 text-blue-800 rounded-full"
-                            >
-                              {service.name} ({formatPrice(service.price)})
-                            </span>
+                            <div key={service.id} className="flex justify-between items-center">
+                              <span className="text-xs sm:text-sm text-gray-700 flex-1 mr-2">
+                                {service.name}
+                              </span>
+                              <span className="text-xs sm:text-sm font-medium text-green-600 bg-green-50 px-2 py-1 rounded whitespace-nowrap">
+                                {formatPrice(service.price)}
+                              </span>
+                            </div>
                           ))}
                           {provider.services.length > 3 && (
-                            <span className="px-2 py-1 text-xs sm:text-sm bg-gray-100 text-gray-800 rounded-full">
-                              +{provider.services.length - 3} more
-                            </span>
+                            <div className="text-xs sm:text-sm text-gray-500 italic">
+                              +{provider.services.length - 3} more services
+                            </div>
                           )}
                         </div>
                       </div>
