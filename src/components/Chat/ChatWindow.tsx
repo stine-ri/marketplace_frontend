@@ -100,7 +100,7 @@ export function ChatWindow() {
       ws.onopen = () => {
         setConnectionStatus('connected');
         setError(null);
-        console.log('WebSocket connected for room:', chatRoomId);
+        console.log('WebSocket connected for room:');
       };
 
       ws.onmessage = (event) => {

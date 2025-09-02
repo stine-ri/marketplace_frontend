@@ -130,7 +130,7 @@ export default function ProvidersList() {
         college: provider.college || null
       }));
 
-      console.log('Processed providers:', processedProviders.slice(0, 2)); // Debug log
+
       setAllProviders(processedProviders);
       setFilteredProviders(processedProviders);
       setServices(servicesRes.data);

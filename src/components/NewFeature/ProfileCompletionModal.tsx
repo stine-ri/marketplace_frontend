@@ -55,114 +55,34 @@ const pastWorkFileInputRef = useRef<HTMLInputElement>(null);
   });
 const [showPreview, setShowPreview] = useState(false);
   // Fetch services and colleges on component mount
-  useEffect(() => {
-    const fetchData = async () => {
-      console.log('🚀 Starting data fetch process...');
-      console.log('📍 Base URL:', baseURL);
-      console.log('⏰ Fetch initiated at:', new Date().toISOString());
-      
-      try {
-        setIsLoading(true);
-        console.log('🔄 Loading state set to true');
-        
-        console.log('📡 Making parallel API calls...');
-        console.log('🎯 Services endpoint:', `${baseURL}/api/services`);
-        console.log('🏫 Colleges endpoint:', `${baseURL}/api/colleges`);
-        
-        const startTime = performance.now();
-        
-        const [servicesRes, collegesRes] = await Promise.all([
-          axios.get<Service[]>(`${baseURL}/api/services`),
-          axios.get<College[]>(`${baseURL}/api/colleges`),
-        ]);
+ useEffect(() => {
+  const fetchData = async () => {
+    try {
+      setIsLoading(true);
 
-        const endTime = performance.now();
-        console.log(`⚡ API calls completed in ${(endTime - startTime).toFixed(2)}ms`);
+      const [servicesRes, collegesRes] = await Promise.all([
+        axios.get<Service[]>(`${baseURL}/api/services`),
+        axios.get<College[]>(`${baseURL}/api/colleges`),
+      ]);
 
-        // Log services response
-        console.log('✅ Services API Response:');
-        console.log('   Status:', servicesRes.status);
-        console.log('   Status Text:', servicesRes.statusText);
-        console.log('   Data type:', typeof servicesRes.data);
-        console.log('   Data length:', Array.isArray(servicesRes.data) ? servicesRes.data.length : 'Not an array');
-        console.log('   Raw services data:', servicesRes.data);
-        
-        if (Array.isArray(servicesRes.data) && servicesRes.data.length > 0) {
-          console.log('   First service sample:', servicesRes.data[0]);
-          console.log('   Service fields:', Object.keys(servicesRes.data[0]));
-        }
+      setServices(servicesRes.data);
+      setColleges(collegesRes.data);
 
-        // Log colleges response
-        console.log('✅ Colleges API Response:');
-        console.log('   Status:', collegesRes.status);
-        console.log('   Status Text:', collegesRes.statusText);
-        console.log('   Data type:', typeof collegesRes.data);
-        console.log('   Data length:', Array.isArray(collegesRes.data) ? collegesRes.data.length : 'Not an array');
-        console.log('   Raw colleges data:', collegesRes.data);
-        
-        if (Array.isArray(collegesRes.data) && collegesRes.data.length > 0) {
-          console.log('   First college sample:', collegesRes.data[0]);
-          console.log('   College fields:', Object.keys(collegesRes.data[0]));
-        }
-
-        // Set state and log the updates
-        console.log('📝 Updating component state...');
-        setServices(servicesRes.data);
-        setColleges(collegesRes.data);
-        
-        console.log('✅ State updated successfully');
-        console.log('   Services in state:', servicesRes.data.length, 'items');
-        console.log('   Colleges in state:', collegesRes.data.length, 'items');
-        
-      } catch (err) {
-        console.error('❌ Error occurred during data fetch:');
-        console.error('   Error type:', typeof err);
-        console.error('   Error message:', err instanceof Error ? err.message : 'Unknown error');
-        console.error('   Full error object:', err);
-        
-        if (axios.isAxiosError(err)) {
-          console.error('🔍 Axios Error Details:');
-          console.error('   Response status:', err.response?.status);
-          console.error('   Response statusText:', err.response?.statusText);
-          console.error('   Response data:', err.response?.data);
-          console.error('   Request URL:', err.config?.url);
-          console.error('   Request method:', err.config?.method);
-          console.error('   Request headers:', err.config?.headers);
-          
-          if (err.code) {
-            console.error('   Error code:', err.code);
-          }
-          
-          if (err.response) {
-            console.error('   Server responded with error');
-          } else if (err.request) {
-            console.error('   No response received from server');
-            console.error('   Request details:', err.request);
-          } else {
-            console.error('   Error in request setup');
-          }
-        }
-        
-        setError('Failed to load required data. Please try again later.');
-        console.error('💥 Error state set for user display');
-        
-      } finally {
-        setIsLoading(false);
-        console.log('🏁 Loading state set to false');
-        console.log('🔚 Data fetch process completed at:', new Date().toISOString());
-        console.log('==========================================');
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        // You can extract response info here if you want
       }
-    };
-
-    console.log('🎯 useEffect triggered - isOpen:', isOpen);
-    
-    if (isOpen) {
-      console.log('✅ Modal is open, proceeding with data fetch');
-      fetchData();
-    } else {
-      console.log('❌ Modal is closed, skipping data fetch');
+      setError('Failed to load required data. Please try again later.');
+    } finally {
+      setIsLoading(false);
     }
-  }, [isOpen]);
+  };
+
+  if (isOpen) {
+    fetchData();
+  }
+}, [isOpen]);
+
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {

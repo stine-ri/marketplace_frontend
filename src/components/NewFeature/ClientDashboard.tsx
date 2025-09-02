@@ -318,14 +318,10 @@ export function ClientDashboard() {
     if (!lastMessage) return;
 
     try {
-      // REMOVE this line - lastMessage is already parsed!
-      // const data = JSON.parse(lastMessage.data);
-      
-      // Use lastMessage directly since it's already the parsed WebSocketMessage object
-      // console.log('WebSocket message:', lastMessage); // Debug log
+
       
       if (lastMessage.type === 'new_interest') {
-        console.log('Processing new interest:', lastMessage); // Debug log
+      
         setRequests(prev => prev.map(req =>
           req.id === lastMessage.data.requestId
             ? {
@@ -409,7 +405,7 @@ export function ClientDashboard() {
 
   const createNewRequest = async (requestData: any) => {
     try {
-      console.log('Creating new request with location:', requestData.location);
+    
 
       // For backend storage, stringify objects, keep strings as-is
       const requestPayload = {
@@ -451,7 +447,7 @@ export function ClientDashboard() {
       // 1. Accept the interest and create chat room in one call
       const response = await api.post(`/api/interests/${interestId}/accept`);
       
-      console.log('Backend response:', response.data); // Add this for debugging
+   
       
       // The backend returns the full chat room object with 'id', not 'chatRoomId'
       if (!response.data?.id) {
@@ -606,12 +602,12 @@ export function ClientDashboard() {
         };
       });
       
-      console.log('Final processed products:', productsWithImages.map(p => ({
+      productsWithImages.map(p => ({
         id: p.id,
         name: p.name,
         imageCount: p.images.length,
         firstImage: p.images[0]
-      })));
+      }));
       
       setProducts(productsWithImages);
     } catch (error) {
@@ -662,10 +658,7 @@ export function ClientDashboard() {
         throw new Error('Shipping address is required');
       }
 
-      console.log('=== Purchase Request Debug ===');
-      console.log('Product ID:', productId);
-      console.log('Purchase Data:', purchaseData);
-      console.log('Token present:', !!token);
+  
 
       // Try the primary endpoint first with better error handling
       const requestBody = {
@@ -674,7 +667,7 @@ export function ClientDashboard() {
         shippingAddress: purchaseData.shippingAddress.trim()
       };
 
-      console.log('Request Body:', requestBody);
+   
 
       const response = await fetch(`${API_BASE_URL}/api/client/products/${productId}/purchase`, {
         method: 'POST',
@@ -686,12 +679,10 @@ export function ClientDashboard() {
         body: JSON.stringify(requestBody)
       });
 
-      console.log('Response status:', response.status);
-      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
 
       // Get response text first
       const responseText = await response.text();
-      console.log('Raw response:', responseText);
+     
 
       let responseData;
       try {
@@ -703,7 +694,7 @@ export function ClientDashboard() {
       }
 
       if (response.ok) {
-        console.log('✅ Purchase successful:', responseData);
+        console.log('✅ Purchase successful');
         
         // Call fetchPurchaseHistory if it exists
         fetchPurchaseHistory();
