@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../api/api';
-import { useAuthCheck } from '../../hooks/useAuth';
+import { useAuth } from '../../context/AuthContext'; // Import useAuth
 import { ClockIcon, CheckIcon } from '@heroicons/react/24/outline';
 
 interface ChatMessage {
@@ -41,10 +41,10 @@ export function ChatList() {
   const [error, setError] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const isAuthenticated = useAuthCheck();
-
-  // TODO: Replace this with your actual user fetching logic (e.g., from context or props)
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  
+  // Use AuthContext directly
+  const { user, token, hydrated } = useAuth();
+  const isAuthenticated = !!user && !!token; // Compute authentication status
 
   const cleanupWebSocket = useCallback(() => {
     if (wsRef.current) {
@@ -60,7 +60,6 @@ export function ChatList() {
   const setupWebSocket = useCallback(() => {
     cleanupWebSocket();
 
-    const token = localStorage.getItem('token');
     if (!token || !isAuthenticated) return;
 
     const wsUrl = `${WS_BASE_URL}/api/chat/updates?token=${token}`;
@@ -112,7 +111,7 @@ export function ChatList() {
     };
 
     wsRef.current = ws;
-  }, [isAuthenticated, cleanupWebSocket]);
+  }, [isAuthenticated, cleanupWebSocket, token]);
 
   const fetchChatRooms = useCallback(async () => {
     if (!isAuthenticated) return;
@@ -135,29 +134,31 @@ export function ChatList() {
   }, [isAuthenticated]);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      fetchChatRooms();
-      setupWebSocket();
-    }
+    if (!hydrated) return; // Wait for auth to hydrate
+    if (!isAuthenticated) return; // Don't proceed if not authenticated
+
+    fetchChatRooms();
+    setupWebSocket();
 
     return () => {
       cleanupWebSocket();
     };
-  }, [isAuthenticated, fetchChatRooms, setupWebSocket, cleanupWebSocket]);
+  }, [isAuthenticated, hydrated, fetchChatRooms, setupWebSocket, cleanupWebSocket]);
 
-if (!isAuthenticated) {
-  console.log('ChatList: User not authenticated');
- 
-  return null;
-}
-
-  if (loading) {
+  // Wait for auth to hydrate
+  if (!hydrated) {
     return (
       <div className="p-4 flex justify-center items-center">
         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
-        <span className="ml-2">Loading chats...</span>
+        <span className="ml-2">Loading...</span>
       </div>
     );
+  }
+
+  // Check authentication after hydration
+  if (!isAuthenticated) {
+    console.log('ChatList: User not authenticated');
+    return null;
   }
 
   if (error) {

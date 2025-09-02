@@ -11,10 +11,23 @@ import {
   FiAlertCircle,
   FiX,
   FiSave,
-  FiFilter
+  FiFilter,
+  FiShield
 } from 'react-icons/fi';
 
 const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com';
+
+// Define public roles vs admin-only roles
+const PUBLIC_ROLES = [
+  { value: 'client', label: 'Client' },
+  { value: 'service_provider', label: 'Service Provider' },
+  { value: 'product_seller', label: 'Product Seller' }
+];
+
+const ADMIN_ROLES = [
+  ...PUBLIC_ROLES,
+  { value: 'admin', label: 'Administrator' }
+];
 
 export default function UserManagement() {
   const [users, setUsers] = useState<User[]>([]);
@@ -25,6 +38,7 @@ export default function UserManagement() {
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showAdminConfirmation, setShowAdminConfirmation] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [selectedUsers, setSelectedUsers] = useState<number[]>([]);
 
@@ -33,8 +47,8 @@ export default function UserManagement() {
     name: '',
     email: '',
     password: '',
-    contact_phone:'',
-    address:'',
+    contact_phone: '',
+    address: '',
     role: 'client'
   });
 
@@ -120,46 +134,58 @@ export default function UserManagement() {
     }
   };
 
-const handleCreateUser = async () => {
-  if (!createForm.name || !createForm.email || !createForm.password || 
-      !createForm.contact_phone || !createForm.address) {
-    setError('All fields are required');
-    return;
-  }
+  const handleCreateUser = async () => {
+    if (!createForm.name || !createForm.email || !createForm.password || 
+        !createForm.contact_phone || !createForm.address) {
+      setError('All fields are required');
+      return;
+    }
 
-  try {
-    const userData = {
-      full_name: createForm.name, // Ensure this matches backend expectation
-      email: createForm.email,
-      password: createForm.password,
-      contact_phone: createForm.contact_phone,
-      address: createForm.address,
-      role: createForm.role
-    };
+    // Check if trying to create admin without confirmation
+    if (createForm.role === 'admin' && !showAdminConfirmation) {
+      setShowAdminConfirmation(true);
+      return;
+    }
 
-    const response = await axios.post(`${baseURL}/api/users`, userData, {
-      headers: getAuthHeaders()
-    });
-    
-    // Normalize the backend response
-    const normalizedUser = normalizeUser(response.data);
-    setUsers([...users, normalizedUser]);
-    
-    // Reset form
-    setCreateForm({ 
-      name: '', 
-      email: '', 
-      password: '', 
-      contact_phone: '',
-      address: '', 
-      role: 'client' 
-    });
-    setShowCreateModal(false);
-    setError(null);
-  } catch (err: any) {
-    setError(err.response?.data?.error?.message || 'Failed to create user');
-  }
-};
+    try {
+      const userData = {
+        full_name: createForm.name,
+        email: createForm.email,
+        password: createForm.password,
+        contact_phone: createForm.contact_phone,
+        address: createForm.address,
+        role: createForm.role
+      };
+
+      const response = await axios.post(`${baseURL}/api/users`, userData, {
+        headers: getAuthHeaders()
+      });
+      
+      // Normalize the backend response
+      const normalizedUser = normalizeUser(response.data);
+      setUsers([...users, normalizedUser]);
+      
+      // Reset form and states
+      setCreateForm({ 
+        name: '', 
+        email: '', 
+        password: '', 
+        contact_phone: '',
+        address: '', 
+        role: 'client' 
+      });
+      setShowCreateModal(false);
+      setShowAdminConfirmation(false);
+      setError(null);
+      
+      if (createForm.role === 'admin') {
+        alert(`Admin account created successfully!\nEmail: ${userData.email}\nPassword: ${userData.password}\n\nPlease save these credentials securely.`);
+      }
+    } catch (err: any) {
+      console.error('Error creating user:', err);
+      setError(err.response?.data?.error?.message || err.response?.data?.message || 'Failed to create user');
+    }
+  };
 
   const handleUpdateUser = async () => {
     if (!editingUser) return;
@@ -231,9 +257,20 @@ const handleCreateUser = async () => {
     switch (role) {
       case 'admin': return 'bg-red-100 text-red-800';
       case 'service_provider': return 'bg-blue-100 text-blue-800';
+      case 'product_seller': return 'bg-purple-100 text-purple-800';
       case 'client': return 'bg-green-100 text-green-800';
       default: return 'bg-gray-100 text-gray-800';
     }
+  };
+
+  const confirmAdminCreation = () => {
+    setShowAdminConfirmation(false);
+    handleCreateUser();
+  };
+
+  const cancelAdminCreation = () => {
+    setShowAdminConfirmation(false);
+    setCreateForm({...createForm, role: 'client'});
   };
 
   if (!isAdmin()) {
@@ -293,6 +330,7 @@ const handleCreateUser = async () => {
             <option value="all">All Roles</option>
             <option value="admin">Admin</option>
             <option value="service_provider">Service Provider</option>
+            <option value="product_seller">Product Seller</option>
             <option value="client">Client</option>
           </select>
         </div>
@@ -376,7 +414,7 @@ const handleCreateUser = async () => {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {filteredUsers.map(user => (
-                    <tr  key={user.id || `${user.email}-${user.role}`} className="hover:bg-gray-50">
+                    <tr key={user.id || `${user.email}-${user.role}`} className="hover:bg-gray-50">
                       <td className="px-4 py-4 whitespace-nowrap">
                         <input
                           type="checkbox"
@@ -392,7 +430,10 @@ const handleCreateUser = async () => {
                         />
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {getUserName(user)}
+                        <div className="flex items-center">
+                          {user.role === 'admin' && <FiShield className="mr-2 text-red-500" size={14} />}
+                          {getUserName(user)}
+                        </div>
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
                         {user.email || 'N/A'}
@@ -439,15 +480,61 @@ const handleCreateUser = async () => {
         </div>
       )}
 
+      {/* Admin Creation Confirmation Modal */}
+      {showAdminConfirmation && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <div className="flex items-center mb-4">
+              <FiShield className="text-red-500 mr-3" size={24} />
+              <h3 className="text-lg font-semibold text-red-600">Create Admin Account</h3>
+            </div>
+            
+            <div className="mb-6">
+              <p className="text-gray-700 mb-4">
+                You are about to create an administrator account. This account will have full system access including:
+              </p>
+              <ul className="text-sm text-gray-600 list-disc list-inside space-y-1">
+                <li>User management privileges</li>
+                <li>System configuration access</li>
+                <li>Full data access and modification</li>
+                <li>Ability to create other admin accounts</li>
+              </ul>
+              <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                <p className="text-sm text-yellow-800">
+                  <strong>Security Note:</strong> Please ensure the credentials are stored securely and shared only with authorized personnel.
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex gap-2">
+              <button
+                onClick={confirmAdminCreation}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-lg transition flex items-center justify-center"
+              >
+                <FiShield className="mr-2" size={16} />
+                Create Admin
+              </button>
+              <button
+                onClick={cancelAdminCreation}
+                className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 py-2 px-4 rounded-lg transition"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Create User Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
+          <div className="bg-white rounded-lg max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold">Create New User</h3>
               <button
                 onClick={() => {
                   setShowCreateModal(false);
+                  setShowAdminConfirmation(false);
                   setError(null);
                 }}
                 className="text-gray-400 hover:text-gray-600"
@@ -458,7 +545,7 @@ const handleCreateUser = async () => {
             
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">full_name*</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Full Name *</label>
                 <input
                   type="text"
                   className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -486,55 +573,74 @@ const handleCreateUser = async () => {
                   className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   value={createForm.password}
                   onChange={(e) => setCreateForm({...createForm, password: e.target.value})}
-                  placeholder="Enter password"
+                  placeholder="Enter password (min 8 characters)"
+                  minLength={8}
                 />
               </div>
-                <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">contact_phone *</label>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number *</label>
                 <input
-                  type="contact_phone"
+                  type="tel"
                   className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   value={createForm.contact_phone}
                   onChange={(e) => setCreateForm({...createForm, contact_phone: e.target.value})}
-                  placeholder="Enter contact_phone"
+                  placeholder="Enter phone number"
                 />
               </div>
-                <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">address *</label>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Address *</label>
                 <input
-                  type="password"
+                  type="text"
                   className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   value={createForm.address}
                   onChange={(e) => setCreateForm({...createForm, address: e.target.value})}
                   placeholder="Enter address"
                 />
               </div>
+              
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Role {createForm.role === 'admin' && <FiShield className="inline text-red-500 ml-1" />}
+                </label>
                 <select
                   className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   value={createForm.role}
                   onChange={(e) => setCreateForm({...createForm, role: e.target.value as any})}
                 >
-                  <option value="client">Client</option>
-                  <option value="service_provider">Service Provider</option>
-                  <option value="admin">Admin</option>
+                  {ADMIN_ROLES.map(role => (
+                    <option key={role.value} value={role.value}>
+                      {role.label}
+                      {role.value === 'admin' ? ' ⚠️' : ''}
+                    </option>
+                  ))}
                 </select>
+                {createForm.role === 'admin' && (
+                  <p className="text-xs text-red-600 mt-1">
+                    Warning: This will create an administrator account with full system access.
+                  </p>
+                )}
               </div>
             </div>
             
             <div className="flex gap-2 mt-6">
               <button
                 onClick={handleCreateUser}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition"
-                disabled={!createForm.name || !createForm.email || !createForm.password}
+                className={`flex-1 py-2 px-4 rounded-lg transition flex items-center justify-center ${
+                  createForm.role === 'admin' 
+                    ? 'bg-red-600 hover:bg-red-700 text-white'
+                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                }`}
+                disabled={!createForm.name || !createForm.email || !createForm.password || !createForm.contact_phone || !createForm.address}
               >
-                <FiSave className="inline mr-2" size={16} />
-                Create User
+                <FiSave className="mr-2" size={16} />
+                {createForm.role === 'admin' ? 'Create Admin' : 'Create User'}
               </button>
               <button
                 onClick={() => {
                   setShowCreateModal(false);
+                  setShowAdminConfirmation(false);
                   setError(null);
                 }}
                 className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 py-2 px-4 rounded-lg transition"
@@ -591,9 +697,11 @@ const handleCreateUser = async () => {
                   value={editForm.role || editingUser.role}
                   onChange={(e) => setEditForm({...editForm, role: e.target.value as any})}
                 >
-                  <option value="client">Client</option>
-                  <option value="service_provider">Service Provider</option>
-                  <option value="admin">Admin</option>
+                  {ADMIN_ROLES.map(role => (
+                    <option key={role.value} value={role.value}>
+                      {role.label}
+                    </option>
+                  ))}
                 </select>
               </div>
               

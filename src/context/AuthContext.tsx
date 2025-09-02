@@ -73,6 +73,7 @@ interface AuthContextType {
   loading: boolean;
   error: string | null;
   hydrated: boolean;
+  isAuthenticated: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -259,7 +260,7 @@ const register = async (formData: {
 
   return (
     <AuthContext.Provider
-      value={{ user, token, login, register, logout, loading, error, hydrated  }}
+      value={{ user, token, login, register, logout, loading, error, hydrated,  isAuthenticated: !!user && !!token,  }}
     >
       {children}
     </AuthContext.Provider>
@@ -285,6 +286,7 @@ return {
   loading: false,
   error: null,
   hydrated: false,
+  isAuthenticated: false,
   isPublic: true,
 };
   }

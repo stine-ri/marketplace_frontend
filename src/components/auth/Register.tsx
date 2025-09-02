@@ -3,8 +3,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { FaEye, FaEyeSlash } from 'react-icons/fa';
 
-// Use the Role type from AuthContext to avoid type conflicts
-import type { Role } from '../../context/AuthContext';
+// Define public roles that users can register as
+type PublicRole = 'client' | 'service_provider' | 'product_seller';
 
 export default function Register() {
   const [formData, setFormData] = useState({
@@ -12,7 +12,7 @@ export default function Register() {
     email: '',
     contact_phone: '',
     address: '',
-    role: 'client' as Role,
+    role: 'client' as PublicRole,
     password: '',
     confirmPassword: ''
   });
@@ -127,10 +127,9 @@ export default function Register() {
               value={formData.role}
               onChange={handleChange}
             >
-              <option value="client">Client</option>
-              <option value="service_provider">Service Provider</option>
-              <option value="product_seller">Product Seller</option>
-              <option value="admin">Administrator</option>
+              <option value="client">Client - Looking for services/products</option>
+              <option value="service_provider">Service Provider - Offering services</option>
+              <option value="product_seller">Product Seller - Selling products</option>
             </select>
           </div>
           
@@ -145,6 +144,7 @@ export default function Register() {
               value={formData.password}
               onChange={handleChange}
               placeholder="••••••••"
+              minLength={8}
             />
             <button
               type="button"
@@ -167,6 +167,7 @@ export default function Register() {
               value={formData.confirmPassword}
               onChange={handleChange}
               placeholder="••••••••"
+              minLength={8}
             />
             <button
               type="button"

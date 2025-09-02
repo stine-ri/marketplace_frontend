@@ -64,7 +64,10 @@ export function ChatWindow() {
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<'connecting'|'connected'|'disconnected'>('connecting');
   const [chatRoomData, setChatRoomData] = useState<ChatRoomData | null>(null);
-  const { user } = useAuth();
+  
+  // Use AuthContext properly
+  const { user, token, hydrated } = useAuth();
+  const isAuthenticated = !!user && !!token;
 
   // Cleanup WebSocket connection
   const cleanupWebSocket = useCallback(() => {
@@ -83,15 +86,8 @@ export function ChatWindow() {
   const setupWebSocket = useCallback(() => {
     cleanupWebSocket();
 
-    if (!chatRoomId || !user?.userId) {
+    if (!chatRoomId || !isAuthenticated || !token) {
       console.log('WebSocket setup skipped - missing requirements');
-      return;
-    }
-
-    const token = localStorage.getItem('token');
-    if (!token) {
-      console.error('No token available for WebSocket');
-      navigate('/login');
       return;
     }
 
@@ -148,7 +144,7 @@ export function ChatWindow() {
         console.log('WebSocket disconnected:', event.code, event.reason);
         
         // Reconnect after 5 seconds if still authenticated
-        if (user?.userId && localStorage.getItem('token')) {
+        if (isAuthenticated) {
           reconnectTimeoutRef.current = setTimeout(() => {
             setupWebSocket();
           }, 5000);
@@ -160,7 +156,7 @@ export function ChatWindow() {
       console.error('Failed to create WebSocket connection:', error);
       setConnectionStatus('disconnected');
     }
-  }, [chatRoomId, user?.userId, navigate, cleanupWebSocket]);
+  }, [chatRoomId, isAuthenticated, token, cleanupWebSocket]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -168,11 +164,8 @@ export function ChatWindow() {
 
   // Fetch chat data
   const fetchChatData = useCallback(async () => {
-     console.log('Fetching chat data for room:', chatRoomId);
-  console.log('User ID:', user?.userId);
-  console.log('Token exists:', !!localStorage.getItem('token'));
-    if (!chatRoomId || !user?.userId) {
-      setError('Invalid chat room or user');
+    if (!chatRoomId || !isAuthenticated) {
+      setError('Invalid chat room or user not authenticated');
       setLoading(false);
       return;
     }
@@ -259,38 +252,41 @@ export function ChatWindow() {
     } finally {
       setLoading(false);
     }
-  }, [chatRoomId, user?.userId, navigate]);
+  }, [chatRoomId, isAuthenticated, navigate]);
+
+  // Check authentication and redirect if needed
+  useEffect(() => {
+    if (hydrated && !isAuthenticated) {
+      navigate('/login');
+    }
+  }, [hydrated, isAuthenticated, navigate]);
 
   // Initial data load
   useEffect(() => {
-    if (chatRoomId && user?.userId) {
+    if (chatRoomId && isAuthenticated) {
       fetchChatData();
     }
 
     return () => {
       cleanupWebSocket();
     };
-  }, [chatRoomId, user?.userId, fetchChatData, cleanupWebSocket]);
+  }, [chatRoomId, isAuthenticated, fetchChatData, cleanupWebSocket]);
 
   // Setup WebSocket after data loads
   useEffect(() => {
-    if (chatRoomData && !loading && user?.userId) {
+    if (chatRoomData && !loading && isAuthenticated) {
       setupWebSocket();
     }
-  }, [chatRoomData, loading, user?.userId, setupWebSocket]);
+  }, [chatRoomData, loading, isAuthenticated, setupWebSocket]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !chatRoomId || connectionStatus !== 'connected') return;
+    if (!newMessage.trim() || !chatRoomId || connectionStatus !== 'connected' || !user) return;
 
     const messageContent = newMessage.trim();
     const tempId = Date.now();
     
     // Optimistic update
-    if (!user) {
-      setError('User not authenticated.');
-      return;
-    }
     const optimisticMessage: Message = {
       id: tempId,
       content: messageContent,
@@ -319,9 +315,9 @@ export function ChatWindow() {
           msg.id === tempId ? {
             ...response.data,
             sender: {
-              id: response.data.sender?.id || user?.userId || 0,
-              name: response.data.sender?.name || user?.full_name || 'You',
-              avatar: response.data.sender?.avatar || user?.avatar
+              id: response.data.sender?.id || user.userId,
+              name: response.data.sender?.name || user.full_name || 'You',
+              avatar: response.data.sender?.avatar || user.avatar
             }
           } : msg
         ));
@@ -402,6 +398,23 @@ export function ChatWindow() {
     fetchChatData();
     setupWebSocket();
   };
+
+  // Show loading while auth is being checked
+  if (!hydrated) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
+          <p className="mt-2 text-gray-600">Checking authentication...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Redirect to login if not authenticated (handled by useEffect)
+  if (!isAuthenticated) {
+    return null;
+  }
 
   if (loading) {
     return (
@@ -523,7 +536,7 @@ export function ChatWindow() {
           </div>
         ) : (
           messages.map(message => {
-            const isOwnMessage = message.senderId === user?.userId;
+            const isOwnMessage = message.senderId === user.userId;
             
             return (
               <div key={message.id} className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'}`}>
