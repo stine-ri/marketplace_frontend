@@ -1,4 +1,4 @@
-// src/components/AdminPanel.tsx - Enhanced with Admin Notifications and Better Error Handling
+
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Service, College, Category } from '../../types/types';

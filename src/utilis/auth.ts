@@ -10,17 +10,16 @@ export const getAuthHeaders = () => {
 export const isAdmin = () => {
   try {
     const token = localStorage.getItem('token');
-    console.log('Token in isAdmin():', token); // Debug log
+
     
     if (!token) {
       console.log('No token found in localStorage');
       return false;
     }
     
-    // Decode JWT token manually (simple base64 decode for payload)
+    // Decode JWT token manually
     const payload = JSON.parse(atob(token.split('.')[1]));
-    console.log('Token payload in isAdmin:', payload); // Debug log
-    console.log('Role check result:', payload.role === 'admin'); // Debug log
+
     
     return payload.role === 'admin';
   } catch (error) {
