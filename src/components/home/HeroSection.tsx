@@ -26,7 +26,6 @@ const formatPrice = (price: number | string | undefined | null): string => {
 };
 
 export const HeroSection = () => {
-    console.log("🔥 FRONTEND VERSION: 2.0 - UPDATED"); 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchType, setSearchType] = useState<'services' | 'products' | 'productsAll'>('services');
   const [searchResults, setSearchResults] = useState<any[]>([]);
