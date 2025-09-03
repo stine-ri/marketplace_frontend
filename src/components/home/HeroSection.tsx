@@ -26,6 +26,7 @@ const formatPrice = (price: number | string | undefined | null): string => {
 };
 
 export const HeroSection = () => {
+    console.log("🔥 FRONTEND VERSION: 2.0 - UPDATED"); 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchType, setSearchType] = useState<'services' | 'products' | 'productsAll'>('services');
   const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -68,7 +69,7 @@ const handleSearch = async () => {
       timeout: 10000,
       validateStatus: (status) => status < 500,
     });
-
+    
     // Handle different response formats
     const apiResults = Array.isArray(response.data) 
       ? response.data 
@@ -76,12 +77,14 @@ const handleSearch = async () => {
 
     if (apiResults.length === 0) {
       setSearchResults([]);
-      toast(
-        searchType === 'productsAll'
-          ? 'No products found'
-          : `${searchQuery} is not yet in our system, but coming soon!`,
-        { icon: 'ℹ️' }
-      );
+      // More specific and helpful messaging
+      if (searchType === 'productsAll') {
+        toast('No products available at the moment. Please check back later!', 
+              { icon: 'ℹ️', duration: 4000 });
+      } else {
+        toast(`No ${searchType} found for "${searchQuery}". Try a different search term or check back later as new providers join daily!`, 
+              { icon: 'ℹ️', duration: 4000 });
+      }
     } else {
       const formattedResults = apiResults.map((item: any) => ({
         id: item.id,
@@ -98,9 +101,9 @@ const handleSearch = async () => {
   } catch (err: any) {
     console.error('Search error:', err);
     
-    let errorMessage = 'Failed to search. Please try again.';
+    let errorMessage = 'Search temporarily unavailable. Please try again later.';
     if (axios.isAxiosError(err)) {
-      errorMessage = err.response?.data?.error || err.message;
+      errorMessage = err.response?.data?.error || 'Network error. Please check your connection.';
     } else if (err instanceof Error) {
       errorMessage = err.message;
     }
@@ -177,43 +180,81 @@ const handleSearch = async () => {
           </div>
           
           {/* Search Results */}
-          {showResults && (
-            <div className="mt-4 bg-white rounded-lg shadow-lg max-w-2xl mx-auto text-left max-h-96 overflow-y-auto">
-              {searchResults.length === 0 ? (
-                <div className="p-4 text-gray-700">
-                  No {searchType} found for "{searchQuery}". Coming soon!
-                </div>
-              ) : (
-                <ul className="divide-y divide-gray-200">
-                  {searchResults.map((item) => (
-                    <li key={item.id} className="p-4 hover:bg-gray-50 transition-colors">
-                      <div className="flex items-start">
-                        {item.images?.[0] && (
-                          <img 
-                            src={item.images[0]} 
-                            alt={item.name} 
-                            className="w-16 h-16 object-cover rounded-md mr-4"
-                          />
-                        )}
-                        <div>
-                          <h3 className="font-medium text-gray-900">{item.name}</h3>
-                          <p className="text-sm text-gray-500">{item.category}</p>
-                          {item.description && (
-                            <p className="text-sm text-gray-600 mt-1">{item.description}</p>
-                          )}
-                          {item.price && (
-                            <p className="text-sm font-medium text-blue-600 mt-1">
-                              {formatPrice(item.price)}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
+         
+{showResults && (
+  <div className="mt-4 bg-white rounded-lg shadow-lg max-w-2xl mx-auto text-left max-h-96 overflow-y-auto">
+    {searchResults.length === 0 ? (
+      <div className="p-6 text-center text-gray-700">
+        <div className="text-4xl mb-2">🔍</div>
+        <h3 className="font-medium mb-2">No {searchType} found</h3>
+        <p className="text-sm">
+          {searchQuery ? (
+            <>No results for "<strong>{searchQuery}</strong>"</>
+          ) : (
+            <>No {searchType} available at the moment</>
           )}
+        </p>
+        <p className="text-xs text-gray-500 mt-2">
+          {searchType === 'services' 
+            ? 'New service providers are joining daily. Try again later or explore other categories.'
+            : 'New products are being added regularly. Please check back soon.'
+          }
+        </p>
+        <button 
+          onClick={() => setShowResults(false)}
+          className="mt-3 text-blue-600 text-sm hover:underline"
+        >
+          Close results
+        </button>
+      </div>
+    ) : (
+      <div>
+        <div className="p-3 bg-gray-50 border-b flex justify-between items-center">
+          <span className="text-sm text-gray-600">
+            Found {searchResults.length} {searchType === 'services' ? 'service' : 'product'}{searchResults.length !== 1 ? 's' : ''}
+            {searchQuery && ` for "${searchQuery}"`}
+          </span>
+          <button 
+            onClick={() => setShowResults(false)}
+            className="text-gray-500 hover:text-gray-700 text-sm"
+          >
+            ✕
+          </button>
+        </div>
+        <ul className="divide-y divide-gray-200">
+          {searchResults.map((item) => (
+            <li key={item.id} className="p-4 hover:bg-gray-50 transition-colors">
+              <div className="flex items-start">
+                {item.images?.[0] && (
+                  <img 
+                    src={item.images[0]} 
+                    alt={item.name} 
+                    className="w-16 h-16 object-cover rounded-md mr-4"
+                  />
+                )}
+                <div className="flex-1">
+                  <h3 className="font-medium text-gray-900">{item.name}</h3>
+                  <p className="text-sm text-gray-500">{item.category}</p>
+                  {item.description && (
+                    <p className="text-sm text-gray-600 mt-1 line-clamp-2">{item.description}</p>
+                  )}
+                  {item.price !== null && item.price !== undefined && (
+                    <p className="text-sm font-medium text-blue-600 mt-1">
+                      {formatPrice(item.price)}
+                    </p>
+                  )}
+                  {item.provider && (
+                    <p className="text-xs text-gray-500 mt-1">By: {item.provider}</p>
+                  )}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    )}
+  </div>
+)}
           
           {/* Popular Searches */}
           <div className="mt-8 flex flex-wrap justify-center gap-4 text-sm">

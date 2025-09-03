@@ -1,15 +1,16 @@
 import React from 'react';
 import { ArrowRight, Briefcase, ShoppingBag } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 export const CtaSection = () => {
+  const navigate = useNavigate(); 
+
   const handleServiceProviderClick = () => {
-    // Redirect to service provider registration
-    window.location.href = '/register?type=service-provider';
+    navigate('/register?type=service-provider'); 
   };
 
   const handleSellerClick = () => {
-    // Redirect to seller registration
-    window.location.href = '/register?type=seller';
+    navigate('/register?type=seller'); 
   };
 
   return (
@@ -24,8 +25,7 @@ export const CtaSection = () => {
               Become a Service Provider
             </h3>
             <p className="mb-6 text-blue-100">
-              Share your skills and expertise with thousands of potential
-              clients. Register to get available requests and start earning.
+              Share your skills and expertise with thousands of potential clients across Kenya. Register to get available requests in your area and start earning.
             </p>
             <ul className="mb-8 space-y-2">
               <li className="flex items-center">
@@ -62,8 +62,7 @@ export const CtaSection = () => {
             </div>
             <h3 className="text-2xl font-bold mb-4">Become a Seller</h3>
             <p className="mb-6 text-blue-100">
-              Reach new customers and grow your business. Register to start
-              selling your products on our marketplace today.
+              Reach new customers from Nairobi to Mombasa and grow your business. Register to start selling your products on Kenya's marketplace today.
             </p>
             <ul className="mb-8 space-y-2">
               <li className="flex items-center">

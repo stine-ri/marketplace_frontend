@@ -9,6 +9,9 @@ export const CategorySection = () => {
             Find exactly what you need from our wide range of services and
             products
           </p>
+          <div className="mt-6 max-w-3xl mx-auto text-gray-700 text-left">
+         <p>Explore the diverse marketplace of Quisells, Kenya's premier platform for buying and selling. Whether you're a <strong>client looking for professional services</strong> like home repair, business consulting, or creative design, or you want to <strong>buy quality products</strong> from electronics to fashion, our categorized system makes it easy to find trusted local providers and sellers. Service providers can showcase their skills, and product sellers can reach customers across Kenya.</p>
+        </div>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           {/* Service Categories */}
