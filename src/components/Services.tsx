@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, MapPin, Star, ShoppingBag, Wrench, ChevronRight, Users, Package, TrendingUp, ArrowRight } from 'lucide-react';
+import { Search, MapPin, Star, ShoppingBag, Wrench, ChevronRight, Users, Package, TrendingUp, ArrowRight, Filter, RefreshCw, Loader, AlertCircle } from 'lucide-react';
 
 interface PopularItem {
   name: string;
@@ -21,6 +21,13 @@ interface FeaturedItem {
   price: string;
   image: string;
   tags: string[];
+  category: string;
+}
+
+interface Category {
+  id: number | string;
+  name: string;
+  count?: number;
 }
 
 type StatsData = {
@@ -30,29 +37,69 @@ type StatsData = {
   totalCategories: number;
 };
 
-const getCategoryIcon = (category: string): string => {
+// Utility function 
+const extractNameFromObject = (obj: any): string => {
+  if (!obj) return '';
+  
+  if (typeof obj === 'string') return obj;
+  
+  if (typeof obj === 'object') {
+    if (obj.firstName) {
+      return `${obj.firstName} ${obj.lastName || ''}`.trim();
+    }
+    return obj.name || obj.title || obj.company || '';
+  }
+  
+  return String(obj);
+};
+
+const getCategoryIcon = (category: any): string => {
+  if (category === undefined || category === null) {
+    return '🛍️';
+  }
+  
+  if (typeof category === 'object') {
+    category = category.name || category.title || 'default';
+  }
+  
+  const categoryString = String(category).toLowerCase();
+  
   const icons: Record<string, string> = {
-    'web': '💻',
-    'cleaning': '🧹',
-    'tutoring': '📚',
-    'photography': '📸',
-    'landscaping': '🌿',
-    'pet': '🐕',
-    'electronics': '⚡',
-    'crafts': '🎨',
-    'decor': '🏺',
-    'fashion': '👕',
-    'books': '📖',
-    'sports': '⚽',
+    'web': '💻', 'tech': '💻', 'development': '💻',
+    'cleaning': '🧹', 'housekeeping': '🧹',
+    'tutoring': '📚', 'education': '📚', 'teaching': '📚',
+    'photography': '📸', 'photo': '📸',
+    'landscaping': '🌿', 'gardening': '🌿',
+    'pet': '🐕', 'animal': '🐕',
+    'electronics': '⚡', 'gadgets': '⚡',
+    'crafts': '🎨', 'art': '🎨', 'handmade': '🎨',
+    'decor': '🏺', 'home': '🏠',
+    'fashion': '👕', 'clothing': '👕',
+    'books': '📖', 'literature': '📖',
+    'sports': '⚽', 'fitness': '💪',
+    'beauty': '💄', 'cosmetics': '💄',
+    'health': '❤️', 'medical': '🏥',
+    'food': '🍕', 'restaurant': '🍕',
+    'transport': '🚗', 'automotive': '🚗',
+    'repair': '🔧', 'plumbing': '🔧',
+    'design': '🎨', 'music': '🎵',
+    'event': '🎉', 'business': '💼',
+    'technology': '💾', 'garden': '🌻',
+    'childcare': '👶', 'eldercare': '👵',
+    'legal': '⚖️', 'financial': '💰',
     'default': '🛍️'
   };
 
-  const lowerCategory = category.toLowerCase();
+  if (icons[categoryString]) {
+    return icons[categoryString];
+  }
+
   for (const key in icons) {
-    if (lowerCategory.includes(key)) {
+    if (categoryString.includes(key)) {
       return icons[key];
     }
   }
+
   return icons['default'];
 };
 
@@ -176,6 +223,114 @@ const ServicesProductsComponent = () => {
   const [featuredItems, setFeaturedItems] = useState<FeaturedItem[]>([]);
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  
+  // Category filtering states
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [serviceCategories, setServiceCategories] = useState<Category[]>([]);
+  const [productCategories, setProductCategories] = useState<Category[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
+  const [categoriesError, setCategoriesError] = useState<string | null>(null);
+
+  // Fetch categories for services and products
+  const fetchCategories = React.useCallback(async () => {
+    setCategoriesLoading(true);
+    setCategoriesError(null);
+
+    try {
+      const [servicesCategoriesRes, productsCategoriesRes] = await Promise.allSettled([
+        fetch('https://mkt-backend-sz2s.onrender.com/api/services/categories'),
+        fetch('https://mkt-backend-sz2s.onrender.com/api/public/categories')
+      ]);
+
+      // Handle service categories
+      if (servicesCategoriesRes.status === 'fulfilled' && servicesCategoriesRes.value.ok) {
+        const serviceCategoriesData = await servicesCategoriesRes.value.json();
+        const categoriesList = Array.isArray(serviceCategoriesData) ? serviceCategoriesData : serviceCategoriesData?.data || [];
+        
+        const formattedServiceCategories = categoriesList.map((category: any, index: number) => ({
+          id: category.id || category._id || `service-${index}`,
+          name: String(category.name || category.category || 'Unknown Category'),
+          count: Number(category.count || category.serviceCount || 0)
+        }));
+        
+        setServiceCategories(formattedServiceCategories);
+      } else {
+        // Fallback: Use predefined service categories
+        const fallbackServiceCategories = [
+          { id: 'cleaning', name: 'Cleaning', count: 0 },
+          { id: 'tutoring', name: 'Tutoring', count: 0 },
+          { id: 'photography', name: 'Photography', count: 0 },
+          { id: 'landscaping', name: 'Landscaping', count: 0 },
+          { id: 'web', name: 'Web Development', count: 0 },
+          { id: 'tech', name: 'Technology', count: 0 }
+        ];
+        setServiceCategories(fallbackServiceCategories);
+      }
+
+      // Handle product categories
+      if (productsCategoriesRes.status === 'fulfilled' && productsCategoriesRes.value.ok) {
+        const productCategoriesData = await productsCategoriesRes.value.json();
+        const categoriesList = Array.isArray(productCategoriesData) ? productCategoriesData : productCategoriesData?.data || [];
+        
+        const formattedProductCategories = categoriesList.map((category: any) => ({
+          id: category.id || category._id || category.name,
+          name: String(category.name || category.category || 'Unknown Category'),
+          count: Number(category.count || category.productCount || 0)
+        }));
+        
+        setProductCategories(formattedProductCategories);
+      } else {
+        // Fallback: Try to get categories from products endpoint
+        try {
+          const productsRes = await fetch('https://mkt-backend-sz2s.onrender.com/api/products');
+          if (productsRes.ok) {
+            const productsData = await productsRes.json();
+            const productsList = Array.isArray(productsData) ? productsData : productsData?.data || [];
+            
+            // Extract unique categories from products
+            const uniqueCategories = new Map();
+            productsList.forEach((product: any) => {
+              const categoryName = String(product.category || 'General');
+              if (uniqueCategories.has(categoryName)) {
+                uniqueCategories.set(categoryName, uniqueCategories.get(categoryName) + 1);
+              } else {
+                uniqueCategories.set(categoryName, 1);
+              }
+            });
+
+            const extractedCategories = Array.from(uniqueCategories.entries()).map(([name, count], index) => ({
+              id: `product-${index}`,
+              name: String(name),
+              count: Number(count)
+            }));
+
+            setProductCategories(extractedCategories);
+          }
+        } catch (fallbackErr) {
+          console.error('Error fetching product categories fallback:', fallbackErr);
+          setProductCategories([]);
+        }
+      }
+
+    } catch (err) {
+      console.error('Error fetching categories:', err);
+      setCategoriesError('Failed to load categories');
+      setServiceCategories([]);
+      setProductCategories([]);
+    } finally {
+      setCategoriesLoading(false);
+    }
+  }, []);
+
+  // Fetch categories on component mount
+  useEffect(() => {
+    fetchCategories();
+  }, [fetchCategories]);
+
+  // Reset category when switching tabs
+  useEffect(() => {
+    setSelectedCategory('all');
+  }, [activeTab]);
 
   // Load recent searches from memory
   useEffect(() => {
@@ -194,9 +349,20 @@ const ServicesProductsComponent = () => {
     const fetchData = async () => {
       try {
         setIsSearching(true);
-        const endpoint = activeTab === 'services' 
+        
+        // Build URL with category filtering
+        const currentCategories = activeTab === 'services' ? serviceCategories : productCategories;
+        const selectedCategoryName = selectedCategory === 'all' 
+          ? null 
+          : currentCategories.find(cat => String(cat.id) === selectedCategory)?.name || selectedCategory;
+
+        let endpoint = activeTab === 'services' 
           ? 'https://mkt-backend-sz2s.onrender.com/api/services'
           : 'https://mkt-backend-sz2s.onrender.com/api/products';
+
+        if (selectedCategoryName) {
+          endpoint += `?category=${encodeURIComponent(selectedCategoryName)}`;
+        }
 
         const response = await fetch(endpoint);
         
@@ -205,54 +371,127 @@ const ServicesProductsComponent = () => {
         }
 
         const data = await response.json();
-        const items = Array.isArray(data) ? data : data?.data || [];
+        let items = Array.isArray(data) ? data : data?.data || [];
 
-        // Create popular items from the first 6 items
-        const popular = items.slice(0, 6).map((item: any) => ({
-          name: item.name || item.title || 'Unknown',
-          icon: getCategoryIcon(item.category || 'default'),
-          rating: item.rating || 4.5,
-          providers: activeTab === 'services' ? Math.floor(Math.random() * 200) + 50 : undefined,
-          sellers: activeTab === 'products' ? Math.floor(Math.random() * 200) + 50 : undefined
-        }));
+        // Apply client-side filtering if needed
+        if (selectedCategoryName) {
+          items = items.filter((item: any) => {
+            const itemCategory = typeof item.category === 'object' 
+              ? item.category?.name || 'General'
+              : item.category || 'General';
+            return String(itemCategory).toLowerCase().includes(selectedCategoryName.toLowerCase()) ||
+                   selectedCategoryName.toLowerCase().includes(String(itemCategory).toLowerCase());
+          });
+        }
 
-        // Create featured items (first 4 items)
-        const featured = items.slice(0, 4).map((item: any, index: number) => ({
-          id: item.id || index,
-          type: activeTab,
-          title: item.name || item.title || 'Unknown',
-          provider: activeTab === 'services' ? (item.provider || item.seller || item.company || 'Verified Provider') : undefined,
-          seller: activeTab === 'products' ? (item.seller || item.provider || item.company || 'Verified Seller') : undefined,
-          location: item.location || 'Nairobi, Kenya',
-          rating: item.rating || 4.0 + (Math.random() * 0.9),
-          reviews: item.reviews || Math.floor(Math.random() * 100) + 5,
-          price: formatPrice(item.price),
-          image: item.image || item.images?.[0] || '',
-          tags: item.tags || [item.category || 'Popular']
-        }));
+        // Create popular items from the first 6 items with better error handling
+        const popular = items.slice(0, 6).map((item: any) => {
+          // Safely extract category - handle both string and object categories
+          let categoryValue = 'default';
+          if (item.category) {
+            if (typeof item.category === 'object') {
+              categoryValue = item.category.name || item.category.title || 'default';
+            } else {
+              categoryValue = item.category;
+            }
+          }
+          
+          return {
+            name: item.name || item.title || 'Unknown Item',
+            icon: getCategoryIcon(categoryValue),
+            rating: item.rating || item.rating_score || 4.5,
+            providers: activeTab === 'services' ? Math.floor(Math.random() * 200) + 50 : undefined,
+            sellers: activeTab === 'products' ? Math.floor(Math.random() * 200) + 50 : undefined
+          };
+        });
+
+        // Create featured items (first 4 items) with better error handling
+        const featured = items.slice(0, 4).map((item: any, index: number) => {
+          // Safely extract category
+          let categoryValue = 'default';
+          if (item.category) {
+            if (typeof item.category === 'object') {
+              categoryValue = item.category.name || item.category.title || 'default';
+            } else {
+              categoryValue = item.category;
+            }
+          }
+          
+          // Safely extract provider/seller - handle both string and object
+          let providerValue = 'Verified Provider';
+          let sellerValue = 'Verified Seller';
+          
+          if (item.provider) {
+            if (typeof item.provider === 'object') {
+              providerValue = item.provider.firstName 
+                ? `${item.provider.firstName} ${item.provider.lastName || ''}`.trim()
+                : item.provider.name || item.provider.company || 'Verified Provider';
+            } else {
+              providerValue = item.provider;
+            }
+          }
+          
+          if (item.seller) {
+            if (typeof item.seller === 'object') {
+              sellerValue = item.seller.firstName 
+                ? `${item.seller.firstName} ${item.seller.lastName || ''}`.trim()
+                : item.seller.name || item.seller.company || 'Verified Seller';
+            } else {
+              sellerValue = item.seller;
+            }
+          }
+          
+          return {
+            id: item.id || index,
+            type: activeTab,
+            title: item.name || item.title || 'Unknown Item',
+            provider: activeTab === 'services' ? providerValue : undefined,
+            seller: activeTab === 'products' ? sellerValue : undefined,
+            location: item.location || item.address || 'Nairobi, Kenya',
+            rating: item.rating || item.rating_score || 4.0 + (Math.random() * 0.9),
+            reviews: item.reviews || item.review_count || Math.floor(Math.random() * 100) + 5,
+            price: formatPrice(item.price || item.cost || item.amount),
+            image: item.image || item.images?.[0] || item.photo || '',
+            tags: item.tags || [categoryValue] || ['Popular'],
+            category: categoryValue
+          };
+        });
 
         setPopularItems(popular);
         setFeaturedItems(featured);
       } catch (error) {
         console.error('Error fetching data:', error);
+        // Set default data to prevent complete breakdown
+        setPopularItems([]);
+        setFeaturedItems([]);
       } finally {
         setIsSearching(false);
       }
     };
 
     fetchData();
-  }, [activeTab]);
+  }, [activeTab, selectedCategory, serviceCategories, productCategories]);
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) {
-      // If no search query, show all items
+      // If no search query, show all items (filtered by category if selected)
       setIsSearching(true);
       setShowResults(true);
       
       try {
-        const endpoint = activeTab === 'services' 
+        // Build URL with category filtering
+        const currentCategories = activeTab === 'services' ? serviceCategories : productCategories;
+        const selectedCategoryName = selectedCategory === 'all' 
+          ? null 
+          : currentCategories.find(cat => String(cat.id) === selectedCategory)?.name || selectedCategory;
+
+        let endpoint = activeTab === 'services' 
           ? 'https://mkt-backend-sz2s.onrender.com/api/services'
           : 'https://mkt-backend-sz2s.onrender.com/api/products';
+
+        if (selectedCategoryName) {
+          endpoint += `?category=${encodeURIComponent(selectedCategoryName)}`;
+        }
         
         const response = await fetch(endpoint);
         
@@ -261,22 +500,60 @@ const ServicesProductsComponent = () => {
         }
 
         const data = await response.json();
-        const apiResults = Array.isArray(data) ? data : data?.data || [];
+        let apiResults = Array.isArray(data) ? data : data?.data || [];
 
-        const formattedResults = apiResults.slice(0, 10).map((item: any) => ({
-          id: item.id || Math.random().toString(36).substring(2, 9),
-          name: item.name || item.title || 'Unknown',
-          category: item.category || 'General',
-          description: item.description || 'No description available',
-          price: formatPrice(item.price),
-          image: item.image || item.images?.[0] || '',
-          provider: activeTab === 'services' ? (item.provider || 'Verified Provider') : undefined,
-          seller: activeTab === 'products' ? (item.seller || 'Verified Seller') : undefined,
-          rating: item.rating || 4.0,
-          reviews: item.reviews || 0,
-          tags: item.tags || [item.category || 'Popular'],
-          type: activeTab
-        }));
+        // Apply client-side filtering if needed
+        if (selectedCategoryName) {
+          apiResults = apiResults.filter((item: any) => {
+            const itemCategory = typeof item.category === 'object' 
+              ? item.category?.name || 'General'
+              : item.category || 'General';
+            return String(itemCategory).toLowerCase().includes(selectedCategoryName.toLowerCase()) ||
+                   selectedCategoryName.toLowerCase().includes(String(itemCategory).toLowerCase());
+          });
+        }
+
+        // Format results with provider/seller extraction
+        const formattedResults = apiResults.slice(0, 10).map((item: any) => {
+          // Handle provider/seller objects
+          let providerValue = 'Verified Provider';
+          let sellerValue = 'Verified Seller';
+          
+          if (item.provider) {
+            if (typeof item.provider === 'object') {
+              providerValue = item.provider.firstName 
+                ? `${item.provider.firstName} ${item.provider.lastName || ''}`.trim()
+                : item.provider.name || item.provider.company || 'Verified Provider';
+            } else {
+              providerValue = item.provider;
+            }
+          }
+          
+          if (item.seller) {
+            if (typeof item.seller === 'object') {
+              sellerValue = item.seller.firstName 
+                ? `${item.seller.firstName} ${item.seller.lastName || ''}`.trim()
+                : item.seller.name || item.seller.company || 'Verified Seller';
+            } else {
+              sellerValue = item.seller;
+            }
+          }
+          
+          return {
+            id: item.id || Math.random().toString(36).substring(2, 9),
+            name: item.name || item.title || 'Unknown',
+            category: item.category || 'General',
+            description: item.description || 'No description available',
+            price: formatPrice(item.price),
+            image: item.image || item.images?.[0] || '',
+            provider: activeTab === 'services' ? providerValue : undefined,
+            seller: activeTab === 'products' ? sellerValue : undefined,
+            rating: item.rating || 4.0,
+            reviews: item.reviews || 0,
+            tags: item.tags || [item.category || 'Popular'],
+            type: activeTab
+          };
+        });
 
         setSearchResults(formattedResults);
       } catch (error) {
@@ -391,6 +668,12 @@ const ServicesProductsComponent = () => {
     { term: 'Furniture', type: 'products' as const },
   ];
 
+  const currentCategories = activeTab === 'services' ? serviceCategories : productCategories;
+  const totalItemsCount = currentCategories.reduce((sum, cat) => sum + (cat.count || 0), 0);
+  const selectedCategoryName = selectedCategory === 'all' 
+    ? 'All' 
+    : currentCategories.find(cat => String(cat.id) === selectedCategory)?.name || selectedCategory;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-white">
       {/* Enhanced Hero Section */}
@@ -446,13 +729,93 @@ const ServicesProductsComponent = () => {
               </div>
             </div>
 
+            {/* Category Filter Section */}
+            <div className="mb-8">
+              <div className="flex items-center justify-center mb-4">
+                <div className="flex items-center gap-2">
+                  <Filter size={18} className="text-blue-100" />
+                  <h3 className="text-lg font-semibold text-blue-100">Filter by Category</h3>
+                  {categoriesLoading && <Loader className="w-4 h-4 animate-spin text-blue-100" />}
+                </div>
+              </div>
+
+              {/* Categories Error State */}
+              {categoriesError && (
+                <div className="bg-yellow-50/10 border border-yellow-200/30 rounded-lg p-3 mb-4 max-w-md mx-auto">
+                  <div className="flex items-center gap-2 justify-center">
+                    <AlertCircle size={16} className="text-yellow-300" />
+                    <span className="text-yellow-100 text-sm">{categoriesError}</span>
+                    <button
+                      onClick={fetchCategories}
+                      className="ml-auto text-yellow-100 hover:text-yellow-300 text-sm underline"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Category Pills */}
+              <div className="flex flex-wrap gap-2 justify-center max-w-4xl mx-auto">
+                {/* All Categories Button */}
+                <button
+                  onClick={() => setSelectedCategory('all')}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+                    selectedCategory === 'all'
+                      ? 'bg-white text-blue-600 shadow-md scale-105'
+                      : 'bg-white/10 text-blue-100 hover:bg-white/20 hover:scale-105 border border-white/20'
+                  }`}
+                >
+                  All {activeTab}
+                  {totalItemsCount > 0 && (
+                    <span className="ml-1 text-xs opacity-75">({totalItemsCount})</span>
+                  )}
+                </button>
+                
+                {/* Category Buttons */}
+                {currentCategories.length > 0 ? (
+                  currentCategories.map((category) => (
+                    <button
+                      key={category.id}
+                      onClick={() => setSelectedCategory(String(category.id))}
+                      className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+                        selectedCategory === String(category.id)
+                          ? 'bg-white text-blue-600 shadow-md scale-105'
+                          : 'bg-white/10 text-blue-100 hover:bg-white/20 hover:scale-105 border border-white/20'
+                      }`}
+                    >
+                      <span className="mr-1">{getCategoryIcon(category.name)}</span>
+                      {String(category.name)}
+                      {category.count !== undefined && (
+                        <span className="ml-1 text-xs opacity-75">({category.count})</span>
+                      )}
+                    </button>
+                  ))
+                ) : !categoriesLoading && !categoriesError && (
+                  <div className="text-center py-4 text-blue-100">
+                    <p className="text-sm">No categories available for {activeTab}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Category Loading State */}
+              {categoriesLoading && currentCategories.length === 0 && (
+                <div className="flex justify-center items-center py-6">
+                  <div className="text-center">
+                    <Loader className="w-6 h-6 animate-spin text-blue-100 mx-auto mb-2" />
+                    <p className="text-blue-100 text-sm">Loading categories...</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Enhanced Search Bar */}
             <div className="bg-white rounded-xl p-3 lg:p-4 flex flex-col lg:flex-row items-stretch shadow-2xl max-w-3xl mx-auto mb-8">
               <div className="flex-grow relative mb-3 lg:mb-0">
                 <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
                   type="text"
-                  placeholder={`Search for ${activeTab}...`}
+                  placeholder={`Search for ${activeTab}${selectedCategory !== 'all' ? ` in ${selectedCategoryName}` : ''}...`}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyDown={handleKeyDown}
@@ -476,7 +839,7 @@ const ServicesProductsComponent = () => {
                 ) : (
                   <span className="flex items-center">
                     <Search size={24} className="mr-2" />
-                    Search
+                    {selectedCategory !== 'all' ? `Search in ${selectedCategoryName}` : 'Search'}
                   </span>
                 )}
               </button>
@@ -517,6 +880,24 @@ const ServicesProductsComponent = () => {
                 </div>
               )}
             </div>
+
+            {/* Selected Category Display */}
+            {selectedCategory !== 'all' && (
+              <div className="mt-6 text-center">
+                <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-sm text-white rounded-lg border border-white/20">
+                  <span className="text-sm">Currently browsing:</span>
+                  <span className="font-semibold text-yellow-300">
+                    {getCategoryIcon(selectedCategoryName)} {selectedCategoryName}
+                  </span>
+                  <button
+                    onClick={() => setSelectedCategory('all')}
+                    className="ml-2 text-white hover:text-yellow-300 text-sm underline"
+                  >
+                    Clear filter
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -531,7 +912,10 @@ const ServicesProductsComponent = () => {
             <div className="p-4 bg-gray-50 border-b flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">
-                  {searchQuery ? `Search Results for "${searchQuery}"` : `All ${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}`}
+                  {searchQuery 
+                    ? `Search Results for "${searchQuery}"${selectedCategory !== 'all' ? ` in ${selectedCategoryName}` : ''}` 
+                    : `All ${activeTab}${selectedCategory !== 'all' ? ` in ${selectedCategoryName}` : ''}`
+                  }
                 </h3>
                 <p className="text-sm text-gray-600">Found {searchResults.length} results</p>
               </div>
@@ -545,18 +929,43 @@ const ServicesProductsComponent = () => {
             
             {searchResults.length === 0 ? (
               <div className="p-8 text-center">
-                <div className="text-gray-600 mb-4">
-                  {searchQuery ? 
-                    `No ${activeTab} found for "${searchQuery}". Coming soon!` : 
-                    `No ${activeTab} available at the moment.`
+                <div className="text-6xl mb-4">
+                  {selectedCategory === 'all' 
+                    ? (activeTab === 'services' ? '🛠️' : '📦')
+                    : '🔍'
                   }
                 </div>
-                <button 
-                  onClick={handleRegisterRedirect}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors inline-flex items-center"
-                >
-                  Join as Provider <ArrowRight size={16} className="ml-2" />
-                </button>
+                <h4 className="text-xl font-bold text-gray-800 mb-4">
+                  {searchQuery && selectedCategory !== 'all' 
+                    ? `No ${activeTab} found for "${searchQuery}" in ${selectedCategoryName}` 
+                    : searchQuery 
+                      ? `No ${activeTab} found for "${searchQuery}"` 
+                      : `No ${activeTab} found in ${selectedCategoryName}`
+                  }
+                </h4>
+                <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                  {searchQuery 
+                    ? `We couldn't find any ${activeTab} matching your search. Try different keywords or check other categories.`
+                    : `This category doesn't have any ${activeTab} yet. Check back later or explore other categories.`
+                  }
+                </p>
+                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                  {selectedCategory !== 'all' && (
+                    <button 
+                      onClick={() => setSelectedCategory('all')}
+                      className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded-lg transition-colors inline-flex items-center"
+                    >
+                      <Filter size={16} className="mr-2" />
+                      View All {activeTab}
+                    </button>
+                  )}
+                  <button 
+                    onClick={handleRegisterRedirect}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors inline-flex items-center"
+                  >
+                    Join as Provider <ArrowRight size={16} className="ml-2" />
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="divide-y divide-gray-200">
@@ -581,12 +990,21 @@ const ServicesProductsComponent = () => {
                         )}
                       </div>
                       <div className="flex-1">
-                        <h4 className="text-xl font-semibold text-gray-900">{item.name}</h4>
-                        <p className="text-blue-600 font-medium mt-1">
-                          {item.provider || item.seller}
-                        </p>
-                        <p className="text-gray-600 mt-1">{item.description}</p>
-                        <div className="mt-2 flex items-center gap-4">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <h4 className="text-xl font-semibold text-gray-900">{item.name}</h4>
+                            <p className="text-blue-600 font-medium mt-1">
+                              {extractNameFromObject(item.provider || item.seller) || 'Verified Provider'}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2 ml-4">
+                            <span className="text-sm text-gray-600 bg-gray-100 px-2 py-1 rounded-full">
+                              {getCategoryIcon(item.category)} {String(item.category)}
+                            </span>
+                          </div>
+                        </div>
+                        <p className="text-gray-600 mt-2">{item.description}</p>
+                        <div className="mt-3 flex items-center gap-4">
                           {item.type === 'product' && (
                             <span className="text-lg font-bold text-green-600">
                               {item.price}
@@ -597,7 +1015,7 @@ const ServicesProductsComponent = () => {
                             {item.rating} ({item.reviews} reviews)
                           </div>
                         </div>
-                        <div className="mt-3 flex gap-2">
+                        <div className="mt-4 flex gap-2">
                           {item.type === 'service' ? (
                             <button 
                               onClick={handleBookNow}
@@ -637,30 +1055,75 @@ const ServicesProductsComponent = () => {
         <>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
             <div className="text-center mb-8">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Popular Categories</h2>
-              <p className="text-gray-600">Browse trending {activeTab} in your area</p>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                {selectedCategory === 'all' ? 'Popular Categories' : `Items in ${selectedCategoryName}`}
+              </h2>
+              <p className="text-gray-600">
+                {selectedCategory === 'all' 
+                  ? `Browse trending ${activeTab} in your area`
+                  : `Discover ${activeTab} in the ${selectedCategoryName} category`
+                }
+              </p>
             </div>
             
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-              {popularItems.map((item, index) => (
-                <div
-                  key={`${item.name}-${index}`}
-                  className="bg-white rounded-xl p-6 text-center hover:shadow-lg transition-all duration-300 cursor-pointer border border-gray-100 hover:border-blue-200 group"
-                >
-                  <div className="text-3xl mb-3 group-hover:scale-110 transition-transform duration-300">
-                    {item.icon}
-                  </div>
-                  <h3 className="font-semibold text-gray-900 mb-2">{item.name}</h3>
-                  <div className="flex items-center justify-center gap-1 mb-1">
-                    <Star className="w-4 h-4 text-yellow-400 fill-current" />
-                    <span className="text-sm text-gray-600">{item.rating}</span>
-                  </div>
-                  <p className="text-xs text-gray-500">
-                    {activeTab === 'services' ? item.providers : item.sellers} {activeTab === 'services' ? 'providers' : 'sellers'}
-                  </p>
+            {popularItems.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="text-6xl mb-6">
+                  {selectedCategory === 'all' ? '🔍' : getCategoryIcon(selectedCategoryName)}
                 </div>
-              ))}
-            </div>
+                <h3 className="text-2xl font-bold text-gray-900 mb-4">
+                  {selectedCategory === 'all' 
+                    ? `No ${activeTab} available yet` 
+                    : `No ${activeTab} in ${selectedCategoryName} category`
+                  }
+                </h3>
+                <p className="text-gray-600 mb-8 max-w-md mx-auto">
+                  {selectedCategory === 'all' 
+                    ? `Be the first to list ${activeTab} on our platform!`
+                    : `This category is currently empty. Try exploring other categories or be the first to add your ${activeTab.slice(0, -1)} here.`
+                  }
+                </p>
+                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                  {selectedCategory !== 'all' && (
+                    <button 
+                      onClick={() => setSelectedCategory('all')}
+                      className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded-lg transition-colors inline-flex items-center"
+                    >
+                      <Filter size={16} className="mr-2" />
+                      View All Categories
+                    </button>
+                  )}
+                  <button 
+                    onClick={() => window.location.href = '/register?role=provider'}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors inline-flex items-center"
+                  >
+                    {activeTab === 'services' ? 'Become a Provider' : 'Start Selling'}
+                    <ArrowRight size={16} className="ml-2" />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                {popularItems.map((item, index) => (
+                  <div
+                    key={`${item.name}-${index}`}
+                    className="bg-white rounded-xl p-6 text-center hover:shadow-lg transition-all duration-300 cursor-pointer border border-gray-100 hover:border-blue-200 group"
+                  >
+                    <div className="text-3xl mb-3 group-hover:scale-110 transition-transform duration-300">
+                      {item.icon}
+                    </div>
+                    <h3 className="font-semibold text-gray-900 mb-2">{item.name}</h3>
+                    <div className="flex items-center justify-center gap-1 mb-1">
+                      <Star className="w-4 h-4 text-yellow-400 fill-current" />
+                      <span className="text-sm text-gray-600">{item.rating}</span>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      {activeTab === 'services' ? item.providers : item.sellers} {activeTab === 'services' ? 'providers' : 'sellers'}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Featured Items */}
@@ -669,6 +1132,7 @@ const ServicesProductsComponent = () => {
               <div>
                 <h2 className="text-2xl font-bold text-gray-900 mb-2">
                   Featured {activeTab === 'services' ? 'Services' : 'Products'}
+                  {selectedCategory !== 'all' && ` in ${selectedCategoryName}`}
                 </h2>
                 <p className="text-gray-600">Top-rated options just for you</p>
               </div>
@@ -681,93 +1145,138 @@ const ServicesProductsComponent = () => {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2 gap-6">
-              {featuredItems.map((item) => (
-                <div
-                  key={item.id}
-                  className="bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 border border-gray-100 hover:border-blue-200 group"
-                >
-                  <div className="relative overflow-hidden">
-                    {renderImage(item)}
-                    <div className="absolute top-4 left-4">
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        item.type === 'service' 
-                          ? 'bg-blue-100 text-blue-800' 
-                          : 'bg-green-100 text-green-800'
-                      }`}>
-                        {item.type === 'service' ? 'Service' : 'Product'}
-                      </span>
-                    </div>
-                  </div>
-                  
-                  <div className="p-6">
-                    <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">
-                      {item.title}
-                    </h3>
-                    <p className="text-blue-600 font-medium mb-2">
-                      {item.provider || item.seller}
-                    </p>
-                    
-                    <div className="flex items-center gap-4 mb-3 text-sm text-gray-600">
-                      <div className="flex items-center gap-1">
-                        <MapPin className="w-4 h-4" />
-                        {item.location}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Star className="w-4 h-4 text-yellow-400 fill-current" />
-                        {item.rating} ({item.reviews})
-                      </div>
-                    </div>
-                    
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      {item.tags.map((tag) => (
-                        <span
-                          key={tag}
-                          className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full"
-                        >
-                          {tag}
+            {featuredItems.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="text-6xl mb-6">
+                  {selectedCategory === 'all' ? '🔍' : getCategoryIcon(selectedCategoryName)}
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900 mb-4">
+                  {selectedCategory === 'all' 
+                    ? `No ${activeTab} available yet` 
+                    : `No ${activeTab} in ${selectedCategoryName} category`
+                  }
+                </h3>
+                <p className="text-gray-600 mb-8 max-w-md mx-auto">
+                  {selectedCategory === 'all' 
+                    ? `Be the first to list ${activeTab} on our platform!`
+                    : `This category is currently empty. Try exploring other categories or be the first to add your ${activeTab.slice(0, -1)} here.`
+                  }
+                </p>
+                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                  {selectedCategory !== 'all' && (
+                    <button 
+                      onClick={() => setSelectedCategory('all')}
+                      className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded-lg transition-colors inline-flex items-center"
+                    >
+                      <Filter size={16} className="mr-2" />
+                      View All Categories
+                    </button>
+                  )}
+                  <button 
+                    onClick={() => window.location.href = '/register?role=provider'}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors inline-flex items-center"
+                  >
+                    {activeTab === 'services' ? 'Become a Provider' : 'Start Selling'}
+                    <ArrowRight size={16} className="ml-2" />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2 gap-6">
+                {featuredItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className="bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 border border-gray-100 hover:border-blue-200 group"
+                  >
+                    <div className="relative overflow-hidden">
+                      {renderImage(item)}
+                      <div className="absolute top-4 left-4">
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                          item.type === 'service' 
+                            ? 'bg-blue-100 text-blue-800' 
+                            : 'bg-green-100 text-green-800'
+                        }`}>
+                          {item.type === 'service' ? 'Service' : 'Product'}
                         </span>
-                      ))}
-                    </div>
-                    
-                    <div className="flex items-center justify-between">
-                      {item.type === 'product' && (
-                        <span className="text-lg font-bold text-gray-900">
-                          {item.price}
-                        </span>
+                      </div>
+                      {selectedCategory !== 'all' && (
+                        <div className="absolute top-4 right-4">
+                          <span className="px-2 py-1 bg-white/90 text-gray-700 text-xs font-medium rounded-full">
+                            {getCategoryIcon(item.category)} {item.category}
+                          </span>
+                        </div>
                       )}
-                      {item.type === 'service' && <div></div>}
+                    </div>
+                    
+                    <div className="p-6">
+                      <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">
+                        {item.title}
+                      </h3>
+                      <p className="text-blue-600 font-medium mb-2">
+                         {extractNameFromObject(item.provider || item.seller) || 'Verified Provider/Seller'}
+                      </p>
                       
-                      <div className="flex gap-2">
-                        {item.type === 'service' ? (
-                          <button 
-                            onClick={handleBookNow}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                      <div className="flex items-center gap-4 mb-3 text-sm text-gray-600">
+                        <div className="flex items-center gap-1">
+                          <MapPin className="w-4 h-4" />
+                          {item.location}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Star className="w-4 h-4 text-yellow-400 fill-current" />
+                          {item.rating.toFixed(1)} ({item.reviews})
+                        </div>
+                      </div>
+                      
+                      <div className="flex flex-wrap gap-2 mb-4">
+                        {item.tags.map((tag, index) => (
+                          <span
+                            key={`${tag}-${index}`}
+                            className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full"
                           >
-                            Book Now
-                          </button>
-                        ) : (
-                          <>
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                      
+                      <div className="flex items-center justify-between">
+                        {item.type === 'product' && (
+                          <span className="text-lg font-bold text-gray-900">
+                            {item.price}
+                          </span>
+                        )}
+                        {item.type === 'service' && <div></div>}
+                        
+                        <div className="flex gap-2">
+                          {item.type === 'service' ? (
                             <button 
-                              onClick={handlePurchase}
-                              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors mr-2"
-                            >
-                              Purchase
-                            </button>
-                            <button 
-                              onClick={handleViewDetails}
+                              onClick={handleBookNow}
                               className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
                             >
-                              View Details
+                              Book Now
                             </button>
-                          </>
-                        )}
+                          ) : (
+                            <>
+                              <button 
+                                onClick={handlePurchase}
+                                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors mr-2"
+                              >
+                                Purchase
+                              </button>
+                              <button 
+                                onClick={handleViewDetails}
+                                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                              >
+                                View Details
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </>
       )}
@@ -812,9 +1321,6 @@ const ServicesProductsComponent = () => {
           <h2 className="text-3xl font-bold mb-4">
             Ready to Get Started?
           </h2>
-          <p className="text-xl text-blue-100 mb-8 max-w-2xl mx-auto">
-            Join thousands of satisfied customers who found exactly what they needed.
-          </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button 
               onClick={() => window.location.href = '/register'}
@@ -833,6 +1339,18 @@ const ServicesProductsComponent = () => {
           </div>
         </div>
       </div>
+
+      {/* Categories Management Notice */}
+      {!categoriesLoading && (serviceCategories.length > 0 || productCategories.length > 0) && (
+        <div className="bg-gray-50 py-8">
+          <div className="max-w-7xl mx-auto px-4 text-center">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm">
+              <RefreshCw size={14} />
+              <span>Categories are automatically updated when new {activeTab} are added</span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

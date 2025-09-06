@@ -46,7 +46,11 @@ export interface Product {
 export interface Category {
   id: number;
   name: string;
+  description?: string;
   count?: number;
+  isActive?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 // Internal component interface for formatted products
@@ -57,9 +61,10 @@ interface FormattedProduct {
   price: string;
   originalPrice?: string | null;
   rating: number;
-  reviews: number; // Changed to number for review count
+  reviews: number;
   images: string[];
   category: string;
+  categoryId: number | null;
   tags: string[];
   inStock: boolean;
   shipping: string;
@@ -67,7 +72,7 @@ interface FormattedProduct {
   createdAt: string;
   status: string;
   location: string;
-  provider: string; // Changed to string for display
+  provider: string;
 }
 
 const ProductsComponent = () => {
@@ -77,10 +82,11 @@ const ProductsComponent = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [priceRange, setPriceRange] = useState([0, 10000000]);
   const [sortBy, setSortBy] = useState('popular');
-  const [allProducts, setAllProducts] = useState<Product[]>([]); // Store all products
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
 
   const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com';
 
@@ -88,39 +94,57 @@ const ProductsComponent = () => {
     alert("Kindly login or register to view or purchase our products");
   };
 
-  // Fetch categories from backend
+  // Fetch categories from backend using the public categories endpoint
   const fetchCategories = async () => {
     try {
+      setCategoriesLoading(true);
       const response = await fetch(`${BASE_URL}/api/public/categories`);
       
       if (!response.ok) {
-        throw new Error('Failed to fetch categories');
+        throw new Error(`Failed to fetch categories: ${response.status}`);
       }
       
       const data = await response.json();
-      setCategories(data);
+      
+      // Ensure we have an array of categories
+      if (Array.isArray(data)) {
+        setCategories(data);
+      } else {
+        console.warn('Categories response is not an array:', data);
+        setCategories([]);
+      }
     } catch (err) {
       console.error('Error fetching categories:', err);
       setCategories([]);
+      // Don't show error for categories as it's not critical
+    } finally {
+      setCategoriesLoading(false);
     }
   };
 
-  // Fetch ALL products from backend (no filtering at API level)
+  // Fetch ALL products from backend (no category filtering on backend)
   const fetchAllProducts = async () => {
     try {
       setLoading(true);
       
-      // Always fetch all products without any filters
-      const response = await fetch(`${BASE_URL}/api/products`);
+      // Always fetch all products, no category filter in URL
+      const url = `${BASE_URL}/api/products`;
+      
+      const response = await fetch(url);
       
       if (!response.ok) {
-        throw new Error('Failed to fetch products');
+        throw new Error(`Failed to fetch products: ${response.status}`);
       }
       
       const data = await response.json();
-    
-      setAllProducts(data); // Store all products
-      setError(null);
+      
+      // Ensure we have an array of products
+      if (Array.isArray(data)) {
+        setAllProducts(data);
+        setError(null);
+      } else {
+        throw new Error('Products response is not an array');
+      }
     } catch (err) {
       console.error('Error fetching products:', err);
       if (err instanceof Error) {
@@ -128,6 +152,7 @@ const ProductsComponent = () => {
       } else {
         setError(String(err));
       }
+      setAllProducts([]);
     } finally {
       setLoading(false);
     }
@@ -148,25 +173,40 @@ const ProductsComponent = () => {
       );
     }
 
-    // Apply category filter
-    if (selectedCategory !== 'all') {
+    // Apply category filter (compare numbers with numbers)
+    if (selectedCategory !== 'all' && selectedCategory !== 'uncategorized') {
+      const categoryId = parseInt(selectedCategory);
+      if (!isNaN(categoryId)) {
+        filtered = filtered.filter(product => 
+          product.categoryId === categoryId
+        );
+      }
+    } else if (selectedCategory === 'uncategorized') {
       filtered = filtered.filter(product => 
-        product.categoryId?.toString() === selectedCategory
+        product.categoryId === null || product.categoryId === undefined
       );
     }
 
     // Apply price range filter
     filtered = filtered.filter(product => {
       const price = parseFloat(product.price);
-      return price >= priceRange[0] && price <= priceRange[1];
+      return !isNaN(price) && price >= priceRange[0] && price <= priceRange[1];
     });
 
     return filtered;
   };
 
+  // Get category name by ID
+  const getCategoryNameById = (categoryId: number | null) => {
+    if (!categoryId) return 'Uncategorized';
+    const category = categories.find(cat => cat.id === categoryId);
+    return category ? category.name : 'Uncategorized';
+  };
+
   // Get categories with correct counts based on filtered products
   const getCategoriesWithCounts = () => {
-    const filteredBySearchOnly = searchQuery.trim() 
+    // Filter products by search only (not by category) to get accurate counts
+    const searchFilteredProducts = searchQuery.trim() 
       ? allProducts.filter(product => {
           const query = searchQuery.toLowerCase();
           return product.name.toLowerCase().includes(query) ||
@@ -176,10 +216,10 @@ const ProductsComponent = () => {
         })
       : allProducts;
 
-    // Count products in each category (excluding category filter to show accurate counts)
+    // Count products in each category
     const categoryCounts = categories.map(cat => {
-      const count = filteredBySearchOnly.filter(product => 
-        product.categoryId?.toString() === cat.id.toString()
+      const count = searchFilteredProducts.filter(product => 
+        product.categoryId === cat.id
       ).length;
       return {
         id: cat.id.toString(),
@@ -188,21 +228,61 @@ const ProductsComponent = () => {
       };
     });
 
-    // Add "All Products" category with total count
-    return [
+    // Count uncategorized products
+    const uncategorizedCount = searchFilteredProducts.filter(product => 
+      !product.categoryId || product.categoryId === null
+    ).length;
+
+    // Build categories list
+    const allCategoriesWithCounts = [
       { 
         id: 'all', 
         name: 'All Products', 
-        count: filteredBySearchOnly.length 
-      },
-      ...categoryCounts
+        count: searchFilteredProducts.length 
+      }
     ];
+
+    // Add categories that have products or show all if not filtering by search
+    const categoriesToShow = searchQuery.trim() 
+      ? categoryCounts.filter(cat => cat.count > 0)
+      : categoryCounts;
+    
+    allCategoriesWithCounts.push(...categoriesToShow);
+
+    // Add uncategorized if there are uncategorized products
+    if (uncategorizedCount > 0) {
+      allCategoriesWithCounts.push({
+        id: 'uncategorized',
+        name: 'Uncategorized',
+        count: uncategorizedCount
+      });
+    }
+
+    return allCategoriesWithCounts;
   };
 
+  // Load initial data
   useEffect(() => {
-    fetchCategories();
-    fetchAllProducts(); // Fetch all products once when component mounts
+    const loadInitialData = async () => {
+      // Load categories and products in parallel
+      await Promise.all([
+        fetchCategories(),
+        fetchAllProducts()
+      ]);
+    };
+    loadInitialData();
   }, []);
+
+  // Reset category selection when categories change (new categories added)
+  useEffect(() => {
+    if (categories.length > 0 && selectedCategory !== 'all') {
+      // Check if selected category still exists
+      const categoryExists = categories.some(cat => cat.id.toString() === selectedCategory);
+      if (!categoryExists && selectedCategory !== 'uncategorized') {
+        setSelectedCategory('all');
+      }
+    }
+  }, [categories, selectedCategory]);
 
   const filteredProducts = getFilteredProducts();
 
@@ -257,7 +337,8 @@ const ProductsComponent = () => {
       rating: product.rating ? Number(product.rating) : 4.5,
       reviews: getReviewCount(product.reviews),
       images: Array.isArray(product.images) && product.images.length > 0 ? product.images : [fallbackImage],
-      category: product.categoryId?.toString() || 'uncategorized',
+      category: getCategoryNameById(product.categoryId),
+      categoryId: product.categoryId,
       tags: Array.isArray(product.tags) ? product.tags : ['new', 'popular'],
       inStock: product.inStock ?? (product.stock ? product.stock > 0 : true),
       shipping: '',
@@ -272,6 +353,7 @@ const ProductsComponent = () => {
   // Enhanced price formatting for KSH
   const formatPrice = (price: string | number) => {
     const amount = typeof price === 'string' ? parseFloat(price) : price;
+    if (isNaN(amount)) return 'KES 0';
     return new Intl.NumberFormat('en-KE', {
       style: 'currency',
       currency: 'KES',
@@ -281,6 +363,18 @@ const ProductsComponent = () => {
 
   const formattedProducts = sortedProducts.map(formatProduct);
   const allCategoriesWithCounts = getCategoriesWithCounts();
+
+  // Handle category selection
+  const handleCategoryChange = (categoryId: string) => {
+    setSelectedCategory(categoryId);
+    // Optional: Scroll to products section on mobile
+    if (window.innerWidth <= 1024) {
+      const productsSection = document.querySelector('.products-section');
+      if (productsSection) {
+        productsSection.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+  };
 
   if (loading) {
     return (
@@ -368,24 +462,35 @@ const ProductsComponent = () => {
             <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 sticky top-8">
               {/* Categories */}
               <div className="mb-8">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Categories</h3>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Categories</h3>
+                  {categoriesLoading && (
+                    <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                  )}
+                </div>
                 <div className="space-y-2">
-                  {allCategoriesWithCounts.map(category => (
-                    <button
-                      key={category.id}
-                      onClick={() => setSelectedCategory(category.id.toString())}
-                      className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
-                        selectedCategory === category.id.toString()
-                          ? 'bg-blue-50 text-blue-600 font-medium'
-                          : 'text-gray-600 hover:bg-gray-50'
-                      }`}
-                    >
-                      <div className="flex justify-between items-center">
-                        <span>{category.name}</span>
-                        <span className="text-sm text-gray-400">({category.count})</span>
-                      </div>
-                    </button>
-                  ))}
+                  {allCategoriesWithCounts.length > 0 ? (
+                    allCategoriesWithCounts.map(category => (
+                      <button
+                        key={category.id}
+                        onClick={() => handleCategoryChange(category.id.toString())}
+                        className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
+                          selectedCategory === category.id.toString()
+                            ? 'bg-blue-50 text-blue-600 font-medium'
+                            : 'text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        <div className="flex justify-between items-center">
+                          <span>{category.name}</span>
+                          <span className="text-sm text-gray-400">({category.count})</span>
+                        </div>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="text-gray-500 text-sm py-2">
+                      {categoriesLoading ? 'Loading categories...' : 'No categories available'}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -406,7 +511,7 @@ const ProductsComponent = () => {
                       type="number"
                       placeholder="Max"
                       value={priceRange[1]}
-                      onChange={(e) => setPriceRange([priceRange[0], parseInt(e.target.value) || 10000])}
+                      onChange={(e) => setPriceRange([priceRange[0], parseInt(e.target.value) || 10000000])}
                       className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
                     />
                   </div>
@@ -435,22 +540,45 @@ const ProductsComponent = () => {
           </div>
 
           {/* Products Grid/List */}
-          <div className="flex-1">
+          <div className="flex-1 products-section">
             <div className="flex items-center justify-between mb-6">
               <p className="text-gray-600">
                 Showing {formattedProducts.length} of {allProducts.length} products
+                {selectedCategory !== 'all' && (
+                  <span className="ml-2 text-blue-600 font-medium">
+                    in {allCategoriesWithCounts.find(cat => cat.id === selectedCategory)?.name || 'Selected Category'}
+                  </span>
+                )}
               </p>
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="text-sm text-gray-500 hover:text-gray-700 underline"
+                >
+                  Clear search
+                </button>
+              )}
             </div>
 
             {formattedProducts.length === 0 ? (
               <div className="bg-white rounded-xl p-12 text-center shadow-sm border border-gray-100">
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">No products found</h3>
-                <p className="text-gray-600 mb-6">Try adjusting your search or filter criteria</p>
+                <div className="mb-4">
+                  <Search className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">No products found</h3>
+                  <p className="text-gray-600 mb-6">
+                    {selectedCategory !== 'all' 
+                      ? `No products found in the selected category${searchQuery ? ' matching your search' : ''}.`
+                      : searchQuery 
+                        ? `No products match "${searchQuery}". Try different keywords.`
+                        : 'No products available at the moment.'
+                    }
+                  </p>
+                </div>
                 <button
                   onClick={() => {
                     setSearchQuery('');
                     setSelectedCategory('all');
-                    setPriceRange([0, 10000]);
+                    setPriceRange([0, 10000000]);
                   }}
                   className="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
                 >
@@ -486,6 +614,9 @@ const ProductsComponent = () => {
                             Sale
                           </span>
                         )}
+                        <span className="bg-green-600 text-white px-2 py-1 rounded-full text-xs font-medium">
+                          {product.category}
+                        </span>
                       </div>
                       <div className="absolute top-4 right-4 flex gap-2">
                         <button 
@@ -591,6 +722,9 @@ const ProductsComponent = () => {
                               Sale
                             </span>
                           )}
+                          <span className="bg-green-600 text-white px-2 py-1 rounded-full text-xs font-medium">
+                            {product.category}
+                          </span>
                         </div>
                       </div>
                       
