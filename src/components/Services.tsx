@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Search, MapPin, Star, ShoppingBag, Wrench, ChevronRight, Users, Package, TrendingUp, ArrowRight, Filter, RefreshCw, Loader, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Search, MapPin, Star, ShoppingBag, Wrench, ChevronRight, Users, Package, TrendingUp, ArrowRight, Filter, RefreshCw, Loader, AlertCircle, ExternalLink } from 'lucide-react';
+import { toast } from 'react-toastify';
+import { useAuth } from '../context/AuthContext'; 
 
 interface PopularItem {
   name: string;
@@ -37,26 +39,236 @@ type StatsData = {
   totalCategories: number;
 };
 
-// Utility function 
+interface Props {
+  item: any;
+  user: any;
+  processingAction: string | null;
+  setProcessingAction: (action: string | null) => void;
+}
+
+type PurchaseData = {
+  quantity: number;
+  paymentMethod: string;
+  shippingAddress: string;
+};
+
+interface PurchaseModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  product: any;
+  onPurchase: (productId: number, data: PurchaseData) => Promise<void>;
+}
+
+
+// Enhanced Purchase Modal Component
+const PurchaseModal = ({ isOpen, onClose, product, onPurchase }: {
+  isOpen: boolean;
+  onClose: () => void;
+  product: any;
+  onPurchase: (productId: number, data: any) => Promise<void>;
+}) => {
+  const [quantity, setQuantity] = useState(1);
+  const [paymentMethod, setPaymentMethod] = useState('mpesa');
+  const [shippingAddress, setShippingAddress] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  if (!isOpen || !product) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!shippingAddress.trim()) {
+      toast.error('Please provide a shipping address');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await onPurchase(product.id, {
+        quantity,
+        paymentMethod,
+        shippingAddress: shippingAddress.trim()
+      });
+      
+      toast.success(`Successfully purchased ${product.title}!`);
+      onClose();
+      setQuantity(1);
+      setShippingAddress('');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Purchase failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const totalPrice = (parseFloat(product.price?.replace(/[^\d.]/g, '') || '0') * quantity).toFixed(2);
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl font-semibold text-gray-900">Purchase Product</h3>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 text-2xl font-light"
+              disabled={loading}
+            >
+              ×
+            </button>
+          </div>
+        </div>
+
+        {/* Product Info */}
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex items-start space-x-4">
+            {product.image && (
+              <img
+                src={product.image}
+                alt={product.title}
+                className="w-20 h-20 object-cover rounded-lg"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = '/api/placeholder/80/80';
+                }}
+              />
+            )}
+            <div className="flex-1">
+              <h4 className="font-semibold text-gray-900">{product.title}</h4>
+              <p className="text-sm text-gray-600 mt-1">{product.seller}</p>
+              <p className="text-lg font-bold text-green-600 mt-2">{product.price}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Purchase Form */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Quantity */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Quantity
+            </label>
+            <div className="flex items-center space-x-3">
+              <button
+                type="button"
+                onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                className="w-10 h-10 rounded-lg border border-gray-300 flex items-center justify-center hover:bg-gray-50 transition-colors"
+                disabled={loading}
+              >
+                -
+              </button>
+              <input
+                type="number"
+                min="1"
+                value={quantity}
+                onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                className="w-20 text-center border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={loading}
+              />
+              <button
+                type="button"
+                onClick={() => setQuantity(quantity + 1)}
+                className="w-10 h-10 rounded-lg border border-gray-300 flex items-center justify-center hover:bg-gray-50 transition-colors"
+                disabled={loading}
+              >
+                +
+              </button>
+            </div>
+          </div>
+
+          {/* Payment Method */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-3">
+              Payment Method
+            </label>
+            <div className="space-y-2">
+              {['mpesa', 'card', 'bank_transfer'].map((method) => (
+                <label key={method} className="flex items-center">
+                  <input
+                    type="radio"
+                    value={method}
+                    checked={paymentMethod === method}
+                    onChange={(e) => setPaymentMethod(e.target.value)}
+                    className="mr-3 text-blue-600 focus:ring-blue-500"
+                    disabled={loading}
+                  />
+                  <span className="text-sm text-gray-700 capitalize">
+                    {method.replace('_', ' ')}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Shipping Address */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Shipping Address *
+            </label>
+            <textarea
+              value={shippingAddress}
+              onChange={(e) => setShippingAddress(e.target.value)}
+              rows={3}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              placeholder="Enter your complete shipping address..."
+              required
+              disabled={loading}
+            />
+          </div>
+
+          {/* Total */}
+          <div className="bg-gray-50 rounded-lg p-4">
+            <div className="flex justify-between items-center text-lg font-semibold">
+              <span>Total:</span>
+              <span className="text-green-600">KSh {totalPrice}</span>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex space-x-3 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+              disabled={loading}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading || !shippingAddress.trim()}
+              className="flex-1 px-4 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+            >
+              {loading ? (
+                <>
+                  <Loader className="w-4 h-4 animate-spin mr-2" />
+                  Processing...
+                </>
+              ) : (
+                'Complete Purchase'
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// Utility functions
 const extractNameFromObject = (obj: any): string => {
   if (!obj) return '';
-  
   if (typeof obj === 'string') return obj;
-  
   if (typeof obj === 'object') {
     if (obj.firstName) {
       return `${obj.firstName} ${obj.lastName || ''}`.trim();
     }
     return obj.name || obj.title || obj.company || '';
   }
-  
   return String(obj);
 };
 
 const getCategoryIcon = (category: any): string => {
-  if (category === undefined || category === null) {
-    return '🛍️';
-  }
+  if (category === undefined || category === null) return '🛍️';
   
   if (typeof category === 'object') {
     category = category.name || category.title || 'default';
@@ -84,22 +296,15 @@ const getCategoryIcon = (category: any): string => {
     'repair': '🔧', 'plumbing': '🔧',
     'design': '🎨', 'music': '🎵',
     'event': '🎉', 'business': '💼',
-    'technology': '💾', 'garden': '🌻',
-    'childcare': '👶', 'eldercare': '👵',
-    'legal': '⚖️', 'financial': '💰',
     'default': '🛍️'
   };
 
-  if (icons[categoryString]) {
-    return icons[categoryString];
-  }
-
+  if (icons[categoryString]) return icons[categoryString];
+  
   for (const key in icons) {
-    if (categoryString.includes(key)) {
-      return icons[key];
-    }
+    if (categoryString.includes(key)) return icons[key];
   }
-
+  
   return icons['default'];
 };
 
@@ -107,12 +312,12 @@ const formatPrice = (price: number | string | undefined | null): string => {
   if (price === undefined || price === null) return 'KSh 0.00';
   
   const numericPrice = typeof price === 'string' ? parseFloat(price) : price;
-  
   if (isNaN(numericPrice)) return 'KSh 0.00';
   
   return `KSh ${numericPrice.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
 };
 
+// Enhanced Stats Section
 const StatsSection = () => {
   const [stats, setStats] = useState<StatsData>({
     totalServices: 0,
@@ -196,8 +401,8 @@ const StatsSection = () => {
         
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8">
           {statsItems.map((item, index) => (
-            <div key={index} className="text-center p-6 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
-              <div className={`inline-flex items-center justify-center w-12 h-12 lg:w-16 lg:h-16 rounded-full bg-gray-100 mb-4 ${item.color}`}>
+            <div key={index} className="text-center p-6 rounded-xl bg-gradient-to-br from-gray-50 to-gray-100 hover:from-gray-100 hover:to-gray-200 transition-all duration-300 transform hover:-translate-y-1 hover:shadow-lg">
+              <div className={`inline-flex items-center justify-center w-12 h-12 lg:w-16 lg:h-16 rounded-full bg-white mb-4 ${item.color} shadow-sm`}>
                 <item.icon size={24} className="lg:w-8 lg:h-8" />
               </div>
               <div className="text-2xl lg:text-3xl font-bold text-gray-800 mb-2">
@@ -214,7 +419,22 @@ const StatsSection = () => {
   );
 };
 
+const getUserDashboard = (user: any) => {
+  if (!user?.role) return '/client/dashboard';
+  
+  switch (user.role.toLowerCase()) {
+    case 'admin': return '/admin/dashboard';
+    case 'service_provider':
+    case 'provider': return '/provider/dashboard';
+    case 'product_seller': 
+    case 'seller': return '/seller/dashboard';
+    case 'client':
+    case 'customer': return '/client/dashboard';
+    default: return '/client/dashboard';
+  }
+};
 const ServicesProductsComponent = () => {
+  const { isAuthenticated, user } = useAuth();
   const [activeTab, setActiveTab] = useState<'services' | 'products'>('services');
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
@@ -223,7 +443,10 @@ const ServicesProductsComponent = () => {
   const [featuredItems, setFeaturedItems] = useState<FeaturedItem[]>([]);
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
-  
+  const [processingAction, setProcessingAction] = useState<string | null>(null);
+  const [showPurchaseModal, setShowPurchaseModal] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<any>(null);
+
   // Category filtering states
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [serviceCategories, setServiceCategories] = useState<Category[]>([]);
@@ -231,8 +454,229 @@ const ServicesProductsComponent = () => {
   const [categoriesLoading, setCategoriesLoading] = useState(false);
   const [categoriesError, setCategoriesError] = useState<string | null>(null);
 
-  // Fetch categories for services and products
-  const fetchCategories = React.useCallback(async () => {
+  // Enhanced authentication handlers
+  const showLoginPrompt = (action: string) => {
+    toast.info(
+      <div className="flex flex-col space-y-2">
+        <span>Please login to {action}</span>
+        <button
+          onClick={() => window.location.href = '/login'}
+          className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition-colors"
+        >
+          Login Now
+        </button>
+      </div>,
+      {
+        position: "top-right",
+        autoClose: 5000,
+        closeOnClick: false,
+      }
+    );
+  };
+
+  const showSuccessMessage = (message: string) => {
+    toast.success(message, {
+      position: "top-right",
+      autoClose: 3000,
+    });
+  };
+
+  // Enhanced product purchase handler
+  const handlePurchaseProduct = async (
+  productId: number,
+  purchaseData: PurchaseData
+): Promise<void> => {
+  if (!isAuthenticated) {
+    showLoginPrompt('purchase products');
+    return;
+  }
+
+  if (user && user.role && user.role.toLowerCase() === 'client') {
+    const productData = encodeURIComponent(
+      JSON.stringify({ productId, ...purchaseData })
+    );
+
+    showSuccessMessage('Redirecting to complete your purchase...');
+
+    setTimeout(() => {
+      window.location.href = `/marketplace?product=${productId}&action=purchase&data=${productData}`;
+    }, 1500);
+  } else {
+    toast.info(
+      <div className="flex flex-col space-y-2">
+        <span>You need a client account to purchase products</span>
+        <button
+          onClick={() =>
+            (window.location.href = '/register?role=client')
+          }
+          className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition-colors"
+        >
+          Register as Client
+        </button>
+      </div>,
+      {
+        position: 'top-right',
+        autoClose: 5000,
+        closeOnClick: false,
+      }
+    );
+  }
+};
+const handleBookNow = async (item: any) => {
+  if (!isAuthenticated) {
+    showLoginPrompt("book services");
+    setTimeout(() => {
+      window.location.href = "/register";
+    }, 1500);
+    return;
+  }
+
+  // ❌ Not a service provider → prompt to register
+  if (
+    !user ||
+    (user.role?.toLowerCase() !== "service_provider" &&
+     user.role?.toLowerCase() !== "provider")
+  ) {
+    toast.info(
+      <div className="flex flex-col space-y-2">
+        <span>You need a Service Provider account to express interest in this service</span>
+        <button
+          onClick={() => (window.location.href = "/register?role=service_provider")}
+          className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition-colors"
+        >
+          Register as Service Provider
+        </button>
+      </div>,
+      {
+        position: "top-right",
+        autoClose: 5000,
+        closeOnClick: false,
+      }
+    );
+    return;
+  }
+
+  // ✅ Service provider → simulate "express interest" then redirect
+  setProcessingAction(`booking-${item.id}`);
+
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 1000)); // simulate API call
+
+    showSuccessMessage(
+      `Redirecting to Express Interest on "${item.title || item.name}"…`
+    );
+
+    // small delay to show success toast before redirect
+    setTimeout(() => {
+      window.location.href = "/provider/dashboard";
+    }, 1500);
+
+    console.log("Expressing interest on service:", item);
+  } catch (error) {
+    console.error("Booking failed:", error);
+    toast.error("Action failed. Please try again.");
+  } finally {
+    setProcessingAction(null);
+  }
+};
+
+const handleViewDetails = async (item: any) => {
+    if (!isAuthenticated) {
+      showLoginPrompt('view details');
+      setTimeout(() => {
+        window.location.href = '/register';
+      }, 1500);
+      return;
+    }
+    
+    setProcessingAction(`details-${item.id}`);
+    
+    try {
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      // For products, redirect based on user role
+      if (item.type === 'product') {
+        // Check if user has client role
+        if (user && user.role && user.role.toLowerCase() === 'client') {
+          // Redirect client users directly to marketplace with specific product
+          window.location.href = `/marketplace?product=${item.id}`;
+        } else {
+          // For non-client users, show message to register as client
+          toast.info(
+            <div className="flex flex-col space-y-2">
+              <span>You need a client account to view product details</span>
+              <button
+                onClick={() => window.location.href = '/register?role=client'}
+                className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition-colors"
+              >
+                Register as Client
+              </button>
+            </div>,
+            {
+              position: "top-right",
+              autoClose: 5000,
+              closeOnClick: false,
+            }
+          );
+        }
+      } else {
+        // For services, use the regular dashboard redirect
+        const dashboardUrl = getUserDashboard(user);
+        window.location.href = `${dashboardUrl}?tab=services&service=${item.id}`;
+      }
+    } catch (error) {
+      console.error('Failed to load details:', error);
+      toast.error('Failed to load details. Please try again.');
+    } finally {
+      setProcessingAction(null);
+    }
+  };
+
+const handlePurchase = (item: any) => {
+    if (!isAuthenticated) {
+      showLoginPrompt('purchase products');
+      setTimeout(() => {
+        window.location.href = '/register';
+      }, 1500);
+      return;
+    }
+    
+    // Check if user has client role
+    if (user && user.role && user.role.toLowerCase() === 'client') {
+      // Redirect client users directly to marketplace with specific product for purchase
+      window.location.href = `/marketplace?product=${item.id}&action=purchase`;
+    } else {
+      // For non-client users, show message to register as client
+      toast.info(
+        <div className="flex flex-col space-y-2">
+          <span>You need a client account to purchase products</span>
+          <button
+            onClick={() => window.location.href = '/register?role=client'}
+            className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition-colors"
+          >
+            Register as Client
+          </button>
+        </div>,
+        {
+          position: "top-right",
+          autoClose: 5000,
+          closeOnClick: false,
+        }
+      );
+    }
+  };
+
+    const handleRegisterRedirect = () => {
+    if (!isAuthenticated) {
+      window.location.href = '/register';
+    } else {
+      // If already logged in, redirect to profile or dashboard
+      window.location.href = '/dashboard';
+    }
+  };
+
+  // Fetch categories function
+  const fetchCategories = useCallback(async () => {
     setCategoriesLoading(true);
     setCategoriesError(null);
 
@@ -255,7 +699,6 @@ const ServicesProductsComponent = () => {
         
         setServiceCategories(formattedServiceCategories);
       } else {
-        // Fallback: Use predefined service categories
         const fallbackServiceCategories = [
           { id: 'cleaning', name: 'Cleaning', count: 0 },
           { id: 'tutoring', name: 'Tutoring', count: 0 },
@@ -280,14 +723,12 @@ const ServicesProductsComponent = () => {
         
         setProductCategories(formattedProductCategories);
       } else {
-        // Fallback: Try to get categories from products endpoint
         try {
           const productsRes = await fetch('https://mkt-backend-sz2s.onrender.com/api/products');
           if (productsRes.ok) {
             const productsData = await productsRes.json();
             const productsList = Array.isArray(productsData) ? productsData : productsData?.data || [];
             
-            // Extract unique categories from products
             const uniqueCategories = new Map();
             productsList.forEach((product: any) => {
               const categoryName = String(product.category || 'General');
@@ -332,25 +773,12 @@ const ServicesProductsComponent = () => {
     setSelectedCategory('all');
   }, [activeTab]);
 
-  // Load recent searches from memory
-  useEffect(() => {
-    // In a real app, you'd use localStorage here
-  }, []);
-
-  const saveToRecentSearches = (query: string) => {
-    if (!query.trim()) return;
-    
-    const updated = [query, ...recentSearches.filter(s => s !== query)].slice(0, 5);
-    setRecentSearches(updated);
-  };
-
-  // Fetch initial data on component mount and tab change
+  // Enhanced data fetching
   useEffect(() => {
     const fetchData = async () => {
       try {
         setIsSearching(true);
         
-        // Build URL with category filtering
         const currentCategories = activeTab === 'services' ? serviceCategories : productCategories;
         const selectedCategoryName = selectedCategory === 'all' 
           ? null 
@@ -373,7 +801,6 @@ const ServicesProductsComponent = () => {
         const data = await response.json();
         let items = Array.isArray(data) ? data : data?.data || [];
 
-        // Apply client-side filtering if needed
         if (selectedCategoryName) {
           items = items.filter((item: any) => {
             const itemCategory = typeof item.category === 'object' 
@@ -384,9 +811,8 @@ const ServicesProductsComponent = () => {
           });
         }
 
-        // Create popular items from the first 6 items with better error handling
+        // Create popular items
         const popular = items.slice(0, 6).map((item: any) => {
-          // Safely extract category - handle both string and object categories
           let categoryValue = 'default';
           if (item.category) {
             if (typeof item.category === 'object') {
@@ -405,9 +831,8 @@ const ServicesProductsComponent = () => {
           };
         });
 
-        // Create featured items (first 4 items) with better error handling
+        // Create featured items
         const featured = items.slice(0, 4).map((item: any, index: number) => {
-          // Safely extract category
           let categoryValue = 'default';
           if (item.category) {
             if (typeof item.category === 'object') {
@@ -417,7 +842,6 @@ const ServicesProductsComponent = () => {
             }
           }
           
-          // Safely extract provider/seller - handle both string and object
           let providerValue = 'Verified Provider';
           let sellerValue = 'Verified Seller';
           
@@ -443,7 +867,7 @@ const ServicesProductsComponent = () => {
           
           return {
             id: item.id || index,
-            type: activeTab,
+            type: activeTab === 'services' ? 'service' : 'product',
             title: item.name || item.title || 'Unknown Item',
             provider: activeTab === 'services' ? providerValue : undefined,
             seller: activeTab === 'products' ? sellerValue : undefined,
@@ -461,7 +885,6 @@ const ServicesProductsComponent = () => {
         setFeaturedItems(featured);
       } catch (error) {
         console.error('Error fetching data:', error);
-        // Set default data to prevent complete breakdown
         setPopularItems([]);
         setFeaturedItems([]);
       } finally {
@@ -472,14 +895,13 @@ const ServicesProductsComponent = () => {
     fetchData();
   }, [activeTab, selectedCategory, serviceCategories, productCategories]);
 
+  // Enhanced search functionality
   const handleSearch = async () => {
     if (!searchQuery.trim()) {
-      // If no search query, show all items (filtered by category if selected)
       setIsSearching(true);
       setShowResults(true);
       
       try {
-        // Build URL with category filtering
         const currentCategories = activeTab === 'services' ? serviceCategories : productCategories;
         const selectedCategoryName = selectedCategory === 'all' 
           ? null 
@@ -502,7 +924,6 @@ const ServicesProductsComponent = () => {
         const data = await response.json();
         let apiResults = Array.isArray(data) ? data : data?.data || [];
 
-        // Apply client-side filtering if needed
         if (selectedCategoryName) {
           apiResults = apiResults.filter((item: any) => {
             const itemCategory = typeof item.category === 'object' 
@@ -513,9 +934,7 @@ const ServicesProductsComponent = () => {
           });
         }
 
-        // Format results with provider/seller extraction
         const formattedResults = apiResults.slice(0, 10).map((item: any) => {
-          // Handle provider/seller objects
           let providerValue = 'Verified Provider';
           let sellerValue = 'Verified Seller';
           
@@ -551,7 +970,7 @@ const ServicesProductsComponent = () => {
             rating: item.rating || 4.0,
             reviews: item.reviews || 0,
             tags: item.tags || [item.category || 'Popular'],
-            type: activeTab
+            type: activeTab === 'services' ? 'service' : 'product'
           };
         });
 
@@ -567,7 +986,6 @@ const ServicesProductsComponent = () => {
 
     setIsSearching(true);
     setShowResults(true);
-    saveToRecentSearches(searchQuery);
 
     try {
       let endpoint = '';
@@ -605,7 +1023,7 @@ const ServicesProductsComponent = () => {
           rating: item.rating || 4.0,
           reviews: item.reviews || 0,
           tags: item.tags || [item.category || 'Popular'],
-          type: activeTab
+          type: activeTab === 'services' ? 'service' : 'product'
         })));
       }
     } catch (error) {
@@ -622,25 +1040,7 @@ const ServicesProductsComponent = () => {
     }
   };
 
-  const handleRegisterRedirect = () => {
-    window.location.href = '/register';
-  };
-
-  const handleBookNow = () => {
-    alert('Please register or login to book our services');
-    window.location.href = '/register';
-  };
-
-  const handlePurchase = () => {
-    alert('Please register or login to purchase our products');
-    window.location.href = '/register';
-  };
-
-  const handleViewDetails = () => {
-    alert('Please register or login to view product details');
-    window.location.href = '/register';
-  };
-
+  // Enhanced image rendering
   const renderImage = (item: { image?: string; title: string; type: 'service' | 'product' }) => {
     if (item.image) {
       return (
@@ -655,12 +1055,13 @@ const ServicesProductsComponent = () => {
       );
     }
     return (
-      <div className="w-full h-48 flex items-center justify-center bg-gray-100 text-5xl">
+      <div className="w-full h-48 flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 text-5xl">
         {getCategoryIcon(item.type === 'service' ? 'service' : 'product')}
       </div>
     );
   };
 
+  // Popular searches
   const popularSearches = [
     { term: 'Cleaning', type: 'services' as const },
     { term: 'Plumbing', type: 'services' as const },
@@ -676,36 +1077,59 @@ const ServicesProductsComponent = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-white">
+      {/* Welcome message for authenticated users */}
+      {isAuthenticated && user && (
+        <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-l-4 border-green-500 text-green-700 p-4">
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <p className="font-medium">
+                Welcome back, {user.full_name || user.email}! Ready to explore our services and products?
+              </p>
+            </div>
+
+          </div>
+        </div>
+      )}
+
       {/* Enhanced Hero Section */}
       <div className="bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 text-white relative overflow-hidden">
-        {/* Background Pattern */}
+        {/* Animated background pattern */}
         <div className="absolute inset-0 opacity-10">
-          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white to-transparent transform -skew-y-6"></div>
+          <div className="absolute top-0 left-0 w-full h-full">
+            <div className="absolute animate-pulse bg-gradient-to-r from-transparent via-white to-transparent transform -skew-y-6 h-full w-1/3"></div>
+            <div className="absolute animate-pulse delay-700 bg-gradient-to-r from-transparent via-white to-transparent transform -skew-y-6 h-full w-1/3 left-1/3"></div>
+            <div className="absolute animate-pulse delay-1000 bg-gradient-to-r from-transparent via-white to-transparent transform -skew-y-6 h-full w-1/3 left-2/3"></div>
+          </div>
         </div>
         
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 lg:py-24 relative z-10">
           <div className="text-center">
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 leading-tight">
               Find Services & Products
-              <span className="block text-yellow-300">In One Place</span>
+              <span className="block text-yellow-300 animate-pulse">In One Place</span>
             </h1>
             <p className="text-lg md:text-xl lg:text-2xl mb-8 text-blue-100 max-w-3xl mx-auto">
               Discover trusted local service providers and unique products from verified sellers around you.
             </p>
             
-            {/* Tab Navigation */}
+            {/* Enhanced Tab Navigation */}
             <div className="flex justify-center mb-8">
-              <div className="bg-white/10 backdrop-blur-sm p-1 rounded-lg inline-flex border border-white/20">
+              <div className="bg-white/10 backdrop-blur-sm p-1 rounded-xl inline-flex border border-white/20 shadow-lg">
                 <button
                   onClick={() => {
                     setActiveTab('services');
                     setShowResults(false);
                     setSearchQuery('');
                   }}
-                  className={`px-6 py-3 rounded-md font-medium transition-all duration-200 flex items-center gap-2 ${
+                  className={`px-6 py-3 rounded-lg font-medium transition-all duration-300 flex items-center gap-2 ${
                     activeTab === 'services'
-                      ? 'bg-white text-blue-600 shadow-lg'
-                      : 'text-white hover:text-yellow-300'
+                      ? 'bg-white text-blue-600 shadow-lg transform scale-105'
+                      : 'text-white hover:text-yellow-300 hover:bg-white/5'
                   }`}
                 >
                   <Wrench className="w-4 h-4" />
@@ -717,10 +1141,10 @@ const ServicesProductsComponent = () => {
                     setShowResults(false);
                     setSearchQuery('');
                   }}
-                  className={`px-6 py-3 rounded-md font-medium transition-all duration-200 flex items-center gap-2 ${
+                  className={`px-6 py-3 rounded-lg font-medium transition-all duration-300 flex items-center gap-2 ${
                     activeTab === 'products'
-                      ? 'bg-white text-blue-600 shadow-lg'
-                      : 'text-white hover:text-yellow-300'
+                      ? 'bg-white text-blue-600 shadow-lg transform scale-105'
+                      : 'text-white hover:text-yellow-300 hover:bg-white/5'
                   }`}
                 >
                   <ShoppingBag className="w-4 h-4" />
@@ -729,7 +1153,7 @@ const ServicesProductsComponent = () => {
               </div>
             </div>
 
-            {/* Category Filter Section */}
+            {/* Enhanced Category Filter Section */}
             <div className="mb-8">
               <div className="flex items-center justify-center mb-4">
                 <div className="flex items-center gap-2">
@@ -755,14 +1179,13 @@ const ServicesProductsComponent = () => {
                 </div>
               )}
 
-              {/* Category Pills */}
+              {/* Enhanced Category Pills */}
               <div className="flex flex-wrap gap-2 justify-center max-w-4xl mx-auto">
-                {/* All Categories Button */}
                 <button
                   onClick={() => setSelectedCategory('all')}
-                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
                     selectedCategory === 'all'
-                      ? 'bg-white text-blue-600 shadow-md scale-105'
+                      ? 'bg-white text-blue-600 shadow-lg scale-105'
                       : 'bg-white/10 text-blue-100 hover:bg-white/20 hover:scale-105 border border-white/20'
                   }`}
                 >
@@ -772,15 +1195,14 @@ const ServicesProductsComponent = () => {
                   )}
                 </button>
                 
-                {/* Category Buttons */}
                 {currentCategories.length > 0 ? (
                   currentCategories.map((category) => (
                     <button
                       key={category.id}
                       onClick={() => setSelectedCategory(String(category.id))}
-                      className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+                      className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
                         selectedCategory === String(category.id)
-                          ? 'bg-white text-blue-600 shadow-md scale-105'
+                          ? 'bg-white text-blue-600 shadow-lg scale-105'
                           : 'bg-white/10 text-blue-100 hover:bg-white/20 hover:scale-105 border border-white/20'
                       }`}
                     >
@@ -798,7 +1220,6 @@ const ServicesProductsComponent = () => {
                 )}
               </div>
 
-              {/* Category Loading State */}
               {categoriesLoading && currentCategories.length === 0 && (
                 <div className="flex justify-center items-center py-6">
                   <div className="text-center">
@@ -810,7 +1231,7 @@ const ServicesProductsComponent = () => {
             </div>
 
             {/* Enhanced Search Bar */}
-            <div className="bg-white rounded-xl p-3 lg:p-4 flex flex-col lg:flex-row items-stretch shadow-2xl max-w-3xl mx-auto mb-8">
+            <div className="bg-white rounded-2xl p-3 lg:p-4 flex flex-col lg:flex-row items-stretch shadow-2xl max-w-4xl mx-auto mb-8">
               <div className="flex-grow relative mb-3 lg:mb-0">
                 <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
@@ -819,21 +1240,18 @@ const ServicesProductsComponent = () => {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  className="w-full pl-12 pr-4 py-3 lg:py-4 text-gray-800 text-lg focus:outline-none rounded-lg lg:rounded-r-none border-0 placeholder-gray-500"
+                  className="w-full pl-12 pr-4 py-3 lg:py-4 text-gray-800 text-lg focus:outline-none rounded-xl lg:rounded-r-none border-0 placeholder-gray-500 focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               
               <button 
-                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 lg:px-8 py-3 lg:py-4 rounded-lg lg:rounded-l-none flex items-center justify-center transition-all duration-300 text-lg font-semibold shadow-lg hover:shadow-xl"
+                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 lg:px-8 py-3 lg:py-4 rounded-xl lg:rounded-l-none flex items-center justify-center transition-all duration-300 text-lg font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
                 onClick={handleSearch}
                 disabled={isSearching}
               >
                 {isSearching ? (
                   <span className="flex items-center">
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
+                    <Loader className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" />
                     Searching...
                   </span>
                 ) : (
@@ -845,9 +1263,8 @@ const ServicesProductsComponent = () => {
               </button>
             </div>
 
-            {/* Popular & Recent Searches */}
+            {/* Enhanced Popular & Recent Searches */}
             <div className="flex flex-col lg:flex-row items-center justify-center gap-6 mt-8 text-sm">
-              {/* Popular Searches */}
               <div className="flex flex-wrap items-center justify-center gap-3">
                 <span className="text-blue-200 font-medium">Popular:</span>
                 {popularSearches.map((item, index) => (
@@ -857,14 +1274,13 @@ const ServicesProductsComponent = () => {
                       setSearchQuery(item.term);
                       setActiveTab(item.type);
                     }} 
-                    className="text-white hover:text-yellow-300 transition-colors px-3 py-1 rounded-full border border-white/30 hover:border-yellow-300/50"
+                    className="text-white hover:text-yellow-300 transition-all px-3 py-1 rounded-full border border-white/30 hover:border-yellow-300/50 hover:bg-white/10 transform hover:scale-105"
                   >
                     {item.term}
                   </button>
                 ))}
               </div>
               
-              {/* Recent Searches */}
               {recentSearches.length > 0 && (
                 <div className="flex flex-wrap items-center justify-center gap-3">
                   <span className="text-blue-200 font-medium">Recent:</span>
@@ -872,7 +1288,7 @@ const ServicesProductsComponent = () => {
                     <button 
                       key={index}
                       onClick={() => setSearchQuery(term)} 
-                      className="text-white hover:text-yellow-300 transition-colors px-3 py-1 rounded-full border border-white/30 hover:border-yellow-300/50"
+                      className="text-white hover:text-yellow-300 transition-all px-3 py-1 rounded-full border border-white/30 hover:border-yellow-300/50 hover:bg-white/10 transform hover:scale-105"
                     >
                       {term}
                     </button>
@@ -884,7 +1300,7 @@ const ServicesProductsComponent = () => {
             {/* Selected Category Display */}
             {selectedCategory !== 'all' && (
               <div className="mt-6 text-center">
-                <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-sm text-white rounded-lg border border-white/20">
+                <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-sm text-white rounded-lg border border-white/20 shadow-lg">
                   <span className="text-sm">Currently browsing:</span>
                   <span className="font-semibold text-yellow-300">
                     {getCategoryIcon(selectedCategoryName)} {selectedCategoryName}
@@ -1015,27 +1431,53 @@ const ServicesProductsComponent = () => {
                             {item.rating} ({item.reviews} reviews)
                           </div>
                         </div>
-                        <div className="mt-4 flex gap-2">
+                         <div className="mt-4 flex gap-2">
                           {item.type === 'service' ? (
+                            // For services: Only show Book Now button
                             <button 
-                              onClick={handleBookNow}
-                              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                              onClick={() => handleBookNow(item)}
+                              disabled={processingAction === `booking-${item.id}`}
+                              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
                             >
-                              Book Now
+                              {processingAction === `booking-${item.id}` ? (
+                                <>
+                                  <Loader className="w-4 h-4 animate-spin mr-2" />
+                                  Booking...
+                                </>
+                              ) : (
+                                'Book Now'
+                              )}
                             </button>
                           ) : (
+                            // For products: Show Purchase and View Details buttons (Add to Cart removed)
                             <>
                               <button 
-                                onClick={handlePurchase}
-                                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                                onClick={() => handlePurchase(item)}
+                                disabled={processingAction === `purchase-${item.id}`}
+                                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
                               >
-                                Purchase
+                                {processingAction === `purchase-${item.id}` ? (
+                                  <>
+                                    <Loader className="w-4 h-4 animate-spin mr-2" />
+                                    Processing...
+                                  </>
+                                ) : (
+                                  'Purchase'
+                                )}
                               </button>
                               <button 
-                                onClick={handleViewDetails}
-                                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                                onClick={() => handleViewDetails(item)}
+                                disabled={processingAction === `details-${item.id}`}
+                                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
                               >
-                                View Details
+                                {processingAction === `details-${item.id}` ? (
+                                  <>
+                                    <Loader className="w-4 h-4 animate-spin mr-2" />
+                                    Loading...
+                                  </>
+                                ) : (
+                                  'View Details'
+                                )}
                               </button>
                             </>
                           )}
@@ -1238,7 +1680,7 @@ const ServicesProductsComponent = () => {
                         ))}
                       </div>
                       
-                      <div className="flex items-center justify-between">
+                     <div className="flex items-center justify-between">
                         {item.type === 'product' && (
                           <span className="text-lg font-bold text-gray-900">
                             {item.price}
@@ -1248,31 +1690,57 @@ const ServicesProductsComponent = () => {
                         
                         <div className="flex gap-2">
                           {item.type === 'service' ? (
+                            // For services: Only show Book Now button (removed purchase and view details)
                             <button 
-                              onClick={handleBookNow}
-                              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                              onClick={() => handleBookNow(item)}
+                              disabled={processingAction === `booking-${item.id}`}
+                              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
                             >
-                              Book Now
+                              {processingAction === `booking-${item.id}` ? (
+                                <>
+                                  <Loader className="w-4 h-4 animate-spin mr-2" />
+                                  Booking...
+                                </>
+                              ) : (
+                                'Book Now'
+                              )}
                             </button>
                           ) : (
+                            // For products: Show Purchase and View Details buttons (Add to Cart removed)
                             <>
                               <button 
-                                onClick={handlePurchase}
-                                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors mr-2"
+                                onClick={() => handlePurchase(item)}
+                                disabled={processingAction === `purchase-${item.id}`}
+                                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
                               >
-                                Purchase
+                                {processingAction === `purchase-${item.id}` ? (
+                                  <>
+                                    <Loader className="w-4 h-4 animate-spin mr-2" />
+                                    Processing...
+                                  </>
+                                ) : (
+                                  'Purchase'
+                                )}
                               </button>
                               <button 
-                                onClick={handleViewDetails}
-                                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                                onClick={() => handleViewDetails(item)}
+                                disabled={processingAction === `details-${item.id}`}
+                                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
                               >
-                                View Details
+                                {processingAction === `details-${item.id}` ? (
+                                  <>
+                                    <Loader className="w-4 h-4 animate-spin mr-2" />
+                                    Loading...
+                                  </>
+                                ) : (
+                                  'View Details'
+                                )}
                               </button>
                             </>
                           )}
                         </div>
-                      </div>
                     </div>
+                  </div>
                   </div>
                 ))}
               </div>
@@ -1282,6 +1750,7 @@ const ServicesProductsComponent = () => {
       )}
 
       {/* Enhanced Register Section */}
+      {!isAuthenticated && (
       <div className="bg-gradient-to-r from-blue-600 via-indigo-700 to-purple-800 text-white relative overflow-hidden">
         {/* Background Pattern */}
         <div className="absolute inset-0 opacity-10">
@@ -1314,6 +1783,7 @@ const ServicesProductsComponent = () => {
           </div>
         </div>
       </div>
+      )}
 
       {/* Enhanced CTA Section */}
       <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
@@ -1323,14 +1793,14 @@ const ServicesProductsComponent = () => {
           </h2>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button 
-              onClick={() => window.location.href = '/register'}
+              onClick={() => window.location.href = isAuthenticated ? '/services' : '/register'}
               className="bg-white text-blue-600 px-8 py-3 rounded-lg font-semibold hover:bg-gray-50 transition-colors inline-flex items-center justify-center"
             >
               Browse Services
               <ArrowRight size={16} className="ml-2" />
             </button>
             <button 
-              onClick={() => window.location.href = '/register'}
+              onClick={() => window.location.href = isAuthenticated ? '/products' : '/register'}
               className="border-2 border-white text-white px-8 py-3 rounded-lg font-semibold hover:bg-white hover:text-blue-600 transition-colors inline-flex items-center justify-center"
             >
               Shop Products
@@ -1351,8 +1821,16 @@ const ServicesProductsComponent = () => {
           </div>
         </div>
       )}
+      {/* Purchase Modal */}
+      <PurchaseModal
+        isOpen={showPurchaseModal}
+        onClose={() => setShowPurchaseModal(false)}
+        product={selectedProduct}
+        onPurchase={handlePurchaseProduct}
+      />
     </div>
   );
 };
+
 
 export default ServicesProductsComponent;

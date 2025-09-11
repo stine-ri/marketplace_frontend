@@ -252,7 +252,7 @@ export interface Product {
   name: string;
   description: string;
   price: string;
-  images: string[];
+  images: (string | null | undefined)[];
   categoryId: number | null; 
   stock?: number;
   status: 'draft' | 'published' | 'archived';

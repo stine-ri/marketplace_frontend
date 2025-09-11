@@ -287,7 +287,7 @@ export const ProductManagementSection = () => {
                         <div className="flex items-center">
                           <div className="flex-shrink-0 h-10 w-10">
                             {product.images.length > 0 ? (
-                              <img className="h-10 w-10 rounded-full object-cover" src={product.images[0]} alt="" />
+                              <img className="h-10 w-10 rounded-full object-cover" src={product.images[0] || ''} alt="" />
                             ) : (
                               <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
                                 <PhotoIcon className="h-5 w-5 text-gray-400" />

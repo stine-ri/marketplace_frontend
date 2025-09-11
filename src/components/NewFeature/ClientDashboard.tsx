@@ -543,8 +543,58 @@ export function ClientDashboard() {
     }
   };
 
-  // FIXED: function to fetch products with proper image URL handling
-  const fetchProducts = useCallback(async () => {
+    // NEW: Handle URL parameters on component mount
+  useEffect(() => {
+    const urlParams = new URLSearchParams(location.search);
+    const productId = urlParams.get('product');
+    const action = urlParams.get('action');
+    const data = urlParams.get('data');
+
+    if (productId) {
+      // Switch to marketplace tab
+      setActiveMainTab('marketplace');
+      setShowMarketplace(true);
+      
+      // If there's a specific product to show
+      if (action === 'purchase') {
+        // Wait for products to load, then show purchase modal for specific product
+        const loadProductAndShowPurchase = async () => {
+          try {
+            // First ensure products are loaded
+            await fetchProducts();
+            
+            // Find the specific product
+            const targetProduct = products.find(p => p.id === parseInt(productId));
+            if (targetProduct) {
+              setSelectedProduct(targetProduct);
+              setShowPurchaseModal(true);
+            } else {
+              // If product not found in current list, fetch it specifically
+              const response = await fetchWithAuth(`/api/products/${productId}`);
+              if (response.ok) {
+                const productData = await response.json();
+                setSelectedProduct(productData);
+                setShowPurchaseModal(true);
+              } else {
+                toast.error('Product not found');
+              }
+            }
+          } catch (error) {
+            console.error('Error loading product for purchase:', error);
+            toast.error('Failed to load product details');
+          }
+        };
+        
+        loadProductAndShowPurchase();
+      }
+      
+      // Clean up URL parameters after processing
+      navigate('/marketplace', { replace: true });
+    }
+  }, [location.search, navigate]);
+
+  //  function to fetch products with proper image URL handling
+const fetchProducts = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
       if (!token) return;
@@ -610,11 +660,51 @@ export function ClientDashboard() {
       }));
       
       setProducts(productsWithImages);
+      return productsWithImages; // Return products for use in URL parameter handling
     } catch (error) {
       console.error('Error fetching products:', error);
       toast.error('Failed to load products');
+      return [];
     }
   }, [productFilters, API_BASE_URL]);
+
+  // NEW: Function to fetch a specific product by ID
+  const fetchProductById = async (productId: string): Promise<Product | null> => {
+    try {
+      const response = await fetchWithAuth(`/api/products/${productId}`);
+      if (response.ok) {
+        const productData = await response.json();
+        
+        // Normalize image URLs for this specific product
+        const normalizeImageUrl = (imageUrl: string | null | undefined): string | null => {
+          if (!imageUrl) return null;
+          if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+            return imageUrl;
+          }
+          if (imageUrl.startsWith('/')) {
+            return `${API_BASE_URL}${imageUrl}`;
+          }
+          return `${API_BASE_URL}/${imageUrl}`;
+        };
+        const processedImages = (productData.images || [])
+          .map(normalizeImageUrl)                // returns (string | null)[]
+          .filter((url: string | null): url is string => url !== null);
+        return {
+          ...productData,
+          images: processedImages,
+          primaryImage: processedImages[0] || null,
+          provider: productData.provider ? {
+            ...productData.provider,
+            profileImageUrl: normalizeImageUrl(productData.provider.profileImageUrl)
+          } : productData.provider
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error('Error fetching specific product:', error);
+      return null;
+    }
+  };
 
   // Update the effect to fetch products
   useEffect(() => {
@@ -658,16 +748,11 @@ export function ClientDashboard() {
         throw new Error('Shipping address is required');
       }
 
-  
-
-      // Try the primary endpoint first with better error handling
       const requestBody = {
         quantity: Number(purchaseData.quantity),
         paymentMethod: purchaseData.paymentMethod.trim(),
         shippingAddress: purchaseData.shippingAddress.trim()
       };
-
-   
 
       const response = await fetch(`${API_BASE_URL}/api/client/products/${productId}/purchase`, {
         method: 'POST',
@@ -679,17 +764,12 @@ export function ClientDashboard() {
         body: JSON.stringify(requestBody)
       });
 
-
-      // Get response text first
       const responseText = await response.text();
-     
-
       let responseData;
       try {
         responseData = responseText ? JSON.parse(responseText) : {};
       } catch (parseError) {
         console.error('Failed to parse response as JSON:', parseError);
-        console.error('Raw response that failed to parse:', responseText);
         throw new Error(`Invalid server response: ${responseText.substring(0, 100)}...`);
       }
 
@@ -699,15 +779,14 @@ export function ClientDashboard() {
         // Call fetchPurchaseHistory if it exists
         fetchPurchaseHistory();
         
+        // Close purchase modal and show success
+        setShowPurchaseModal(false);
+        setSelectedProduct(null);
+        toast.success('Purchase completed successfully!');
+        
         return responseData;
       } else {
         // Enhanced error handling for different status codes
-        console.error('❌ Purchase failed:', {
-          status: response.status,
-          statusText: response.statusText,
-          responseData
-        });
-
         let errorMessage = 'Purchase failed';
         
         switch (response.status) {
@@ -728,7 +807,6 @@ export function ClientDashboard() {
             break;
           case 500:
             errorMessage = responseData?.error || 'Server error occurred';
-            // If we have detailed error info from the server, include it
             if (responseData?.details) {
               console.error('Server error details:', responseData.details);
               if (process.env.NODE_ENV === 'development') {
@@ -749,7 +827,6 @@ export function ClientDashboard() {
       if (error instanceof Error) {
         console.error('Error type:', error.constructor.name);
         console.error('Error message:', error.message);
-        console.error('Error stack:', error.stack);
 
         // Re-throw with more context if it's a network error
         if (error instanceof TypeError && error.message.includes('fetch')) {
@@ -763,10 +840,10 @@ export function ClientDashboard() {
         console.error('Unknown error:', error);
         throw error; // still rethrow for unknown cases
       }
-
-      console.error('===============================');
     }
   };
+
+
 
   // fetch purchase history
   const fetchPurchaseHistory = useCallback(async () => {
@@ -845,7 +922,7 @@ export function ClientDashboard() {
     setShowReviewModal(true);
   };
 
-  return (
+ return (
     <div className="min-h-screen bg-gray-50">
       {/* Header with improved mobile layout */}
       <header className="bg-white shadow-sm sticky top-0 z-40">
@@ -858,7 +935,7 @@ export function ClientDashboard() {
               <button
                 type="button"
                 className="lg:hidden inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500 transition-colors"
-                onClick={handleMobileMenuToggle}
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               >
                 <span className="sr-only">Open main menu</span>
                 {mobileMenuOpen ? (
@@ -946,7 +1023,10 @@ export function ClientDashboard() {
               {/* Action buttons */}
               <div className="flex items-center space-x-2">
                 <button 
-                  onClick={handleRefresh}
+                  onClick={() => {
+                    setRefreshing(true);
+                    fetchRequests();
+                  }}
                   disabled={refreshing}
                   className="p-2 rounded-full hover:bg-gray-100 transition-colors"
                   title="Refresh requests"
@@ -956,7 +1036,7 @@ export function ClientDashboard() {
                 
                 <div className="relative">
                   <button 
-                    onClick={handleNotificationToggle}
+                    onClick={() => setShowNotifications(!showNotifications)}
                     className="p-2 rounded-full hover:bg-gray-100 transition-colors relative"
                   >
                     <BellIcon className="h-5 w-5 text-gray-600" />
@@ -1020,7 +1100,10 @@ export function ClientDashboard() {
             {/* Mobile action buttons */}
             <div className="lg:hidden flex items-center space-x-1">
               <button 
-                onClick={handleRefresh}
+                onClick={() => {
+                  setRefreshing(true);
+                  fetchRequests();
+                }}
                 disabled={refreshing}
                 className="p-2 rounded-full hover:bg-gray-100 transition-colors"
                 title="Refresh"
@@ -1030,7 +1113,7 @@ export function ClientDashboard() {
               
               <div className="relative">
                 <button 
-                  onClick={handleNotificationToggle}
+                  onClick={() => setShowNotifications(!showNotifications)}
                   className="p-2 rounded-full hover:bg-gray-100 transition-colors relative"
                 >
                   <BellIcon className="h-5 w-5 text-gray-600" />
@@ -1470,7 +1553,10 @@ export function ClientDashboard() {
       />
       <PurchaseModal
         isOpen={showPurchaseModal}
-        onClose={() => setShowPurchaseModal(false)}
+        onClose={() => {
+          setShowPurchaseModal(false);
+          setSelectedProduct(null);
+        }}
         product={selectedProduct}
         onPurchase={handlePurchaseProduct}
       />

@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Star, MapPin, Clock, Package, ShoppingBag, Loader, AlertCircle, Wrench, RefreshCw, Filter } from 'lucide-react';
+import { Star, MapPin, Clock, Package, ShoppingBag, Loader, AlertCircle, Wrench, RefreshCw, Filter, ShoppingCart } from 'lucide-react';
+import { toast } from 'react-toastify';
+import { useAuth } from '../../context/AuthContext';
 
 interface ServiceItem {
   id: string | number;
@@ -53,16 +55,215 @@ export const FeaturedSection = () => {
   const [productCategories, setProductCategories] = useState<Category[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(false);
   const [categoriesError, setCategoriesError] = useState<string | null>(null);
+  const [processingAction, setProcessingAction] = useState<string | null>(null);
 
-  // Fetch categories for services and products
+  const { isAuthenticated, user } = useAuth();
+  const BASE_URL = 'https://mkt-backend-sz2s.onrender.com';
+
+  // Enhanced authentication handlers
+  const showLoginPrompt = (action: string) => {
+    toast.info(
+      <div className="flex flex-col space-y-2">
+        <span>Please login to {action}</span>
+        <button
+          onClick={() => window.location.href = '/login'}
+          className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition-colors"
+        >
+          Login Now
+        </button>
+      </div>,
+      {
+        position: "top-right",
+        autoClose: 5000,
+        closeOnClick: false,
+      }
+    );
+  };
+
+  const showSuccessMessage = (message: string) => {
+    toast.success(message, {
+      position: "top-right",
+      autoClose: 3000,
+    });
+  };
+
+  // Enhanced action handlers
+  const handleBookNow = async (item: any) => {
+    if (!isAuthenticated) {
+      showLoginPrompt("book services");
+      setTimeout(() => {
+        window.location.href = "/register";
+      }, 1500);
+      return;
+    }
+
+    // Check if user has service provider role
+    if (!user || (user.role?.toLowerCase() !== 'service_provider' && user.role?.toLowerCase() !== 'provider')) {
+      toast.info(
+        <div className="flex flex-col space-y-2">
+          <span>You need a Service Provider account to express interest in this service</span>
+          <button
+            onClick={() => (window.location.href = "/register?role=service_provider")}
+            className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition-colors"
+          >
+            Register as Service Provider
+          </button>
+        </div>,
+        {
+          position: "top-right",
+          autoClose: 5000,
+          closeOnClick: false,
+        }
+      );
+      return;
+    }
+
+    setProcessingAction(`booking-${item.id}`);
+
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      showSuccessMessage(`Redirecting to Express Interest on "${item.title || item.name}"…`);
+
+      setTimeout(() => {
+        window.location.href = "/provider/dashboard";
+      }, 1500);
+
+    } catch (error) {
+      console.error("Booking failed:", error);
+      toast.error("Action failed. Please try again.");
+    } finally {
+      setProcessingAction(null);
+    }
+  };
+
+const handleViewDetails = async (item: any) => {
+  if (!isAuthenticated) {
+    showLoginPrompt('view details');
+    setTimeout(() => {
+      window.location.href = '/register';
+    }, 1500);
+    return;
+  }
+
+  setProcessingAction(`details-${item.id}`);
+
+  try {
+    await new Promise(resolve => setTimeout(resolve, 800));
+
+    if (item.type === 'product') {
+      if (user && user.role && user.role.toLowerCase() === 'client') {
+        // ✅ Redirect to client dashboard → marketplace tab → product with id
+        window.location.href = `/marketplace?product=${item.id}`;
+      } else {
+        toast.info(
+          <div className="flex flex-col space-y-2">
+            <span>You need a client account to view product details</span>
+            <button
+              onClick={() => window.location.href = '/register?role=client'}
+              className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition-colors"
+            >
+              Register as Client
+            </button>
+          </div>,
+          {
+            position: "top-right",
+            autoClose: 5000,
+            closeOnClick: false,
+          }
+        );
+      }
+    } else {
+      // ✅ Services work the same way
+     window.location.href = `/marketplace?product=${item.id}`;
+    }
+  } catch (error) {
+    console.error('Failed to load details:', error);
+    toast.error('Failed to load details. Please try again.');
+  } finally {
+    setProcessingAction(null);
+  }
+};
+
+
+
+  const handlePurchase = async (item: any) => {
+    if (!isAuthenticated) {
+      showLoginPrompt('purchase products');
+      setTimeout(() => {
+        window.location.href = '/register';
+      }, 1500);
+      return;
+    }
+    
+    // Check if user has client role
+    if (user && user.role && user.role.toLowerCase() !== 'client') {
+      toast.info(
+        <div className="flex flex-col space-y-2">
+          <span>You need a client account to purchase products</span>
+          <button
+            onClick={() => window.location.href = '/register?role=client'}
+            className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition-colors"
+          >
+            Register as Client
+          </button>
+        </div>,
+        {
+          position: "top-right",
+          autoClose: 5000,
+          closeOnClick: false,
+        }
+      );
+      return;
+    }
+
+    try {
+      setProcessingAction(`purchase-${item.id}`);
+      
+      const productData = encodeURIComponent(JSON.stringify({
+        productId: item.id,
+        quantity: 1,
+        paymentMethod: 'card',
+        shippingAddress: '',
+      }));
+
+      showSuccessMessage('Redirecting to complete your purchase...');
+      
+      setTimeout(() => {
+        window.location.href = `/marketplace?product=${item.id}&action=purchase`;
+      }, 1500);
+      
+    } catch (error) {
+      console.error('Purchase redirect error:', error);
+      toast.error('Failed to redirect to purchase. Please try again.');
+    } finally {
+      setProcessingAction(null);
+    }
+  };
+
+  const getUserDashboard = (user: any) => {
+    if (!user?.role) return '/client/dashboard';
+    
+    switch (user.role.toLowerCase()) {
+      case 'admin': return '/admin/dashboard';
+      case 'service_provider':
+      case 'provider': return '/provider/dashboard';
+      case 'product_seller': 
+      case 'seller': return '/seller/dashboard';
+      case 'client':
+      case 'customer': return '/client/dashboard';
+      default: return '/client/dashboard';
+    }
+  };
+
+  // Fetch categories from backend
   const fetchCategories = useCallback(async () => {
     setCategoriesLoading(true);
     setCategoriesError(null);
 
     try {
       const [servicesCategoriesRes, productsCategoriesRes] = await Promise.allSettled([
-        fetch('https://mkt-backend-sz2s.onrender.com/api/services/categories'),
-        fetch('https://mkt-backend-sz2s.onrender.com/api/public/categories')
+        fetch(`${BASE_URL}/api/services/categories`),
+        fetch(`${BASE_URL}/api/public/categories`)
       ]);
 
       // Handle service categories
@@ -78,7 +279,7 @@ export const FeaturedSection = () => {
         
         setServiceCategories(formattedServiceCategories);
       } else {
-        // Fallback: Use predefined service categories
+        // Fallback categories
         const fallbackServiceCategories = [
           { id: 'cleaning', name: 'Cleaning', count: 0 },
           { id: 'tutoring', name: 'Tutoring', count: 0 },
@@ -103,9 +304,8 @@ export const FeaturedSection = () => {
         
         setProductCategories(formattedProductCategories);
       } else {
-        // Fallback: Try to get categories from products endpoint
         try {
-          const productsRes = await fetch('https://mkt-backend-sz2s.onrender.com/api/products');
+          const productsRes = await fetch(`${BASE_URL}/api/products`);
           if (productsRes.ok) {
             const productsData = await productsRes.json();
             const productsList = Array.isArray(productsData) ? productsData : productsData?.data || [];
@@ -145,20 +345,15 @@ export const FeaturedSection = () => {
     }
   }, []);
 
-  // Fetch categories on component mount
-  useEffect(() => {
-    fetchCategories();
-  }, [fetchCategories]);
-
   // Fetch data from backend
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     try {
-      // Build URLs with category filtering - FIXED: Use category name instead of ID
-      let servicesUrl = 'https://mkt-backend-sz2s.onrender.com/api/services';
-      let productsUrl = 'https://mkt-backend-sz2s.onrender.com/api/products';
+      // Build URLs with category filtering
+      let servicesUrl = `${BASE_URL}/api/services`;
+      let productsUrl = `${BASE_URL}/api/products`;
       
       // Get the actual category name for filtering
       const currentCategories = activeTab === 'services' ? serviceCategories : productCategories;
@@ -272,6 +467,11 @@ export const FeaturedSection = () => {
     }
   }, [selectedCategory, activeTab, serviceCategories, productCategories]);
 
+  // Load initial data
+  useEffect(() => {
+    fetchCategories();
+  }, [fetchCategories]);
+
   useEffect(() => {
     fetchData();
   }, [fetchData]);
@@ -281,6 +481,7 @@ export const FeaturedSection = () => {
     setSelectedCategory('all');
   }, [activeTab]);
 
+  // Utility functions
   const formatPrice = (price: string | number): string => {
     if (typeof price === 'string' && isNaN(Number(price))) {
       return price;
@@ -328,38 +529,6 @@ export const FeaturedSection = () => {
     return '🛍️';
   };
 
-  const handleAction = (type: 'service' | 'product', action: 'book' | 'purchase' | 'details') => {
-    const actionText = action === 'book' ? 'book services' : 
-                     action === 'purchase' ? 'purchase products' : 'view details';
-    alert(`Please register or login to ${actionText}`);
-    window.location.href = '/register';
-  };
-
-  const renderImage = (item: ServiceItem | ProductItem) => {
-    const imageUrl = item.image || (item.images && item.images[0]);
-    
-    if (imageUrl && imageUrl.trim()) {
-      return (
-        <img
-          src={imageUrl}
-          alt={item.name}
-          className="w-full h-48 object-cover"
-          onError={(e) => {
-            const target = e.target as HTMLImageElement;
-            target.style.display = 'none';
-            target.nextElementSibling?.classList.remove('hidden');
-          }}
-        />
-      );
-    }
-    
-    return (
-      <div className="w-full h-48 flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 text-6xl">
-        {getCategoryIcon(item.category)}
-      </div>
-    );
-  };
-
   const renderStars = (rating: number) => {
     const fullStars = Math.floor(rating);
     const hasHalfStar = rating % 1 >= 0.5;
@@ -388,6 +557,14 @@ export const FeaturedSection = () => {
   const selectedCategoryName = selectedCategory === 'all' 
     ? 'All' 
     : currentCategories.find(cat => String(cat.id) === selectedCategory)?.name || selectedCategory;
+
+  const handleRegisterRedirect = () => {
+    if (!isAuthenticated) {
+      window.location.href = '/register';
+    } else {
+      window.location.href = getUserDashboard(user);
+    }
+  };
 
   return (
     <section className="py-12 lg:py-16 bg-white">
@@ -650,10 +827,20 @@ export const FeaturedSection = () => {
                     >
                       {/* Image Section */}
                       <div className="relative overflow-hidden">
-                        {renderImage(item)}
-                        <div className="hidden w-full h-48 flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 text-6xl">
-                          {getCategoryIcon(item.category)}
-                        </div>
+                        {item.image ? (
+                          <img
+                            src={item.image}
+                            alt={item.name}
+                            className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                            }}
+                          />
+                        ) : (
+                          <div className="w-full h-48 flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 text-6xl">
+                            {getCategoryIcon(item.category)}
+                          </div>
+                        )}
                         
                         {/* Badges */}
                         <div className="absolute top-2 right-2">
@@ -716,10 +903,18 @@ export const FeaturedSection = () => {
                                 {formatPrice(item.price)}
                               </span>
                               <button 
-                                onClick={() => handleAction('service', 'book')}
-                                className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
+                                onClick={() => handleBookNow(item)}
+                                disabled={processingAction === `booking-${item.id}`}
+                                className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
                               >
-                                Book Now
+                                {processingAction === `booking-${item.id}` ? (
+                                  <>
+                                    <Loader className="w-4 h-4 animate-spin mr-2" />
+                                    Booking...
+                                  </>
+                                ) : (
+                                  'Book Now'
+                                )}
                               </button>
                             </div>
                           </>
@@ -767,13 +962,39 @@ export const FeaturedSection = () => {
                                   {formatPrice(item.price)}
                                 </span>
                               </div>
-                              <button 
-                                onClick={() => handleAction('product', 'purchase')}
-                                className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 flex items-center transition-colors"
-                              >
-                                <ShoppingBag size={14} className="mr-1" />
-                                Add to Cart
-                              </button>
+                              <div className="flex gap-2">
+                                <button 
+                                  onClick={() => handlePurchase(item)}
+                                  disabled={processingAction === `purchase-${item.id}`}
+                                  className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                                >
+                                  {processingAction === `purchase-${item.id}` ? (
+                                    <>
+                                      <Loader className="w-4 h-4 animate-spin mr-2" />
+                                      Processing...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <ShoppingCart size={14} className="mr-1" />
+                                      Purchase
+                                    </>
+                                  )}
+                                </button>
+                                <button 
+                                  onClick={() => handleViewDetails(item)}
+                                  disabled={processingAction === `details-${item.id}`}
+                                  className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                                >
+                                  {processingAction === `details-${item.id}` ? (
+                                    <>
+                                      <Loader className="w-4 h-4 animate-spin mr-2" />
+                                      Loading...
+                                    </>
+                                  ) : (
+                                    'Details'
+                                  )}
+                                </button>
+                              </div>
                             </div>
                           </>
                         )}
@@ -789,7 +1010,7 @@ export const FeaturedSection = () => {
               <div className="text-center mt-10 space-y-4">
                 <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
                   <button 
-                    onClick={() => window.location.href = `/${activeTab}`}
+                    onClick={handleRegisterRedirect}
                     className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors flex items-center gap-2"
                   >
                     View All {activeTab === 'services' ? 'Services' : 'Products'}

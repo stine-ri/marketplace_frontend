@@ -142,7 +142,7 @@ export function NewRequestModal({ isOpen, onClose, onSubmit }: NewRequestModalPr
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label htmlFor="desiredPrice" className="block text-sm font-medium text-gray-700">Desired Price ($)</label>
+                <label htmlFor="desiredPrice" className="block text-sm font-medium text-gray-700">Desired Price (ksh)</label>
                 <input
                   type="number"
                   name="desiredPrice"

@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Grid, List, Star, Heart, ShoppingCart, MapPin, Eye, ChevronDown, SlidersHorizontal } from 'lucide-react';
+import { Search, Filter, Grid, List, Star, Heart, ShoppingCart, MapPin, Eye, ChevronDown, SlidersHorizontal, Loader } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { toast } from 'react-toastify';
 
 // Define interfaces to match the backend data structure
 export interface Review {
@@ -87,12 +89,155 @@ const ProductsComponent = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [processingAction, setProcessingAction] = useState<string | null>(null);
 
   const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com';
 
-  const showLoginMessage = () => {
-    alert("Kindly login or register to view or purchase our products");
+  // Get user from AuthContext
+  const { user, isAuthenticated } = useAuth();
+
+  // Enhanced authentication handlers
+  const showLoginPrompt = (action: string) => {
+    toast.info(
+      <div className="flex flex-col space-y-2">
+        <span>Please login to {action}</span>
+        <button
+          onClick={() => window.location.href = '/login'}
+          className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition-colors"
+        >
+          Login Now
+        </button>
+      </div>,
+      {
+        position: "top-right",
+        autoClose: 5000,
+        closeOnClick: false,
+      }
+    );
   };
+
+  const showSuccessMessage = (message: string) => {
+    toast.success(message, {
+      position: "top-right",
+      autoClose: 3000,
+    });
+  };
+
+  // Enhanced wishlist and view handlers
+  const handleWishlist = async (productId: string) => {
+    if (!isAuthenticated) {
+      showLoginPrompt('add to wishlist');
+      return;
+    }
+
+    setProcessingAction(`wishlist-${productId}`);
+    try {
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 800));
+      showSuccessMessage('Added to wishlist!');
+    } catch (error) {
+      console.error('Wishlist error:', error);
+      toast.error('Failed to add to wishlist');
+    } finally {
+      setProcessingAction(null);
+    }
+  };
+
+  const handleViewDetails = async (productId: string) => {
+    if (!isAuthenticated) {
+      showLoginPrompt('view product details');
+      return;
+    }
+
+    // Check if user has client role for product details
+    if (user && user.role && user.role.toLowerCase() !== 'client') {
+      toast.info(
+        <div className="flex flex-col space-y-2">
+          <span>You need a client account to view product details</span>
+          <button
+            onClick={() => window.location.href = '/register?role=client'}
+            className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition-colors"
+          >
+            Register as Client
+          </button>
+        </div>,
+        {
+          position: "top-right",
+          autoClose: 5000,
+          closeOnClick: false,
+        }
+      );
+      return;
+    }
+
+    setProcessingAction(`view-${productId}`);
+    try {
+      await new Promise(resolve => setTimeout(resolve, 800));
+      window.location.href = `/marketplace?product=${productId}`;
+    } catch (error) {
+      console.error('View details error:', error);
+      toast.error('Failed to load product details');
+    } finally {
+      setProcessingAction(null);
+    }
+  };
+
+  // Purchase handler for authenticated users
+ const handlePurchaseProduct = async (
+  productId: string,
+  purchaseData?: {
+    quantity?: number;
+    paymentMethod?: string;
+    shippingAddress?: string;
+  }
+) => {
+  if (!isAuthenticated) {
+    showLoginPrompt('purchase products');
+    setTimeout(() => {
+      window.location.href = '/register';
+    }, 1500);
+    return;
+  }
+
+  // Check if user has client role
+  if (user && user.role && user.role.toLowerCase() === 'client') {
+    // Redirect client users directly to marketplace with specific product for purchase
+    const defaultPurchaseData = {
+      quantity: 1,
+      paymentMethod: 'card',
+      shippingAddress: '',
+      ...purchaseData,
+    };
+
+    const productData = encodeURIComponent(
+      JSON.stringify({
+        productId: parseInt(productId),
+        ...defaultPurchaseData,
+      })
+    );
+
+    window.location.href = `/marketplace?product=${productId}&action=purchase&data=${productData}`;
+  } else {
+    // For non-client users, show message to register as client
+    toast.info(
+      <div className="flex flex-col space-y-2">
+        <span>You need a client account to purchase products</span>
+        <button
+          onClick={() => (window.location.href = '/register?role=client')}
+          className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition-colors"
+        >
+          Register as Client
+        </button>
+      </div>,
+      {
+        position: 'top-right',
+        autoClose: 5000,
+        closeOnClick: false,
+      }
+    );
+  }
+};
+
 
   // Fetch categories from backend using the public categories endpoint
   const fetchCategories = async () => {
@@ -304,7 +449,7 @@ const ProductsComponent = () => {
 
   // Format product data to match our component's expectations
   const formatProduct = (product: Product): FormattedProduct => {
-    const fallbackImage = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgZmlsbD0iI2Y4ZjlmYSIvPgogIDx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IiM2YjczODAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIwLjNlbSI+Tm8gSW1hZ2UgQXZhaWxhYmxlPC90ZXh0Pgo8L3N2Zz4K';
+    const fallbackImage = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgZmlsbD0iI2Y4ZjlmYSIvPgogIDx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJiaXJhLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjE2IiBmaWxsPSIjNmI3MzgwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iMC4zZW0iPk5vIEltYWdlIEF2YWlsYWJsZTwvdGV4dD4KPC9zdmc+Cg==';
     
     // Helper function to format provider name
     const formatProviderName = (provider: Product['provider']) => {
@@ -373,6 +518,16 @@ const ProductsComponent = () => {
       if (productsSection) {
         productsSection.scrollIntoView({ behavior: 'smooth' });
       }
+    }
+  };
+
+  // Enhanced register redirect handler
+  const handleRegisterRedirect = (role: 'client' | 'seller' = 'client') => {
+    if (!isAuthenticated) {
+      window.location.href = `/register?role=${role}`;
+    } else {
+      // If already logged in but wrong role, redirect to appropriate registration
+      window.location.href = `/register?role=${role}`;
     }
   };
 
@@ -530,7 +685,7 @@ const ProductsComponent = () => {
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
                 >
                   <option value="popular">Most Popular</option>
-                  <option value="newest">Newest First</option>
+                  <option value='newest'>Newest First</option>
                   <option value="price-low">Price: Low to High</option>
                   <option value="price-high">Price: High to Low</option>
                   <option value="rating">Highest Rated</option>
@@ -598,7 +753,7 @@ const ProductsComponent = () => {
                         alt={product.name}
                         className="w-full h-64 object-cover group-hover:scale-105 transition-transform duration-300"
                         onError={(e) => {
-                          const fallbackSvg = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgZmlsbD0iI2Y4ZjlmYSIvPgogIDx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IiM2YjczODAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIwLjNlbSI+SW1hZ2UgVW5hdmFpbGFibGU8L3RleHQ+Cjwvc3ZnPgo=';
+                          const fallbackSvg = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgZmlsbD0iI2Y4ZjlmYSIvPgogIDx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJiaXJhLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjE2IiBmaWxsPSIjNmI3MzgwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iMC4zZW0iPk5vIEltYWdlIEF2YWlsYWJsZTwvdGV4dD4KPC9zdmc+Cg==';
                           (e.target as HTMLImageElement).src = fallbackSvg;
                         }}
                       />
@@ -621,15 +776,25 @@ const ProductsComponent = () => {
                       <div className="absolute top-4 right-4 flex gap-2">
                         <button 
                           className="p-2 bg-white rounded-full shadow-sm hover:bg-gray-50 transition-colors"
-                          onClick={showLoginMessage}
+                          onClick={() => handleWishlist(product.id)}
+                          disabled={processingAction === `wishlist-${product.id}`}
                         >
-                          <Heart className="w-4 h-4 text-gray-600" />
+                          {processingAction === `wishlist-${product.id}` ? (
+                            <Loader className="w-4 h-4 animate-spin text-gray-600" />
+                          ) : (
+                            <Heart className="w-4 h-4 text-gray-600" />
+                          )}
                         </button>
                         <button 
                           className="p-2 bg-white rounded-full shadow-sm hover:bg-gray-50 transition-colors"
-                          onClick={showLoginMessage}
+                          onClick={() => handleViewDetails(product.id)}
+                          disabled={processingAction === `view-${product.id}`}
                         >
-                          <Eye className="w-4 h-4 text-gray-600" />
+                          {processingAction === `view-${product.id}` ? (
+                            <Loader className="w-4 h-4 animate-spin text-gray-600" />
+                          ) : (
+                            <Eye className="w-4 h-4 text-gray-600" />
+                          )}
                         </button>
                       </div>
                     </div>
@@ -679,15 +844,27 @@ const ProductsComponent = () => {
                       </div>
                       
                       <button
-                        onClick={showLoginMessage}
+                        onClick={() => handlePurchaseProduct(product.id)}
+                        disabled={processingAction === `purchase-${product.id}` || !product.inStock}
                         className={`w-full py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
                           product.inStock
-                            ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                            ? processingAction === `purchase-${product.id}`
+                              ? 'bg-blue-400 cursor-not-allowed'
+                              : 'bg-blue-600 hover:bg-blue-700 text-white'
                             : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                         }`}
                       >
-                        <ShoppingCart className="w-4 h-4" />
-                        {product.inStock ? 'Add to Cart' : 'Out of Stock'}
+                        {processingAction === `purchase-${product.id}` ? (
+                          <>
+                            <Loader className="w-4 h-4 animate-spin mr-2" />
+                            Processing...
+                          </>
+                        ) : (
+                          <>
+                            <ShoppingCart className="w-4 h-4" />
+                            {product.inStock ? 'Add to Cart' : 'Out of Stock'}
+                          </>
+                        )}
                       </button>
                     </div>
                   </div>
@@ -707,7 +884,7 @@ const ProductsComponent = () => {
                           alt={product.name}
                           className="w-full h-full object-cover"
                           onError={(e) => {
-                            const fallbackSvg = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgZmlsbD0iI2Y4ZjlmYSIvPgogIDx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IiM2YjczODAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIwLjNlbSI+SW1hZ2UgVW5hdmFpbGFibGU8L3RleHQ+Cjwvc3ZnPgo=';
+                            const fallbackSvg = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgZmlsbD0iI2Y4ZjlmYSIvPgogIDx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJiaXJhLCBzYW5zLXNlcmlmIiBmb250LXNpemU2IjE2IiBmaWxsPSIjNmI3MzgwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iMC4zZW0iPk5vIEltYWdlIEF2YWlsYWJsZTwvdGV4dD4KPC9zdmc+Cg==';
                             (e.target as HTMLImageElement).src = fallbackSvg;
                           }}
                         />
@@ -779,20 +956,37 @@ const ProductsComponent = () => {
                             <div className="flex gap-2">
                               <button 
                                 className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                                onClick={showLoginMessage}
+                                onClick={() => handleViewDetails(product.id)}
+                                disabled={processingAction === `view-${product.id}`}
                               >
-                                <Eye className="w-5 h-5 text-gray-600" />
+                                {processingAction === `view-${product.id}` ? (
+                                  <Loader className="w-5 h-5 animate-spin text-gray-600" />
+                                ) : (
+                                  <Eye className="w-5 h-5 text-gray-600" />
+                                )}
                               </button>
                               <button
-                                onClick={showLoginMessage}
+                                onClick={() => handlePurchaseProduct(product.id)}
+                                disabled={processingAction === `purchase-${product.id}` || !product.inStock}
                                 className={`px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
                                   product.inStock
-                                    ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                                    ? processingAction === `purchase-${product.id}`
+                                      ? 'bg-blue-400 cursor-not-allowed'
+                                      : 'bg-blue-600 hover:bg-blue-700 text-white'
                                     : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                                 }`}
                               >
-                                <ShoppingCart className="w-4 h-4" />
-                                {product.inStock ? 'Add to Cart' : 'Out of Stock'}
+                                {processingAction === `purchase-${product.id}` ? (
+                                  <>
+                                    <Loader className="w-4 h-4 animate-spin mr-2" />
+                                    Processing...
+                                  </>
+                                ) : (
+                                  <>
+                                    <ShoppingCart className="w-4 h-4" />
+                                    {product.inStock ? 'Add to Cart' : 'Out of Stock'}
+                                  </>
+                                )}
                               </button>
                             </div>
                           </div>
@@ -822,13 +1016,13 @@ const ProductsComponent = () => {
           <div className="flex flex-col sm:flex-row gap-6 justify-center">
             <button 
               className="bg-white text-blue-600 px-10 py-4 rounded-xl text-lg font-bold hover:bg-gray-50 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
-              onClick={showLoginMessage}
+              onClick={() => handleRegisterRedirect('client')}
             >
               Register as Buyer
             </button>
             <button 
               className="border-2 border-white text-white px-10 py-4 rounded-xl text-lg font-bold hover:bg-white hover:text-blue-600 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
-              onClick={showLoginMessage}
+              onClick={() => handleRegisterRedirect('seller')}
             >
               Register as Seller
             </button>

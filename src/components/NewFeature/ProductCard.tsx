@@ -8,6 +8,7 @@ interface ProductCardProps {
   onViewDetails: (product: any) => void; 
   onPurchase: (product: any) => void;     
   showPurchaseButton?: boolean;
+ 
 }
 
 export const ProductCard = ({ 
@@ -15,6 +16,7 @@ export const ProductCard = ({
   onViewDetails,  // Changed from onClick
   onPurchase,     // New prop
   showPurchaseButton = false 
+  
 }: ProductCardProps) => {
   // Provide default value of 0 if rating is undefined/null
   const rating = product.provider.rating || 0;

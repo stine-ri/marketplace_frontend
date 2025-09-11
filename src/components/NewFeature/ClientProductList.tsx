@@ -5,24 +5,7 @@ import { ProductCard } from './ProductCard';
 import { ProductFilterModal } from './ProductFilterModal';
 import { formatPrice } from '../../utilis/priceFormatter';
 import { toast } from 'react-toastify';
-
-interface Product {
-  id: number;
-  name: string;
-  description: string;
-  price: string;
-  category: string;
-  stock: number | null;
-  images: string[];
-  provider: {
-    id: number;
-    firstName: string;
-    lastName: string;
-    rating: number;
-    collegeId: number;
-    profileImageUrl: string;
-  };
-}
+import { Product } from '../../types/types'; // Import the Product type from your types file
 
 export const ProductList = () => {
   const [products, setProducts] = useState<Product[]>([]);
@@ -69,7 +52,14 @@ export const ProductList = () => {
       }
 
       const data = await response.json();
-      setProducts(data);
+      
+      // Transform the data to match your Product type
+      const transformedProducts: Product[] = data.map((product: any) => ({
+        ...product,
+        stock: product.stock === null ? undefined : product.stock, // Convert null to undefined
+      }));
+      
+      setProducts(transformedProducts);
     } catch (error) {
       console.error('Error fetching products:', error);
       toast.error('Failed to load products');
@@ -231,7 +221,14 @@ export const ProductList = () => {
               <ProductCard 
                 key={product.id}
                 product={product}
-                onClick={() => navigate(`/products/${product.id}`)}
+                onViewDetails={() => navigate(`/products/${product.id}`)}
+                onPurchase={(product) => {
+                  // Handle purchase logic here
+                  console.log('Purchase clicked for:', product.name);
+                  // You can add purchase logic or navigation to purchase page
+                  navigate(`/products/${product.id}/purchase`);
+                }}
+                showPurchaseButton={true} // Set to true if you want to show purchase buttons
               />
             ))}
           </div>

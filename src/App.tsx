@@ -143,7 +143,17 @@ function AppContent() {
               <ClientDashboard/>
             </ProtectedRoute>
           }
+          
         />
+        {/* Marketplace route for clients */}
+<Route
+  path="/marketplace"
+  element={
+    <ProtectedRoute requiredRole="client">
+      <ClientDashboard />
+    </ProtectedRoute>
+  }
+/>
       </Routes>
     </main>
   );
