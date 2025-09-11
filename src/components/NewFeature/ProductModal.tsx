@@ -226,7 +226,7 @@ export const ProductUploadModal = ({
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Stock Quantity (Must💯)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Stock Quantity* (Must💯)</label>
                 <input
                   type="number"
                   min="0"
