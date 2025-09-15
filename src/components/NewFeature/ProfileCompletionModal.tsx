@@ -38,6 +38,7 @@ const [pastWorkImagePreview, setPastWorkImagePreview] = useState<string | null>(
 const pastWorkFileInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState<ProviderProfileFormData>(initialProfile || {
+    id: 0, 
     firstName: '',
     lastName: '',
     phoneNumber: '',
@@ -630,14 +631,18 @@ const handleRemovePastWork = (index: number) => {
           </button>
         </div>
         
-        <ProviderProfile 
-          profile={{
-            ...formData,
-            profileImageUrl: imagePreview || formData.profileImageUrl || ''
-          }} 
-          colleges={colleges} 
-          services={services} 
-        />
+       <ProviderProfile 
+  profile={{
+    ...formData,
+    profileImageUrl: imagePreview || formData.profileImageUrl || '',
+    id: formData.id ?? 0, // ✅ Add missing `id`
+  }}
+  colleges={colleges}
+  services={services}
+  onProfileUpdate={async () => {}} // ✅ Add required noop
+  isOpen={showPreview} // ✅ Control modal visibility
+  onClose={() => setShowPreview(false)} // ✅ Close handler
+/>
         
         <div className="flex justify-end mt-4">
           <button

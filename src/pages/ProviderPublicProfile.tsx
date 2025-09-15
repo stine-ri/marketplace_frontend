@@ -1,4 +1,4 @@
-// Add this to your ProviderPublicProfile.tsx at the top of the component
+// ProviderPublicProfile.tsx 
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
@@ -200,7 +200,14 @@ export default function ProviderPublicProfile() {
   return (
     <div className="container mx-auto py-8 px-4">
       <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-        <ProviderProfile profile={profile} colleges={colleges} services={services} />
+        <ProviderProfile
+  profile={profile}
+  colleges={colleges}
+  services={services}
+  onProfileUpdate={async () => {}} // ✅ noop is fine here
+  isOpen={true} // ✅ always open in this context
+  onClose={() => navigate('/providers')} // ✅ navigate back to providers list
+/>
 
         {!isOwnProfile && user?.role !== 'service_provider' && (
           <div className="border-t border-gray-200 p-6">

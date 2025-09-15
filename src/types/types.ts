@@ -217,12 +217,14 @@ export interface PastWork {
   id?: number;
   imageUrl: string;
   description: string;
+  shouldDelete?: boolean;
 }
 
 // You might also want these additional types for forms and API responses
 export type ProviderProfileFormData = Omit<ProviderProfile, 
-  'id' | 'userId' | 'createdAt' | 'updatedAt' | 'college' | 'servicesDetails'
+  'userId' | 'createdAt' | 'updatedAt' | 'college' | 'servicesDetails'
 > & {
+   id?: number; 
   college?: College; // For form selection
   servicesDetails?: Service[]; // For displaying selected services
    pastWorks?: PastWork[];

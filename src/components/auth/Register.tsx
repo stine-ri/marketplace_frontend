@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { FaEye, FaEyeSlash } from 'react-icons/fa';
+import { FaEye, FaEyeSlash, FaExternalLinkAlt } from 'react-icons/fa';
+import TermsAndConditions from '../NewFeature/Terms';
 
 // Define public roles that users can register as
 type PublicRole = 'client' | 'service_provider' | 'product_seller';
@@ -19,6 +20,8 @@ export default function Register() {
   
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
 
   const { register, error, loading } = useAuth();
   const navigate = useNavigate();
@@ -36,16 +39,57 @@ export default function Register() {
     setShowConfirmPassword(!showConfirmPassword);
   };
 
+  const handleTermsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setAcceptedTerms(e.target.checked);
+  };
+
+
+
+  const isFormValid = () => {
+    return (
+      formData.full_name.trim() !== '' &&
+      formData.email.trim() !== '' &&
+      formData.contact_phone.trim() !== '' &&
+      formData.address.trim() !== '' &&
+      formData.password.length >= 8 &&
+      formData.password === formData.confirmPassword &&
+      acceptedTerms
+    );
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate all fields
+    if (!formData.full_name.trim()) {
+      alert("Please enter your full name");
+      return;
+    }
+    if (!formData.email.trim()) {
+      alert("Please enter your email");
+      return;
+    }
+    if (!formData.contact_phone.trim()) {
+      alert("Please enter your phone number");
+      return;
+    }
+    if (!formData.address.trim()) {
+      alert("Please enter your address");
+      return;
+    }
     if (formData.password !== formData.confirmPassword) {
       alert("Passwords don't match!");
       return;
     }
     if (formData.password.length < 8) {
-        alert("Password must be at least 8 characters");
-        return;
+      alert("Password must be at least 8 characters");
+      return;
     }
+    if (!acceptedTerms) {
+      alert("You must accept the Terms and Conditions to register");
+      return;
+    }
+
     try {
       await register({
         full_name: formData.full_name,
@@ -57,12 +101,12 @@ export default function Register() {
       });
       navigate('/login');
     } catch (err: any) {
-        console.error("Registration error:", err);
+      console.error("Registration error:", err);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12">
       <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow-md">
         <h2 className="text-2xl font-bold text-center">Create your account</h2>
         {error && (
@@ -178,16 +222,69 @@ export default function Register() {
               {showConfirmPassword ? <FaEyeSlash className="text-gray-500" /> : <FaEye className="text-gray-500" />}
             </button>
           </div>
+
+          {/* Terms and Conditions */}
+         <div className="flex items-start space-x-3">
+  <input
+    id="terms"
+    name="terms"
+    type="checkbox"
+    checked={acceptedTerms}
+    onChange={handleTermsChange}
+    className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+  />
+  <div className="flex-1">
+    <label htmlFor="terms" className="text-sm text-gray-700">
+      I agree to the{' '}
+      <button
+        type="button"
+        onClick={() => setShowTermsModal(true)}
+        className="text-blue-600 hover:text-blue-500 underline inline-flex items-center gap-1"
+      >
+        Terms and Conditions
+        <FaExternalLinkAlt className="text-xs" />
+      </button>
+    </label>
+  </div>
+</div>
+
+
+{showTermsModal && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="sticky top-0 bg-white p-4 border-b flex justify-between items-center">
+        <h3 className="text-lg font-semibold">Terms and Conditions</h3>
+        <button 
+          onClick={() => setShowTermsModal(false)}
+          className="text-gray-500 hover:text-gray-700"
+        >
+          &times;
+        </button>
+      </div>
+      <div className="p-4">
+        <TermsAndConditions />
+      </div>
+    </div>
+  </div>
+)}
           
           <button
             type="submit"
-            disabled={loading}
-            className={`w-full py-2 px-4 rounded-md text-white font-medium ${
-              loading ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'
+            disabled={loading || !isFormValid()}
+            className={`w-full py-2 px-4 rounded-md text-white font-medium transition-colors ${
+              loading || !isFormValid() 
+                ? 'bg-gray-400 cursor-not-allowed' 
+                : 'bg-blue-600 hover:bg-blue-700'
             }`}
           >
             {loading ? 'Creating account...' : 'Register'}
           </button>
+          
+          {!isFormValid() && !loading && (
+            <div className="text-xs text-red-500 text-center">
+              Please fill all fields and accept the Terms and Conditions
+            </div>
+          )}
         </form>
         <div className="text-center text-sm text-gray-600">
           Already have an account?{' '}
@@ -199,6 +296,6 @@ export default function Register() {
           </button>
         </div>
       </div>
-    </div>
+      </div>
   );
 }

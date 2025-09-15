@@ -5,16 +5,16 @@ import { NewBidModal } from '../NewFeature/NewBidModal';
 import ProfileCompletionModal from '../NewFeature/ProfileCompletionModal';
 import useWebSocket from '../../hooks/useWebSocket';
 import { useWebSocketContext } from '../../context/WebSocketContext';
-import { BellIcon, ArrowPathIcon, CurrencyDollarIcon, ClockIcon, PencilIcon, TrashIcon, EyeIcon, MapPinIcon, CalendarIcon, TagIcon, HandThumbUpIcon } from '@heroicons/react/24/outline';
+import { BellIcon, ArrowPathIcon, CurrencyDollarIcon, ClockIcon, PencilIcon, TrashIcon, EyeIcon, MapPinIcon, CalendarIcon, TagIcon, HandThumbUpIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../../context/AuthContext';
 import type { ProviderProfile, User, InterestWithChatRoom } from '../../types/types';
 import { Request, Bid,  ProviderProfileFormData, Interest, PastWork , College, Service, ChatRoom, ChatMessage,CombinedChatRoom } from '../../types/types';
 import { ProviderRequestCard } from './ProvideRequestCard';
 import { toast } from 'react-toastify';
 import { AxiosError } from 'axios';
-
 import { ProductManagementSection } from '../NewFeature/ProductManagementSection';
 import { useNavigate } from 'react-router-dom';
+import EnhancedProviderProfile from '../NewFeature/ProviderProfile';
 
 interface ClientRequest extends Request {
   deadline?: string;
@@ -376,6 +376,9 @@ export function ProviderDashboard() {
   const [currentChatRoom, setCurrentChatRoom] = useState<ChatRoom | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const [showEnhancedProfile, setShowEnhancedProfile] = useState(false);
+const [colleges, setColleges] = useState<College[]>([]);
+const [allServices, setAllServices] = useState<Service[]>([]);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -395,6 +398,32 @@ export function ProviderDashboard() {
 
     fetchProviderProfile();
   }, []);
+
+  useEffect(() => {
+  const fetchStaticData = async () => {
+    try {
+      const [collegesRes, servicesRes] = await Promise.all([
+        api.get('/api/colleges'),
+        api.get('/api/services')
+      ]);
+      setColleges(collegesRes.data);
+      setAllServices(servicesRes.data);
+    } catch (error) {
+      console.error('Error fetching static data:', error);
+      toast.error('Failed to load colleges and services data');
+    }
+  };
+  
+  fetchStaticData();
+}, []);
+
+// Add this after fetching provider profile
+useEffect(() => {
+  console.log('Provider data:', provider);
+  console.log('Colleges:', colleges);
+  console.log('Services:', allServices);
+}, [provider, colleges, allServices]);
+
 
   const getCurrentLocation = useCallback((): Promise<Location> => {
     return new Promise((resolve, reject) => {
@@ -704,8 +733,6 @@ export function ProviderDashboard() {
       console.error('lastMessage.data value:', lastMessage.data);
     }
   }, [lastMessage]);
-
-  // REMOVED: Duplicate useEffect for socket handling
   
   const handleExpressInterest = async (requestId: number) => {
     try {
@@ -942,6 +969,55 @@ export function ProviderDashboard() {
     return myBids.some(bid => bid.requestId === requestId && bid.status !== 'withdrawn');
   };
 
+const handleProfileUpdate = async (updatedProfile: ProviderProfileFormData) => {
+  try {
+    const response = await api.put('/api/provider/profile', updatedProfile, {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('token')}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    // ✅ Force a fresh fetch to ensure all data is current
+    await fetchProviderProfile();
+    
+    toast.success('Profile updated successfully!');
+  } catch (error) {
+    console.error('Error updating profile:', error);
+    toast.error('Failed to update profile');
+    throw error;
+  }
+};
+
+// Add this function to refresh provider profile data
+const fetchProviderProfile = async () => {
+  try {
+    const res = await api.get('/api/provider/profile');
+    setProvider(res.data);
+  } catch (error) {
+    console.error('Error fetching provider profile:', error);
+  }
+};
+
+const handleImageUpload = async (file: File): Promise<string> => {
+  try {
+    const formData = new FormData();
+    formData.append('image', file);
+    
+    const response = await api.post('/api/provider/profile/upload', formData, {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('token')}`,
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    
+    // ✅ Check both possible response formats
+    return response.data.imageUrl || response.data.url || response.data;
+  } catch (error) {
+    console.error('Error uploading image:', error);
+    throw error;
+  }
+};
   const withdrawInterest = async (interestId: number) => {
     try {
       await api.delete(`/api/interests/${interestId}`);
@@ -1236,10 +1312,10 @@ export function ProviderDashboard() {
 
             {provider?.isProfileComplete && (
               <button
-                onClick={() => setShowProfileModal(true)}
+                onClick={() => setShowEnhancedProfile(true)}
                 className="text-xs sm:text-sm text-blue-600 hover:text-blue-800 px-2 py-1 sm:px-3 sm:py-1.5 lg:px-4 lg:py-2 rounded hover:bg-blue-50"
               >
-                Edit Profile
+                View/Edit Profile
               </button>
             )}
 
@@ -1848,6 +1924,35 @@ export function ProviderDashboard() {
           </div>
         </div>
       )}
+
+      {showEnhancedProfile && provider && (
+  <EnhancedProviderProfile
+    isOpen={showEnhancedProfile}
+    onClose={() => setShowEnhancedProfile(false)}
+    profile={{
+      id: provider.id,
+      firstName: provider.firstName || '',
+      lastName: provider.lastName || '',
+      bio: provider.bio || '',
+      phoneNumber: provider.phoneNumber || '',
+      address: provider.address || '',
+      latitude: provider.latitude,
+      longitude: provider.longitude,
+      collegeId: provider.collegeId,
+      college: provider.college || colleges.find(c => c.id === provider.collegeId),
+      services: provider.services || [],
+      pastWorks: provider.pastWorks || [],
+      profileImageUrl: provider.profileImageUrl || '',
+      isProfileComplete: provider.isProfileComplete || false,
+      rating: provider.rating,
+      completedRequests: provider.completedRequests || 0
+    }}
+    colleges={colleges}
+    services={allServices}
+    onProfileUpdate={handleProfileUpdate}
+    onImageUpload={handleImageUpload}
+  />
+)}
     </div>
   );
 }
