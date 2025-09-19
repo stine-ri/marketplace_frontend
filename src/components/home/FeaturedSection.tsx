@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Star, MapPin, Clock, Package, ShoppingBag, Loader, AlertCircle, Wrench, RefreshCw, Filter, ShoppingCart } from 'lucide-react';
+import { Star, MapPin, Clock, Package, ShoppingBag, Loader, AlertCircle, Wrench, RefreshCw, Filter, ShoppingCart, Users, Eye } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../context/AuthContext';
 
@@ -44,6 +44,12 @@ interface Category {
   count?: number;
 }
 
+interface Stats {
+  totalServices: number;
+  totalProducts: number;
+  totalCategories: number;
+}
+
 export const FeaturedSection = () => {
   const [activeTab, setActiveTab] = useState<'services' | 'products'>('services');
   const [services, setServices] = useState<ServiceItem[]>([]);
@@ -56,6 +62,7 @@ export const FeaturedSection = () => {
   const [categoriesLoading, setCategoriesLoading] = useState(false);
   const [categoriesError, setCategoriesError] = useState<string | null>(null);
   const [processingAction, setProcessingAction] = useState<string | null>(null);
+  const [stats, setStats] = useState<Stats>({ totalServices: 0, totalProducts: 0, totalCategories: 0 });
 
   const { isAuthenticated, user } = useAuth();
   const BASE_URL = 'https://mkt-backend-sz2s.onrender.com';
@@ -183,8 +190,6 @@ const handleViewDetails = async (item: any) => {
     setProcessingAction(null);
   }
 };
-
-
 
   const handlePurchase = async (item: any) => {
     if (!isAuthenticated) {
@@ -345,7 +350,7 @@ const handleViewDetails = async (item: any) => {
     }
   }, []);
 
-  // Fetch data from backend
+  // Fetch data from backend with enhanced stats collection
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -371,6 +376,9 @@ const handleViewDetails = async (item: any) => {
         fetch(productsUrl)
       ]);
 
+      let totalServicesCount = 0;
+      let totalProductsCount = 0;
+
       // Handle services
       if (servicesRes.status === 'fulfilled' && servicesRes.value.ok) {
         const servicesData = await servicesRes.value.json();
@@ -388,6 +396,8 @@ const handleViewDetails = async (item: any) => {
                    selectedCategoryName.toLowerCase().includes(String(serviceCategory).toLowerCase());
           });
         }
+        
+        totalServicesCount = filteredServices.length;
         
         const formattedServices = filteredServices.slice(0, 8).map((service: any) => ({
           id: service.id || service._id || Math.random().toString(36).substr(2, 9),
@@ -431,6 +441,8 @@ const handleViewDetails = async (item: any) => {
           });
         }
         
+        totalProductsCount = filteredProducts.length;
+        
         const formattedProducts = filteredProducts.slice(0, 8).map((product: any) => ({
           id: product.id || product._id || Math.random().toString(36).substr(2, 9),
           name: String(product.name || product.title || 'Product'),
@@ -456,6 +468,13 @@ const handleViewDetails = async (item: any) => {
       } else {
         setProducts([]);
       }
+
+      // Update stats
+      setStats({
+        totalServices: totalServicesCount,
+        totalProducts: totalProductsCount,
+        totalCategories: serviceCategories.length + productCategories.length
+      });
 
     } catch (err) {
       console.error('Error fetching data:', err);
@@ -534,15 +553,33 @@ const handleViewDetails = async (item: any) => {
     const hasHalfStar = rating % 1 >= 0.5;
     
     return (
-      <div className="flex items-center text-yellow-500 text-sm">
+      <div className="flex items-center text-yellow-400 text-sm">
         {Array.from({ length: 5 }, (_, i) => (
           <Star
             key={i}
-            size={14}
+            size={12}
             className={i < fullStars ? 'fill-current' : 
                       i === fullStars && hasHalfStar ? 'fill-current opacity-50' : 'text-gray-300'}
           />
         ))}
+      </div>
+    );
+  };
+
+  const renderReviewCount = (reviews: number, compact: boolean = false) => {
+    if (compact) {
+      return (
+        <div className="flex items-center gap-1 text-xs text-gray-500">
+          <Users size={10} />
+          <span>{reviews} reviews</span>
+        </div>
+      );
+    }
+    
+    return (
+      <div className="flex items-center gap-1 text-sm text-gray-500">
+        <Users size={12} />
+        <span>{reviews} customer reviews</span>
       </div>
     );
   };
@@ -567,59 +604,75 @@ const handleViewDetails = async (item: any) => {
   };
 
   return (
-    <section className="py-12 lg:py-16 bg-white">
-      <div className="container mx-auto px-4">
-        <div className="text-center mb-10">
-          <h2 className="text-3xl font-bold mb-2">Featured Listings</h2>
-          <p className="text-gray-600 max-w-2xl mx-auto">
+    <section className="py-8 sm:py-12 lg:py-16 bg-gradient-to-br from-gray-50 to-white">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="text-center mb-8 sm:mb-10">
+          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2 text-gray-900">Featured Listings</h2>
+          <p className="text-gray-600 max-w-2xl mx-auto text-sm sm:text-base">
             Discover our top-rated services and products from trusted providers and sellers
           </p>
           
-          {/* Tab Navigation */}
-          <div className="flex justify-center mt-6">
-            <div className="flex border border-gray-200 rounded-lg overflow-hidden">
+          {/* Tab Navigation with Stats */}
+          <div className="flex flex-col items-center mt-6 sm:mt-8">
+            <div className="flex border border-gray-200 rounded-xl overflow-hidden shadow-sm bg-white">
               <button 
-                className={`px-6 py-2 font-medium flex items-center gap-2 transition-colors ${
+                className={`px-4 sm:px-6 py-2 sm:py-3 font-medium flex items-center gap-2 transition-all duration-200 text-sm sm:text-base ${
                   activeTab === 'services' 
-                    ? 'bg-blue-600 text-white' 
-                    : 'bg-white text-gray-600 hover:bg-gray-50'
+                    ? 'bg-blue-600 text-white shadow-md' 
+                    : 'bg-white text-gray-600 hover:bg-blue-50'
                 }`} 
                 onClick={() => setActiveTab('services')}
               >
                 <Wrench size={16} />
-                Services
-                {serviceCategories.length > 0 && (
-                  <span className="ml-1 text-xs bg-white/20 px-1 rounded">
-                    {serviceCategories.reduce((sum, cat) => sum + (cat.count || 0), 0)}
+                <span className="hidden sm:inline">Services</span>
+                <span className="sm:hidden">Services</span>
+                {stats.totalServices > 0 && (
+                  <span className="ml-1 text-xs bg-white/20 px-1.5 py-0.5 rounded-full">
+                    {stats.totalServices}
                   </span>
                 )}
               </button>
               <button 
-                className={`px-6 py-2 font-medium flex items-center gap-2 transition-colors ${
+                className={`px-4 sm:px-6 py-2 sm:py-3 font-medium flex items-center gap-2 transition-all duration-200 text-sm sm:text-base ${
                   activeTab === 'products' 
-                    ? 'bg-blue-600 text-white' 
-                    : 'bg-white text-gray-600 hover:bg-gray-50'
+                    ? 'bg-blue-600 text-white shadow-md' 
+                    : 'bg-white text-gray-600 hover:bg-blue-50'
                 }`} 
                 onClick={() => setActiveTab('products')}
               >
                 <ShoppingBag size={16} />
-                Products
-                {productCategories.length > 0 && (
-                  <span className="ml-1 text-xs bg-white/20 px-1 rounded">
-                    {productCategories.reduce((sum, cat) => sum + (cat.count || 0), 0)}
+                <span className="hidden sm:inline">Products</span>
+                <span className="sm:hidden">Products</span>
+                {stats.totalProducts > 0 && (
+                  <span className="ml-1 text-xs bg-white/20 px-1.5 py-0.5 rounded-full">
+                    {stats.totalProducts}
                   </span>
                 )}
               </button>
+            </div>
+            
+            {/* Stats Summary */}
+            <div className="flex flex-wrap justify-center gap-4 mt-4 text-xs sm:text-sm text-gray-500">
+              <div className="flex items-center gap-1">
+                <span className="font-semibold text-blue-600">
+                  {activeTab === 'services' ? stats.totalServices : stats.totalProducts}
+                </span>
+                <span>Total {activeTab}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="font-semibold text-blue-600">{currentCategories.length}</span>
+                <span>Categories</span>
+              </div>
             </div>
           </div>
         </div>
 
         {/* Category Filter Section */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Filter size={20} className="text-gray-600" />
-              <h3 className="text-lg font-semibold text-gray-800">Filter by Category</h3>
+        <div className="mb-6 sm:mb-8">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4">
+            <div className="flex items-center gap-2 mb-2 sm:mb-0">
+              <Filter size={18} className="text-gray-600" />
+              <h3 className="text-base sm:text-lg font-semibold text-gray-800">Filter by Category</h3>
               {categoriesLoading && <Loader className="w-4 h-4 animate-spin text-blue-600" />}
             </div>
             
@@ -627,10 +680,10 @@ const handleViewDetails = async (item: any) => {
             <button
               onClick={fetchCategories}
               disabled={categoriesLoading}
-              className="flex items-center gap-1 px-3 py-1 text-sm text-gray-600 hover:text-gray-800 transition-colors disabled:opacity-50"
+              className="flex items-center gap-1 px-3 py-1.5 text-xs sm:text-sm text-gray-600 hover:text-gray-800 transition-colors disabled:opacity-50 bg-white rounded-lg border border-gray-200 hover:border-gray-300"
             >
               <RefreshCw size={14} className={categoriesLoading ? 'animate-spin' : ''} />
-              Refresh
+              <span className="hidden sm:inline">Refresh</span>
             </button>
           </div>
 
@@ -650,15 +703,15 @@ const handleViewDetails = async (item: any) => {
             </div>
           )}
 
-          {/* Category Pills */}
+          {/* Category Pills - Enhanced Responsiveness */}
           <div className="flex flex-wrap gap-2 justify-center">
             {/* All Categories Button */}
             <button
               onClick={() => setSelectedCategory('all')}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+              className={`px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-medium transition-all duration-200 ${
                 selectedCategory === 'all'
-                  ? 'bg-blue-600 text-white shadow-md scale-105'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:scale-105'
+                  ? 'bg-blue-600 text-white shadow-lg scale-105'
+                  : 'bg-white text-gray-600 hover:bg-blue-50 hover:scale-105 border border-gray-200 hover:border-blue-300'
               }`}
             >
               All {activeTab}
@@ -667,20 +720,20 @@ const handleViewDetails = async (item: any) => {
               )}
             </button>
             
-            {/* Category Buttons */}
+            {/* Category Buttons - Enhanced Mobile View */}
             {currentCategories.length > 0 ? (
               currentCategories.map((category) => (
                 <button
                   key={category.id}
                   onClick={() => setSelectedCategory(String(category.id))}
-                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+                  className={`px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-medium transition-all duration-200 ${
                     selectedCategory === String(category.id)
-                      ? 'bg-blue-600 text-white shadow-md scale-105'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:scale-105'
+                      ? 'bg-blue-600 text-white shadow-lg scale-105'
+                      : 'bg-white text-gray-600 hover:bg-blue-50 hover:scale-105 border border-gray-200 hover:border-blue-300'
                   }`}
                 >
                   <span className="mr-1">{getCategoryIcon(category.name)}</span>
-                  {String(category.name)}
+                  <span className="truncate max-w-24 sm:max-w-none">{String(category.name)}</span>
                   {category.count !== undefined && (
                     <span className="ml-1 text-xs opacity-75">({category.count})</span>
                   )}
@@ -706,7 +759,7 @@ const handleViewDetails = async (item: any) => {
 
         {/* Loading State */}
         {loading && (
-          <div className="flex justify-center items-center py-16">
+          <div className="flex justify-center items-center py-12 sm:py-16">
             <div className="text-center">
               <Loader className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-4" />
               <p className="text-gray-600">Loading {activeTab}...</p>
@@ -716,7 +769,7 @@ const handleViewDetails = async (item: any) => {
 
         {/* Error State */}
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 sm:p-6 text-center mx-4 sm:mx-0">
             <AlertCircle className="w-8 h-8 text-red-500 mx-auto mb-2" />
             <p className="text-red-700 font-medium">{error}</p>
             <button 
@@ -733,20 +786,20 @@ const handleViewDetails = async (item: any) => {
           <>
             {currentItems.length === 0 ? (
               // Enhanced Empty State with better messaging
-              <div className="text-center py-16">
-                <div className="text-6xl mb-6">
+              <div className="text-center py-12 sm:py-16 px-4">
+                <div className="text-4xl sm:text-6xl mb-4 sm:mb-6">
                   {selectedCategory === 'all' 
                     ? (activeTab === 'services' ? '🛠️' : '📦')
                     : '🔍'
                   }
                 </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-4">
+                <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4">
                   {selectedCategory === 'all' 
                     ? `No ${activeTab} available yet` 
                     : `No ${activeTab} found in "${selectedCategoryName}" category`
                   }
                 </h3>
-                <p className="text-gray-600 mb-8 max-w-md mx-auto">
+                <p className="text-gray-600 mb-6 sm:mb-8 max-w-md mx-auto text-sm sm:text-base">
                   {selectedCategory === 'all' 
                     ? `Be the first to ${activeTab === 'services' ? 'offer services' : 'list products'} on our platform and start earning today!`
                     : `We couldn't find any ${activeTab} in the "${selectedCategoryName}" category right now. This could be because:`
@@ -763,11 +816,11 @@ const handleViewDetails = async (item: any) => {
                   </div>
                 )}
 
-                <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center">
                   {selectedCategory !== 'all' && (
                     <button 
                       onClick={() => setSelectedCategory('all')}
-                      className="bg-gray-600 hover:bg-gray-700 text-white px-8 py-3 rounded-lg font-semibold transition-colors inline-flex items-center gap-2"
+                      className="w-full sm:w-auto bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 px-6 sm:px-8 py-3 rounded-lg font-semibold transition-colors inline-flex items-center justify-center gap-2"
                     >
                       <Filter size={16} />
                       View All {activeTab}
@@ -776,7 +829,7 @@ const handleViewDetails = async (item: any) => {
                   
                   <button 
                     onClick={() => window.location.href = '/register?role=provider'}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-semibold transition-colors inline-flex items-center gap-2"
+                    className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-6 sm:px-8 py-3 rounded-lg font-semibold transition-colors inline-flex items-center justify-center gap-2"
                   >
                     {activeTab === 'services' ? 'Become a Service Provider' : 'Start Selling Products'}
                     <Wrench size={16} />
@@ -810,7 +863,7 @@ const handleViewDetails = async (item: any) => {
               <>
                 {/* Results Header */}
                 <div className="mb-6 text-center">
-                  <p className="text-gray-600">
+                  <p className="text-gray-600 text-sm sm:text-base">
                     {selectedCategory === 'all' 
                       ? `Showing ${currentItems.length} featured ${activeTab}`
                       : `Found ${currentItems.length} ${activeTab} in "${selectedCategoryName}" category`
@@ -818,12 +871,12 @@ const handleViewDetails = async (item: any) => {
                   </p>
                 </div>
 
-                {/* Items Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {/* Items Grid - Enhanced Responsive Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
                   {currentItems.map((item) => (
                     <div 
                       key={item.id} 
-                      className="bg-white rounded-lg overflow-hidden shadow-md border border-gray-100 transition-transform hover:-translate-y-1 hover:shadow-lg group"
+                      className="bg-white rounded-xl overflow-hidden shadow-sm border border-gray-100 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 group"
                     >
                       {/* Image Section */}
                       <div className="relative overflow-hidden">
@@ -831,31 +884,31 @@ const handleViewDetails = async (item: any) => {
                           <img
                             src={item.image}
                             alt={item.name}
-                            className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
+                            className="w-full h-40 sm:h-48 object-cover group-hover:scale-105 transition-transform duration-300"
                             onError={(e) => {
                               (e.target as HTMLImageElement).style.display = 'none';
                             }}
                           />
                         ) : (
-                          <div className="w-full h-48 flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 text-6xl">
+                          <div className="w-full h-40 sm:h-48 flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 text-4xl sm:text-6xl">
                             {getCategoryIcon(item.category)}
                           </div>
                         )}
                         
                         {/* Badges */}
-                        <div className="absolute top-2 right-2">
+                        <div className="absolute top-2 right-2 space-y-1">
                           {activeTab === 'products' && (item as ProductItem).discount && (item as ProductItem).discount! > 0 && (
-                            <div className="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded mb-1">
+                            <div className="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full">
                               {(item as ProductItem).discount}% OFF
                             </div>
                           )}
                           {activeTab === 'products' && (item as ProductItem).isNew && (
-                            <div className="bg-green-500 text-white text-xs font-bold px-2 py-1 rounded">
-                              New Arrival
+                            <div className="bg-green-500 text-white text-xs font-bold px-2 py-1 rounded-full">
+                              New
                             </div>
                           )}
                           {activeTab === 'services' && (
-                            <div className="bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded">
+                            <div className="bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded-full">
                               Featured
                             </div>
                           )}
@@ -863,135 +916,149 @@ const handleViewDetails = async (item: any) => {
                       </div>
 
                       {/* Content Section */}
-                      <div className="p-5">
+                      <div className="p-4 sm:p-5">
                         {activeTab === 'services' ? (
                           <>
                             <div className="flex items-center mb-3">
-                              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm mr-3">
+                              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-xs sm:text-sm mr-3">
                                 {String((item as ServiceItem).provider).charAt(0).toUpperCase()}
                               </div>
-                              <div>
-                                <h4 className="font-medium">{String((item as ServiceItem).provider)}</h4>
-                                <div className="flex items-center gap-1">
-                                  {renderStars(item.rating)}
-                                  <span className="text-gray-600 ml-1 text-sm">({item.reviews})</span>
+                              <div className="flex-1 min-w-0">
+                                <h4 className="font-medium text-sm sm:text-base truncate">{String((item as ServiceItem).provider)}</h4>
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-1">
+                                    {renderStars(item.rating)}
+                                    <span className="text-gray-500 ml-1 text-xs">{item.rating.toFixed(1)}</span>
+                                  </div>
+                                  {renderReviewCount(item.reviews, true)}
                                 </div>
                               </div>
                             </div>
                             
-                            <h3 className="text-lg font-bold mb-2 line-clamp-2">
+                            <h3 className="text-sm sm:text-lg font-bold mb-2 line-clamp-2">
                               {String(item.name)}
                             </h3>
                             
-                            <p className="text-gray-600 text-sm mb-3 line-clamp-2">
+                            <p className="text-gray-600 text-xs sm:text-sm mb-3 line-clamp-2">
                               {String(item.description)}
                             </p>
                             
-                            <div className="flex items-center text-gray-500 text-sm mb-3">
-                              <MapPin size={14} className="mr-1 flex-shrink-0" />
-                              <span className="truncate">{String(item.location)}</span>
+                            <div className="flex items-center text-gray-500 text-xs sm:text-sm mb-3 space-x-3">
+                              <div className="flex items-center">
+                                <MapPin size={12} className="mr-1 flex-shrink-0" />
+                                <span className="truncate">{String(item.location)}</span>
+                              </div>
                               {(item as ServiceItem).duration && (
-                                <>
-                                  <Clock size={14} className="ml-3 mr-1 flex-shrink-0" />
-                                  <span>{String((item as ServiceItem).duration)}</span>
-                                </>
+                                <div className="flex items-center">
+                                  <Clock size={12} className="mr-1 flex-shrink-0" />
+                                  <span className="truncate">{String((item as ServiceItem).duration)}</span>
+                                </div>
                               )}
                             </div>
                             
                             <div className="flex items-center justify-between">
-                              <span className="text-blue-600 font-bold">
+                              <span className="text-blue-600 font-bold text-sm sm:text-base">
                                 {formatPrice(item.price)}
                               </span>
                               <button 
                                 onClick={() => handleBookNow(item)}
                                 disabled={processingAction === `booking-${item.id}`}
-                                className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                                className="px-3 py-1.5 bg-white text-blue-600 border border-blue-600 text-xs sm:text-sm font-medium rounded-lg hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
                               >
                                 {processingAction === `booking-${item.id}` ? (
                                   <>
-                                    <Loader className="w-4 h-4 animate-spin mr-2" />
-                                    Booking...
+                                    <Loader className="w-3 h-3 animate-spin mr-1" />
+                                    <span className="hidden sm:inline">Booking...</span>
                                   </>
                                 ) : (
-                                  'Book Now'
+                                  <>
+                                    <span>Book Now</span>
+                                  </>
                                 )}
                               </button>
                             </div>
                           </>
                         ) : (
                           <>
-                            <div className="flex items-center mb-3">
-                              <Package size={16} className="text-blue-600 mr-2" />
-                              <span className="text-sm text-gray-600 capitalize">{String(item.category)}</span>
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center">
+                                <Package size={14} className="text-blue-600 mr-2" />
+                                <span className="text-xs sm:text-sm text-gray-600 capitalize truncate">{String(item.category)}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                {renderStars(item.rating)}
+                                <span className="text-gray-500 ml-1 text-xs">{item.rating.toFixed(1)}</span>
+                              </div>
                             </div>
                             
-                            <div className="flex items-center mb-3">
-                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-blue-600 flex items-center justify-center text-white font-bold text-xs mr-2">
+                            <div className="flex items-center mb-2">
+                              <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-green-500 to-blue-600 flex items-center justify-center text-white font-bold text-xs mr-2">
                                 {String((item as ProductItem).seller).charAt(0).toUpperCase()}
                               </div>
-                              <span className="text-sm text-gray-600 font-medium">{String((item as ProductItem).seller)}</span>
+                              <span className="text-xs sm:text-sm text-gray-600 font-medium truncate">{String((item as ProductItem).seller)}</span>
                             </div>
                             
-                            <h3 className="text-lg font-bold mb-2 line-clamp-2">
+                            <h3 className="text-sm sm:text-lg font-bold mb-2 line-clamp-2">
                               {String(item.name)}
                             </h3>
                             
-                            <p className="text-gray-600 text-sm mb-3 line-clamp-2">
+                            <p className="text-gray-600 text-xs sm:text-sm mb-3 line-clamp-2">
                               {String(item.description)}
                             </p>
                             
                             <div className="flex items-center justify-between mb-3">
-                              <div className="flex items-center gap-1">
-                                {renderStars(item.rating)}
-                                <span className="text-gray-600 ml-1 text-sm">({item.reviews})</span>
-                              </div>
+                              {renderReviewCount(item.reviews, true)}
                               <div className="flex items-center text-gray-500 text-xs">
-                                <MapPin size={12} className="mr-1" />
-                                <span className="truncate max-w-20">{String(item.location)}</span>
+                                <MapPin size={10} className="mr-1" />
+                                <span className="truncate max-w-16 sm:max-w-20">{String(item.location)}</span>
                               </div>
                             </div>
                             
                             <div className="flex items-center justify-between">
                               <div className="flex flex-col">
                                 {(item as ProductItem).originalPrice && (item as ProductItem).discount! > 0 && (
-                                  <span className="text-gray-400 line-through text-sm">
+                                  <span className="text-gray-400 line-through text-xs">
                                     {formatPrice((item as ProductItem).originalPrice!)}
                                   </span>
                                 )}
-                                <span className="text-blue-600 font-bold">
+                                <span className="text-blue-600 font-bold text-sm sm:text-base">
                                   {formatPrice(item.price)}
                                 </span>
                               </div>
-                              <div className="flex gap-2">
+                              <div className="flex gap-1 sm:gap-2">
                                 <button 
                                   onClick={() => handlePurchase(item)}
                                   disabled={processingAction === `purchase-${item.id}`}
-                                  className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                                  className="px-2 sm:px-3 py-1.5 bg-green-600 text-white text-xs sm:text-sm font-medium rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
                                 >
                                   {processingAction === `purchase-${item.id}` ? (
                                     <>
-                                      <Loader className="w-4 h-4 animate-spin mr-2" />
-                                      Processing...
+                                      <Loader className="w-3 h-3 animate-spin mr-1" />
+                                      <span className="hidden sm:inline">Processing...</span>
                                     </>
                                   ) : (
                                     <>
-                                      <ShoppingCart size={14} className="mr-1" />
-                                      Purchase
+                                      <ShoppingCart size={12} className="mr-1" />
+                                      <span className="hidden sm:inline">Purchase</span>
+                                      <span className="sm:hidden">Buy</span>
                                     </>
                                   )}
                                 </button>
                                 <button 
                                   onClick={() => handleViewDetails(item)}
                                   disabled={processingAction === `details-${item.id}`}
-                                  className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                                  className="px-2 sm:px-3 py-1.5 bg-white text-blue-600 border border-blue-600 text-xs sm:text-sm font-medium rounded-lg hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
                                 >
                                   {processingAction === `details-${item.id}` ? (
                                     <>
-                                      <Loader className="w-4 h-4 animate-spin mr-2" />
-                                      Loading...
+                                      <Loader className="w-3 h-3 animate-spin mr-1" />
+                                      <span className="hidden sm:inline">Loading...</span>
                                     </>
                                   ) : (
-                                    'Details'
+                                    <>
+                                      <Eye size={12} className="mr-1" />
+                                      <span>Details</span>
+                                    </>
                                   )}
                                 </button>
                               </div>
@@ -1007,11 +1074,11 @@ const handleViewDetails = async (item: any) => {
 
             {/* View All Button */}
             {currentItems.length > 0 && (
-              <div className="text-center mt-10 space-y-4">
-                <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+              <div className="text-center mt-8 sm:mt-10 space-y-4">
+                <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center px-4 sm:px-0">
                   <button 
                     onClick={handleRegisterRedirect}
-                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors flex items-center gap-2"
+                    className="w-full sm:w-auto px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-medium transition-colors flex items-center justify-center gap-2 shadow-md hover:shadow-lg"
                   >
                     View All {activeTab === 'services' ? 'Services' : 'Products'}
                     {selectedCategory !== 'all' && ` in ${selectedCategoryName}`}
@@ -1020,14 +1087,14 @@ const handleViewDetails = async (item: any) => {
                   
                   <button 
                     onClick={() => window.location.href = '/register?role=provider'}
-                    className="px-6 py-3 bg-white text-blue-600 border border-blue-600 rounded-lg hover:bg-blue-50 font-medium transition-colors"
+                    className="w-full sm:w-auto px-6 py-3 bg-white text-blue-600 border border-blue-600 rounded-xl hover:bg-blue-50 font-medium transition-colors"
                   >
                     {activeTab === 'services' ? 'Become a Provider' : 'Start Selling'}
                   </button>
                 </div>
                 
                 {/* Summary Stats */}
-                <div className="flex flex-wrap justify-center gap-6 text-sm text-gray-600 pt-4 border-t border-gray-100">
+                <div className="flex flex-wrap justify-center gap-4 sm:gap-6 text-xs sm:text-sm text-gray-600 pt-4 border-t border-gray-100">
                   <div className="flex items-center gap-1">
                     <span className="font-semibold text-blue-600">{currentItems.length}</span>
                     <span>Featured {activeTab}</span>
@@ -1037,9 +1104,11 @@ const handleViewDetails = async (item: any) => {
                     <span className="font-semibold text-blue-600">{currentCategories.length}</span>
                     <span>Categories Available</span>
                   </div>
-                  {totalItemsCount > 0 && (
+                  {(activeTab === 'services' ? stats.totalServices : stats.totalProducts) > 0 && (
                     <div className="flex items-center gap-1">
-                      <span className="font-semibold text-blue-600">{totalItemsCount}</span>
+                      <span className="font-semibold text-blue-600">
+                        {activeTab === 'services' ? stats.totalServices : stats.totalProducts}
+                      </span>
                       <span>Total Listed</span>
                     </div>
                   )}
@@ -1052,7 +1121,7 @@ const handleViewDetails = async (item: any) => {
         {/* Categories Management Notice */}
         {!categoriesLoading && (serviceCategories.length > 0 || productCategories.length > 0) && (
           <div className="mt-8 text-center">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg text-xs sm:text-sm">
               <RefreshCw size={14} />
               <span>Categories are automatically updated when new {activeTab} are added</span>
             </div>

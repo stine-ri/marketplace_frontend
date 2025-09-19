@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { XMarkIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, PhotoIcon } from '@heroicons/react/24/outline'; // Add PhotoIcon
 import axios from 'axios';
+import { toast } from 'react-toastify';
 
 interface NewRequestModalProps {
   isOpen: boolean;
@@ -23,6 +24,10 @@ export function NewRequestModal({ isOpen, onClose, onSubmit }: NewRequestModalPr
     urgency: 'standard'
   });
 
+  // ADD: New image upload state
+  const [images, setImages] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
+
   const [services, setServices] = useState<Service[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -42,6 +47,78 @@ export function NewRequestModal({ isOpen, onClose, onSubmit }: NewRequestModalPr
     fetchServices();
   }, [isOpen]);
 
+  // ADD: Image handling functions
+const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+ 
+  
+  if (e.target.files) {
+    const files = Array.from(e.target.files);
+    console.log(`Selected ${files.length} files`);
+    
+    // Validate each file
+    const validFiles = files.filter(file => {
+      const isValid = file.size > 0 && 
+                     file.size <= 5 * 1024 * 1024 && // 5MB limit
+                     file.type.startsWith('image/');
+      
+      console.log(`File validation: ${file.name}`, {
+        size: file.size,
+        type: file.type,
+        sizeOk: file.size > 0 && file.size <= 5 * 1024 * 1024,
+        typeOk: file.type.startsWith('image/'),
+        valid: isValid
+      });
+      
+      if (!isValid) {
+        if (file.size === 0) {
+          toast.error(`File ${file.name} is empty`);
+        } else if (file.size > 5 * 1024 * 1024) {
+          toast.error(`File ${file.name} is too large (max 5MB)`);
+        } else if (!file.type.startsWith('image/')) {
+          toast.error(`File ${file.name} is not an image`);
+        }
+      }
+      
+      return isValid;
+    });
+    
+    console.log(`Valid files: ${validFiles.length}/${files.length}`);
+    
+    if (validFiles.length === 0) {
+      toast.error('No valid image files selected');
+      return;
+    }
+    
+    setImages(validFiles);
+    
+    // Create previews
+    const newPreviews = validFiles.map(file => {
+      const url = URL.createObjectURL(file);
+      console.log(`Created preview for ${file.name}: ${url}`);
+      return url;
+    });
+    
+    setPreviews(newPreviews);
+    
+    if (validFiles.length !== files.length) {
+      toast.warning(`${files.length - validFiles.length} files were rejected due to validation errors`);
+    } else {
+      toast.success(`${validFiles.length} images selected`);
+    }
+  }
+};
+
+  const removeImage = (index: number) => {
+    const newImages = [...images];
+    newImages.splice(index, 1);
+    setImages(newImages);
+    
+    const newPreviews = [...previews];
+    URL.revokeObjectURL(newPreviews[index]);
+    newPreviews.splice(index, 1);
+    setPreviews(newPreviews);
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -50,28 +127,111 @@ export function NewRequestModal({ isOpen, onClose, onSubmit }: NewRequestModalPr
     }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    try {
+  // UPDATED: Handle submit with images
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setIsSubmitting(true);
+  
+  try {
+    console.log('=== FORM SUBMISSION DEBUG ===');
+    console.log('Images selected:', images.length);
+
+    
+    // Validate images before proceeding
+    const validImages = images.filter(img => {
+      console.log(`Image validation: ${img.name}`, {
+        size: img.size,
+        type: img.type,
+        lastModified: img.lastModified,
+        valid: img.size > 0 && img.type.startsWith('image/')
+      });
+      return img.size > 0 && img.type.startsWith('image/');
+    });
+    
+    console.log(`Valid images: ${validImages.length}/${images.length}`);
+    
+    if (validImages.length > 0) {
+      console.log('Creating FormData with images...');
+      
+      // Create FormData for image upload
+      const formDataWithImages = new FormData();
+      
+      // Add form fields first
+      formDataWithImages.append('productName', formData.title);
+      formDataWithImages.append('description', formData.description || '');
+      formDataWithImages.append('desiredPrice', formData.desiredPrice);
+      formDataWithImages.append('location', formData.location);
+      formDataWithImages.append('serviceId', formData.serviceId);
+      formDataWithImages.append('isService', 'true');
+      
+      // Add images - CRITICAL: Make sure this matches backend expectations
+      validImages.forEach((image, index) => {
+        console.log(`Adding image ${index}:`, {
+          name: image.name,
+          size: image.size,
+          type: image.type
+        });
+        formDataWithImages.append('images', image, image.name); // Explicitly set filename
+      });
+      
+      // Debug: Log all FormData entries
+      console.log('=== FORMDATA CONTENTS ===');
+      for (let [key, value] of formDataWithImages.entries()) {
+        if (value instanceof File) {
+          console.log(`${key}: File "${value.name}" (${value.size} bytes, ${value.type})`);
+        } else {
+          console.log(`${key}: "${value}"`);
+        }
+      }
+      
+      // Verify images are actually in FormData
+      const imageEntries = formDataWithImages.getAll('images');
+      console.log('Images in FormData:', imageEntries.length);
+      imageEntries.forEach((img, i) => {
+        if (img instanceof File) {
+          console.log(`  Image ${i}: ${img.name} (${img.size} bytes)`);
+        }
+      });
+      
+      console.log('Calling onSubmit with FormData...');
+      await onSubmit(formDataWithImages);
+    } else {
+      console.log('No valid images, submitting as JSON...');
       await onSubmit({
-        ...formData,
+        productName: formData.title,
+        description: formData.description,
         serviceId: Number(formData.serviceId),
         desiredPrice: parseFloat(formData.desiredPrice),
+        location: formData.location,
         isService: true
       });
-      setFormData({
-        title: '',
-        description: '',
-        serviceId: '',
-        desiredPrice: '',
-        location: '',
-        urgency: 'standard'
-      });
-    } finally {
-      setIsSubmitting(false);
     }
-  };
+
+    // Reset form on success
+    setFormData({
+      title: '',
+      description: '',
+      serviceId: '',
+      desiredPrice: '',
+      location: '',
+      urgency: 'standard'
+    });
+    
+    // Reset images
+    setImages([]);
+    previews.forEach(preview => URL.revokeObjectURL(preview));
+    setPreviews([]);
+    
+    onClose(); // Close modal on success
+    
+  } catch (error) {
+    console.error('=== FORM SUBMISSION ERROR ===', error);
+  } finally {
+    setIsSubmitting(false);
+  }
+};
+
+
 
   if (!isOpen) return null;
 
@@ -181,6 +341,59 @@ export function NewRequestModal({ isOpen, onClose, onSubmit }: NewRequestModalPr
                 className="mt-1 block w-full border border-gray-300 rounded-md py-2 px-3 sm:text-sm"
                 placeholder="Address or general location"
               />
+            </div>
+
+            {/* ADD: Image Upload Section */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Reference Images (Optional)
+              </label>
+              <div className="mt-1 flex justify-center rounded-md border-2 border-dashed border-gray-300 px-6 pt-5 pb-6">
+                <div className="space-y-1 text-center">
+                  <PhotoIcon className="mx-auto h-12 w-12 text-gray-400" />
+                  <div className="flex text-sm text-gray-600">
+                    <label
+                      htmlFor="request-file-upload"
+                      className="relative cursor-pointer rounded-md bg-white font-medium text-indigo-600 focus-within:outline-none hover:text-indigo-500"
+                    >
+                      <span>Upload images</span>
+                      <input
+                        id="request-file-upload"
+                        name="request-file-upload"
+                        type="file"
+                        className="sr-only"
+                        multiple
+                        onChange={handleImageChange}
+                        accept="image/*"
+                      />
+                    </label>
+                    <p className="pl-1">or drag and drop</p>
+                  </div>
+                  <p className="text-xs text-gray-500">PNG, JPG, GIF up to 5MB each</p>
+                </div>
+              </div>
+              
+              {/* Image Previews */}
+              {previews.length > 0 && (
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  {previews.map((preview, index) => (
+                    <div key={index} className="relative group">
+                      <img
+                        src={preview}
+                        alt={`Preview ${index}`}
+                        className="h-24 w-full object-cover rounded"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeImage(index)}
+                        className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1 hover:bg-black/70"
+                      >
+                        <XMarkIcon className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="pt-4 flex justify-end gap-3">

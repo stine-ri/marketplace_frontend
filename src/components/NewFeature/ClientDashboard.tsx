@@ -200,6 +200,7 @@ export function ClientDashboard() {
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [selectedRequestForReview, setSelectedRequestForReview] = useState<any>(null);
   const [userTestimonials, setUserTestimonials] = useState<any[]>([]);
+  const [activeNavItem, setActiveNavItem] = useState<'dashboard' | 'requests' | 'marketplace' | 'purchases' | 'providers' | 'chat'>('requests');
 
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com';
 
@@ -349,6 +350,27 @@ export function ClientDashboard() {
     }
   }, [lastMessage]);
 
+  //useEffect to sync navigation state with main tabs and routes
+useEffect(() => {
+  const currentPath = window.location.pathname;
+  if (currentPath.includes('/providers')) {
+    setActiveNavItem('providers');
+  } else if (currentPath.includes('/chat')) {
+    setActiveNavItem('chat');
+  } else {
+    // Sync with main tabs
+    if (activeMainTab === 'requests') {
+      setActiveNavItem('requests');
+    } else if (activeMainTab === 'marketplace') {
+      setActiveNavItem('marketplace');
+    } else if (activeMainTab === 'purchases') {
+      setActiveNavItem('purchases');
+    } else {
+      setActiveNavItem('dashboard');
+    }
+  }
+}, [activeMainTab, location.pathname]);
+
   const handleRefresh = () => {
     setRefreshing(true);
     fetchRequests();
@@ -403,37 +425,162 @@ export function ClientDashboard() {
     }
   };
 
-  const createNewRequest = async (requestData: any) => {
-    try {
-    
-
-      // For backend storage, stringify objects, keep strings as-is
-      const requestPayload = {
-        ...requestData,
-        location: typeof requestData.location === 'object' 
-          ? JSON.stringify(requestData.location)
-          : requestData.location
-      };
-
-      const response = await api.post('/api/client/requests', requestPayload);
-      
-      // Add new request to the list with the response data (backend format)
-      const newRequest = {
-        ...response.data,
-        bids: [],
-        createdAt: response.data.createdAt || new Date().toISOString()
-      };
-      
-      setRequests(prev => [newRequest, ...prev]);
-      setShowNewRequestModal(false);
-      
-      toast.success('Request created successfully!');
-    } catch (error) {
-      console.error('Error creating request:', error);
-      toast.error('Failed to create request');
+//  createNewRequest function in ClientDashboard
+const createNewRequest = async (requestData: FormData | any) => {
+  console.log('=== CREATE REQUEST FUNCTION CALLED ===');
+  console.log('Request data type:', requestData.constructor.name);
+  
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      throw new Error('No authentication token found');
     }
-  };
 
+    let response;
+    
+    if (requestData instanceof FormData) {
+
+      
+      // Debug FormData contents
+      console.log('FormData entries:');
+      for (let [key, value] of requestData.entries()) {
+        if (value instanceof File) {
+          console.log(`${key}: File "${value.name}" (${value.size} bytes, ${value.type})`);
+        } else {
+          console.log(`${key}: "${value}"`);
+        }
+      }
+      
+      // Verify images specifically
+      const images = requestData.getAll('images');
+      console.log(`Images found in FormData: ${images.length}`);
+      images.forEach((img, index) => {
+        if (img instanceof File) {
+          console.log(`Image ${index}: ${img.name} (${img.size} bytes, ${img.type})`);
+        } else {
+          console.log(`Image ${index}: Not a File object:`, typeof img);
+        }
+      });
+      
+      if (images.length === 0) {
+        console.warn('WARNING: No images found in FormData!');
+      }
+      
+      console.log('Making FormData request to:', `${API_BASE_URL}/api/client/requests`);
+      
+      response = await fetch(`${API_BASE_URL}/api/client/requests`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+          // IMPORTANT: Don't set Content-Type for FormData
+        },
+        body: requestData
+      });
+      
+    } else {
+      
+      
+      const requestPayload = {
+        productName: requestData.productName || null,
+        description: requestData.description || null,
+        desiredPrice: validateAndParseNumber(requestData.desiredPrice),
+        isService: Boolean(requestData.isService),
+        serviceId: requestData.serviceId || null,
+        location: validateAndStringifyLocation(requestData.location),
+        collegeFilterId: validateAndParseNumber(requestData.collegeFilterId)
+      };
+
+      const cleanPayload = Object.fromEntries(
+        Object.entries(requestPayload).filter(([_, v]) => v !== null && v !== undefined)
+      );
+
+
+
+      response = await fetch(`${API_BASE_URL}/api/client/requests`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(cleanPayload)
+      });
+    }
+
+
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Error response body:', errorText);
+      
+      let errorMessage = 'Failed to create request';
+      try {
+        const jsonError = JSON.parse(errorText);
+        errorMessage = jsonError.error || jsonError.message || errorMessage;
+      } catch {
+        errorMessage = `Server error: ${response.status} ${response.statusText}`;
+      }
+      
+      throw new Error(errorMessage);
+    }
+
+    const result = await response.json();
+
+    
+    if (result.images && result.images.length > 0) {
+      console.log('Image URLs:', result.images);
+    } else {
+      console.warn('No images in response - check backend processing');
+    }
+    
+    toast.success(`Request created successfully${result.images?.length ? ` with ${result.images.length} images` : ''}!`);
+    
+    // Refresh the requests list
+    await fetchRequests();
+    
+    return result;
+
+  } catch (error) {
+    console.error('=== REQUEST CREATION ERROR ===', error);
+    toast.error('Failed to create request: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    throw error;
+  }
+};
+
+// Helper functions for safer data validation
+function validateAndParseNumber(value: any): number | null {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+  
+  const num = Number(value);
+  if (isNaN(num) || !isFinite(num)) {
+    console.warn(`Invalid number value: ${value}`);
+    return null;
+  }
+  
+  return num;
+}
+
+function validateAndStringifyLocation(location: any): string | null {
+  if (!location) return null;
+  
+  if (typeof location === 'string') {
+    return location;
+  }
+  
+  if (typeof location === 'object') {
+    try {
+      return JSON.stringify(location);
+    } catch (error) {
+      console.error('Failed to stringify location:', error);
+      return null;
+    }
+  }
+  
+  return String(location);
+}
  const filteredRequests = requests.filter(request =>
   activeTab === 'active'
     ? request.status === 'open' || request.status === 'pending'
@@ -922,10 +1069,10 @@ const fetchProducts = useCallback(async () => {
     setShowReviewModal(true);
   };
 
- return (
+return (
     <div className="min-h-screen bg-gray-50">
       {/* Header with improved mobile layout */}
-      <header className="bg-white shadow-sm sticky top-0 z-40">
+      <header className="bg-white shadow-sm sticky top-0 z-40 border-b border-gray-200">
         <div className="mx-auto px-3 sm:px-4 lg:px-8 max-w-7xl">
           {/* Main header content */}
           <div className="flex items-center justify-between h-14 sm:h-16 lg:h-20">
@@ -953,17 +1100,18 @@ const fetchProducts = useCallback(async () => {
             
             {/* Right side - Desktop Navigation */}
             <div className="hidden lg:flex items-center space-x-4">
-              {/* Main/Marketplace Toggle */}
+              {/* Main/Marketplace Toggle - Desktop with persistent state */}
               <div className="flex bg-gray-100 rounded-lg p-1">
                 <button
                   onClick={() => {
                     setActiveMainTab('requests');
                     setShowMarketplace(false);
+                    setActiveNavItem('requests');
                   }}
                   className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-all text-center ${
                     activeMainTab === 'requests' 
-                      ? 'bg-white text-indigo-600 shadow-sm' 
-                      : 'text-gray-500 hover:text-gray-700'
+                      ? 'bg-white text-indigo-600 shadow-sm ring-1 ring-indigo-200' 
+                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
                   }`}
                 >
                   <span className="hidden sm:inline">My Requests</span>
@@ -973,11 +1121,12 @@ const fetchProducts = useCallback(async () => {
                   onClick={() => {
                     setActiveMainTab('marketplace');
                     setShowMarketplace(true);
+                    setActiveNavItem('marketplace');
                   }}
                   className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-all text-center ${
                     activeMainTab === 'marketplace' 
-                      ? 'bg-white text-indigo-600 shadow-sm' 
-                      : 'text-gray-500 hover:text-gray-700'
+                      ? 'bg-white text-indigo-600 shadow-sm ring-1 ring-indigo-200' 
+                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
                   }`}
                 >
                   Marketplace
@@ -986,11 +1135,12 @@ const fetchProducts = useCallback(async () => {
                   onClick={() => {
                     setActiveMainTab('purchases');
                     setShowMarketplace(false);
+                    setActiveNavItem('purchases');
                   }}
                   className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-all text-center ${
                     activeMainTab === 'purchases' 
-                      ? 'bg-white text-indigo-600 shadow-sm' 
-                      : 'text-gray-500 hover:text-gray-700'
+                      ? 'bg-white text-indigo-600 shadow-sm ring-1 ring-indigo-200' 
+                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
                   }`}
                 >
                   <span className="hidden sm:inline">My Purchases</span>
@@ -998,11 +1148,16 @@ const fetchProducts = useCallback(async () => {
                 </button>
               </div>
               
-              {/* Navigation Links */}
+              {/* Navigation Links - Desktop with persistent state */}
               <div className="flex items-center space-x-2">
                 <Link 
                   to="/providers"
-                  className="flex items-center px-3 py-2 text-sm font-medium text-gray-700 hover:text-indigo-600 hover:bg-gray-50 rounded-lg transition-colors"
+                  onClick={() => setActiveNavItem('providers')}
+                  className={`flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
+                    activeNavItem === 'providers'
+                      ? 'text-indigo-600 bg-indigo-50 border border-indigo-200 shadow-sm'
+                      : 'text-gray-700 hover:text-indigo-600 hover:bg-indigo-50 border border-transparent'
+                  }`}
                 >
                   <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -1011,7 +1166,12 @@ const fetchProducts = useCallback(async () => {
                 </Link>
                 <Link 
                   to="/chat"
-                  className="flex items-center px-3 py-2 text-sm font-medium text-gray-700 hover:text-indigo-600 hover:bg-gray-50 rounded-lg transition-colors"
+                  onClick={() => setActiveNavItem('chat')}
+                  className={`flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
+                    activeNavItem === 'chat'
+                      ? 'text-indigo-600 bg-indigo-50 border border-indigo-200 shadow-sm'
+                      : 'text-gray-700 hover:text-indigo-600 hover:bg-indigo-50 border border-transparent'
+                  }`}
                 >
                   <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -1166,7 +1326,7 @@ const fetchProducts = useCallback(async () => {
             </div>
           </div>
           
-          {/* Mobile Navigation - Enhanced layout */}
+          {/* Mobile Navigation - Enhanced layout with persistent state */}
           {mobileMenuOpen && (
             <>
               {/* Mobile menu backdrop */}
@@ -1178,17 +1338,18 @@ const fetchProducts = useCallback(async () => {
               {/* Mobile menu panel */}
               <div className="lg:hidden absolute left-0 right-0 top-full bg-white border-t shadow-lg z-40">
                 <div className="p-4 space-y-4">
-                  {/* Main/Marketplace Toggle - Mobile */}
+                  {/* Main/Marketplace Toggle - Mobile with persistent state */}
                   <div className="flex bg-gray-100 rounded-lg p-1">
                     <button
                       onClick={() => {
                         setActiveMainTab('requests');
                         setShowMarketplace(false);
+                        setActiveNavItem('requests');
                         setMobileMenuOpen(false);
                       }}
                       className={`flex-1 px-2 py-2 rounded-md text-xs font-medium transition-all text-center ${
                         activeMainTab === 'requests' 
-                          ? 'bg-white text-indigo-600 shadow-sm' 
+                          ? 'bg-white text-indigo-600 shadow-sm ring-1 ring-indigo-200' 
                           : 'text-gray-500'
                       }`}
                     >
@@ -1198,11 +1359,12 @@ const fetchProducts = useCallback(async () => {
                       onClick={() => {
                         setActiveMainTab('marketplace');
                         setShowMarketplace(true);
+                        setActiveNavItem('marketplace');
                         setMobileMenuOpen(false);
                       }}
                       className={`flex-1 px-2 py-2 rounded-md text-xs font-medium transition-all text-center ${
                         activeMainTab === 'marketplace' 
-                          ? 'bg-white text-indigo-600 shadow-sm' 
+                          ? 'bg-white text-indigo-600 shadow-sm ring-1 ring-indigo-200' 
                           : 'text-gray-500'
                       }`}
                     >
@@ -1212,11 +1374,12 @@ const fetchProducts = useCallback(async () => {
                       onClick={() => {
                         setActiveMainTab('purchases');
                         setShowMarketplace(false);
+                        setActiveNavItem('purchases');
                         setMobileMenuOpen(false);
                       }}
                       className={`flex-1 px-2 py-2 rounded-md text-xs font-medium transition-all text-center ${
                         activeMainTab === 'purchases' 
-                          ? 'bg-white text-indigo-600 shadow-sm' 
+                          ? 'bg-white text-indigo-600 shadow-sm ring-1 ring-indigo-200' 
                           : 'text-gray-500'
                       }`}
                     >
@@ -1236,12 +1399,19 @@ const fetchProducts = useCallback(async () => {
                     New Request
                   </button>
                   
-                  {/* Navigation Links */}
+                  {/* Mobile Navigation Links with persistent state */}
                   <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-200">
                     <Link 
                       to="/providers"
-                      className="flex items-center justify-center px-3 py-3 text-sm text-gray-700 hover:bg-gray-50 rounded-lg border border-gray-200 transition-colors"
-                      onClick={() => setMobileMenuOpen(false)}
+                      className={`flex items-center justify-center px-3 py-3 text-sm rounded-lg border transition-all duration-200 ${
+                        activeNavItem === 'providers'
+                          ? 'text-indigo-600 bg-indigo-50 border-indigo-200 shadow-sm'
+                          : 'text-gray-700 hover:bg-gray-50 border-gray-200'
+                      }`}
+                      onClick={() => {
+                        setActiveNavItem('providers');
+                        setMobileMenuOpen(false);
+                      }}
                     >
                       <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -1250,8 +1420,15 @@ const fetchProducts = useCallback(async () => {
                     </Link>
                     <Link 
                       to="/chat"
-                      className="flex items-center justify-center px-3 py-3 text-sm text-gray-700 hover:bg-gray-50 rounded-lg border border-gray-200 transition-colors"
-                      onClick={() => setMobileMenuOpen(false)}
+                      className={`flex items-center justify-center px-3 py-3 text-sm rounded-lg border transition-all duration-200 ${
+                        activeNavItem === 'chat'
+                          ? 'text-indigo-600 bg-indigo-50 border-indigo-200 shadow-sm'
+                          : 'text-gray-700 hover:bg-gray-50 border-gray-200'
+                      }`}
+                      onClick={() => {
+                        setActiveNavItem('chat');
+                        setMobileMenuOpen(false);
+                      }}
                     >
                       <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -1268,6 +1445,25 @@ const fetchProducts = useCallback(async () => {
 
       {/* Main Content - Enhanced spacing and layout */}
       <main className="mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-6 max-w-7xl">
+        {/* Navigation Status Indicator */}
+        <div className="mb-4">
+          <div className="flex items-center text-sm text-gray-500">
+            <span className="capitalize font-medium text-indigo-600">
+              {activeNavItem === 'requests' ? 'Service Requests' :
+               activeNavItem === 'marketplace' ? 'Product Marketplace' :
+               activeNavItem === 'purchases' ? 'Purchase History' :
+               activeNavItem === 'providers' ? 'Find Providers' :
+               activeNavItem === 'chat' ? 'Messages' : 'Dashboard'}
+            </span>
+            {(activeNavItem === 'requests' || activeNavItem === 'marketplace' || activeNavItem === 'purchases') && (
+              <>
+                <span className="mx-2">•</span>
+                <span className="capitalize">{activeTab || activeMainTab}</span>
+              </>
+            )}
+          </div>
+        </div>
+
         {activeMainTab === 'marketplace' ? (
           /* Marketplace View - Enhanced mobile layout */
           <div className="bg-white rounded-lg shadow-sm">
@@ -1348,6 +1544,7 @@ const fetchProducts = useCallback(async () => {
                       onClick={() => {
                         setActiveMainTab('marketplace');
                         setShowMarketplace(true);
+                        setActiveNavItem('marketplace');
                       }}
                       className="inline-flex items-center px-6 py-3 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
                     >
@@ -1503,12 +1700,16 @@ const fetchProducts = useCallback(async () => {
         )}
       </main>
 
-      {/* Floating Action Button for Mobile */}
+      {/* Floating Action Button for Mobile - Enhanced with state */}
       <div className="lg:hidden fixed bottom-6 right-4 z-30">
         {activeMainTab === 'requests' ? (
           <button
             onClick={() => setShowNewRequestModal(true)}
-            className="inline-flex items-center justify-center w-14 h-14 border border-transparent rounded-full shadow-lg text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all transform hover:scale-105 active:scale-95"
+            className={`inline-flex items-center justify-center w-14 h-14 border border-transparent rounded-full shadow-lg text-white transition-all transform hover:scale-105 active:scale-95 ${
+              activeNavItem === 'requests' 
+                ? 'bg-indigo-700 ring-2 ring-indigo-200' 
+                : 'bg-indigo-600 hover:bg-indigo-700'
+            }`}
           >
             <PlusIcon className="h-6 w-6" />
             <span className="sr-only">New Request</span>
@@ -1516,7 +1717,11 @@ const fetchProducts = useCallback(async () => {
         ) : activeMainTab === 'marketplace' ? (
           <button
             onClick={() => setShowProductFilters(true)}
-            className="inline-flex items-center justify-center w-14 h-14 border border-transparent rounded-full shadow-lg text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all transform hover:scale-105 active:scale-95"
+            className={`inline-flex items-center justify-center w-14 h-14 border border-transparent rounded-full shadow-lg text-white transition-all transform hover:scale-105 active:scale-95 ${
+              activeNavItem === 'marketplace' 
+                ? 'bg-indigo-700 ring-2 ring-indigo-200' 
+                : 'bg-indigo-600 hover:bg-indigo-700'
+            }`}
           >
             <FunnelIcon className="h-6 w-6" />
             <span className="sr-only">Filter Products</span>
@@ -1526,8 +1731,13 @@ const fetchProducts = useCallback(async () => {
             onClick={() => {
               setActiveMainTab('marketplace');
               setShowMarketplace(true);
+              setActiveNavItem('marketplace');
             }}
-            className="inline-flex items-center justify-center w-14 h-14 border border-transparent rounded-full shadow-lg text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all transform hover:scale-105 active:scale-95"
+            className={`inline-flex items-center justify-center w-14 h-14 border border-transparent rounded-full shadow-lg text-white transition-all transform hover:scale-105 active:scale-95 ${
+              activeNavItem === 'purchases' 
+                ? 'bg-indigo-700 ring-2 ring-indigo-200' 
+                : 'bg-indigo-600 hover:bg-indigo-700'
+            }`}
           >
             <ShoppingBagIcon className="h-6 w-6" />
             <span className="sr-only">Browse Marketplace</span>

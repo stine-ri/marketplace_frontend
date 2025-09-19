@@ -21,7 +21,6 @@ export const ProductUploadModal = ({
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
   const [category, setCategory] = useState(''); // Changed to category
-  const [stock, setStock] = useState('');
   const [images, setImages] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -78,8 +77,6 @@ export const ProductUploadModal = ({
       formData.append('description', description.trim());
       formData.append('price', priceNumber.toString());
       formData.append('category', category); // Changed to category
-      
-      if (stock) formData.append('stock', stock.trim());
       
       images.forEach((image) => {
         formData.append('images', image);
@@ -146,7 +143,6 @@ export const ProductUploadModal = ({
     setDescription('');
     setPrice('');
     setCategory(''); // Reset to empty string
-    setStock('');
     setImages([]);
     previews.forEach(preview => URL.revokeObjectURL(preview));
     setPreviews([]);
@@ -223,17 +219,6 @@ export const ProductUploadModal = ({
                     ))}
                   </select>
                 </div>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Stock Quantity* (Must💯)</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={stock}
-                  onChange={(e) => setStock(e.target.value)}
-                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                />
               </div>
               
               <div>

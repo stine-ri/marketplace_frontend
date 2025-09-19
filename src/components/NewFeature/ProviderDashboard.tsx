@@ -5,10 +5,10 @@ import { NewBidModal } from '../NewFeature/NewBidModal';
 import ProfileCompletionModal from '../NewFeature/ProfileCompletionModal';
 import useWebSocket from '../../hooks/useWebSocket';
 import { useWebSocketContext } from '../../context/WebSocketContext';
-import { BellIcon, ArrowPathIcon, CurrencyDollarIcon, ClockIcon, PencilIcon, TrashIcon, EyeIcon, MapPinIcon, CalendarIcon, TagIcon, HandThumbUpIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { BellIcon, ArrowPathIcon, CurrencyDollarIcon, ClockIcon, PencilIcon, TrashIcon, EyeIcon, MapPinIcon, CalendarIcon, TagIcon, HandThumbUpIcon, XMarkIcon, ChatBubbleLeftIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../../context/AuthContext';
-import type { ProviderProfile, User, InterestWithChatRoom } from '../../types/types';
-import { Request, Bid,  ProviderProfileFormData, Interest, PastWork , College, Service, ChatRoom, ChatMessage,CombinedChatRoom } from '../../types/types';
+import type { ProviderProfile, User } from '../../types/types';
+import { Request, Bid, ProviderProfileFormData, Interest, PastWork, College, Service, ChatRoom, ChatMessage, CombinedChatRoom, InterestWithChatRoom } from '../../types/types';
 import { ProviderRequestCard } from './ProvideRequestCard';
 import { toast } from 'react-toastify';
 import { AxiosError } from 'axios';
@@ -107,7 +107,7 @@ const ProviderProfile: React.FC<ProviderProfileProps> = ({ profile, colleges, se
         <section className="mb-8">
           <h2 className="text-2xl font-semibold mb-4">Past Works</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {pastWorks.map((work, index) => (
+            {pastWorks.map((work: PastWork, index) => (
               <div
                 key={index}
                 className="border rounded-lg overflow-hidden hover:shadow-lg transition-shadow"
@@ -252,6 +252,39 @@ const LocationControls = ({
   </div>
 );
 
+// Error Display Component
+const ErrorDisplay = ({ 
+  error, 
+  onRetry, 
+  title = "Something went wrong" 
+}: { 
+  error: string; 
+  onRetry?: () => void; 
+  title?: string; 
+}) => (
+  <div className="text-center py-8 bg-red-50 rounded-lg border border-red-200">
+    <div className="text-red-500 mb-2">⚠️</div>
+    <h3 className="text-lg font-medium text-red-900 mb-2">{title}</h3>
+    <p className="text-sm text-red-700 mb-4">{error}</p>
+    {onRetry && (
+      <button
+        onClick={onRetry}
+        className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+      >
+        Try Again
+      </button>
+    )}
+  </div>
+);
+
+// Loading Spinner Component
+const LoadingSpinner = ({ message = "Loading..." }: { message?: string }) => (
+  <div className="flex flex-col justify-center items-center h-48 sm:h-64">
+    <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-t-2 border-b-2 border-indigo-500 mb-4"></div>
+    <p className="text-gray-500 text-sm">{message}</p>
+  </div>
+);
+
 function formatLocation(location: any): string {
   if (!location) return 'Location not provided';
   
@@ -280,6 +313,7 @@ function formatLocation(location: any): string {
   
   return 'Location not provided';
 }
+
 // Kenya-specific date formatting
 function formatDate(dateString: string | null | undefined): string {
   if (!dateString) return 'Date not available';
@@ -349,7 +383,6 @@ export function ProviderDashboard() {
   const [selectedRequest, setSelectedRequest] = useState<ClientRequest | null>(null);
 
   const [requests, setRequests] = useState<Request[]>([]);
-  const [bids, setBids] = useState<Bid[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [provider, setProvider] = useState<ProviderProfile | null>(null);
@@ -363,22 +396,29 @@ export function ProviderDashboard() {
     searchTerm: ''
   });
 
+  // Error states
+  const [requestsError, setRequestsError] = useState<string | null>(null);
+  const [bidsError, setBidsError] = useState<string | null>(null);
+  const [interestsError, setInterestsError] = useState<string | null>(null);
+
   const { user, logout } = useAuth();
   const userId = user?.userId;
   const providerId = user?.providerId || provider?.id;
   const { socket } = useWebSocketContext();
 
   const { lastMessage, notifications, unreadCount } = useWebSocket();
-  const [myInterests, setMyInterests] = useState<Interest[]>([]);
+  const [myInterests, setMyInterests] = useState<InterestWithChatRoom[]>([]);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   
-  const [chatRooms, setChatRooms] = useState<ChatRoom[]>([]);
-  const [currentChatRoom, setCurrentChatRoom] = useState<ChatRoom | null>(null);
+  const [chatRooms, setChatRooms] = useState<CombinedChatRoom[]>([]);
+  const [currentChatRoom, setCurrentChatRoom] = useState<CombinedChatRoom | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const [chatError, setChatError] = useState<string | null>(null);
+  
   const [showEnhancedProfile, setShowEnhancedProfile] = useState(false);
-const [colleges, setColleges] = useState<College[]>([]);
-const [allServices, setAllServices] = useState<Service[]>([]);
+  const [colleges, setColleges] = useState<College[]>([]);
+  const [allServices, setAllServices] = useState<Service[]>([]);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -400,30 +440,22 @@ const [allServices, setAllServices] = useState<Service[]>([]);
   }, []);
 
   useEffect(() => {
-  const fetchStaticData = async () => {
-    try {
-      const [collegesRes, servicesRes] = await Promise.all([
-        api.get('/api/colleges'),
-        api.get('/api/services')
-      ]);
-      setColleges(collegesRes.data);
-      setAllServices(servicesRes.data);
-    } catch (error) {
-      console.error('Error fetching static data:', error);
-      toast.error('Failed to load colleges and services data');
-    }
-  };
-  
-  fetchStaticData();
-}, []);
-
-// Add this after fetching provider profile
-useEffect(() => {
-  console.log('Provider data:', provider);
-  console.log('Colleges:', colleges);
-  console.log('Services:', allServices);
-}, [provider, colleges, allServices]);
-
+    const fetchStaticData = async () => {
+      try {
+        const [collegesRes, servicesRes] = await Promise.all([
+          api.get('/api/colleges'),
+          api.get('/api/services')
+        ]);
+        setColleges(collegesRes.data);
+        setAllServices(servicesRes.data);
+      } catch (error) {
+        console.error('Error fetching static data:', error);
+        toast.error('Failed to load colleges and services data');
+      }
+    };
+    
+    fetchStaticData();
+  }, []);
 
   const getCurrentLocation = useCallback((): Promise<Location> => {
     return new Promise((resolve, reject) => {
@@ -473,26 +505,22 @@ useEffect(() => {
     });
   }, []);
 
-  // FIXED: Consolidated fetch function to prevent conflicts
+  // Fetch available requests with error handling
   const fetchAvailableRequests = useCallback(async () => {
     try {
+      setRequestsError(null);
       const token = localStorage.getItem('token');
       if (!token) {
         toast.error("Please log in again");
         return;
       }
 
-      console.log('⌛ Fetching requests...');
-      const startTime = Date.now();
-      
-      // Build query parameters
       const params: any = {};
       
-      // Only add location params if explicitly using location filter
       if (useLocationFilter && userLocation) {
         params.lat = userLocation.lat;
         params.lng = userLocation.lng;
-        params.radius = searchRadius; // Changed from 'range' to 'radius' to match expected API
+        params.radius = searchRadius;
       }
 
       const response = await api.get('/api/provider/requests', {
@@ -500,11 +528,9 @@ useEffect(() => {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        params // Only include params if they exist
+        params
       });
 
-      console.log(`✅ Requests fetched in ${Date.now() - startTime}ms`);
-      
       const requestsWithDefaults = response.data.map((request: any) => {
         let location = request.location;
         if (typeof location === 'string') {
@@ -519,7 +545,7 @@ useEffect(() => {
         return {
           ...request,
           location,
-          serviceName: request.serviceName || request.service?.name || 'Service Request', // Fix undefined serviceName
+          serviceName: request.serviceName || request.service?.name || 'Service Request',
           allowBids: request.allowBids !== false,
           allowInterests: request.allowInterests !== false
         };
@@ -527,31 +553,19 @@ useEffect(() => {
 
       setAvailableRequests(requestsWithDefaults || []);
     } catch (error) {
-      console.error('Error fetching requests:', {
-        error,
-        time: new Date().toISOString(),
-        userLocation,
-        searchRadius,
-        useLocationFilter
-      });
+      console.error('Error fetching requests:', error);
+      const errorMessage = error instanceof AxiosError 
+        ? error.response?.data?.message || "Failed to load requests"
+        : "Failed to load available requests";
       
-      // More specific error handling
-      if (error instanceof AxiosError) {
-        if (error.response?.status === 500) {
-          toast.error("Server error - trying without location filter");
-          // Retry without location parameters
-          if (useLocationFilter) {
-            setUseLocationFilter(false);
-            setUserLocation(null);
-          }
-        } else {
-          toast.error(error.response?.data?.message || "Failed to load requests");
-        }
-      } else {
-        toast.error("Failed to load available requests");
-      }
-      
+      setRequestsError(errorMessage);
       setAvailableRequests([]);
+      
+      if (error instanceof AxiosError && error.response?.status === 500 && useLocationFilter) {
+        toast.error("Server error - trying without location filter");
+        setUseLocationFilter(false);
+        setUserLocation(null);
+      }
     }
   }, [userLocation, searchRadius, useLocationFilter]);
 
@@ -585,12 +599,10 @@ useEffect(() => {
     }
   }, [getCurrentLocation, fetchAvailableRequests]);
 
-  useEffect(() => {
-    fetchAvailableRequests();
-  }, [fetchAvailableRequests]);
-
+  // Fetch bids with error handling
   const fetchMyBids = useCallback(async () => {
     try {
+      setBidsError(null);
       const token = localStorage.getItem('token');
       if (!token) return;
 
@@ -605,16 +617,17 @@ useEffect(() => {
           canWithdraw: ['pending', 'accepted'].includes(bid.status) && !bid.request?.status?.includes('closed')
         }));
         setMyBids(enhancedBids);
-        setBids(response.data);
       }
     } catch (error) {
       console.error('Error fetching my bids:', error);
+      setBidsError('Failed to load your bids');
     }
   }, []);
 
-  // REMOVED: Duplicate fetchRequests function to avoid conflicts
+  // Fetch interests with error handling
   const fetchMyInterests = useCallback(async () => {
     try {
+      setInterestsError(null);
       const token = localStorage.getItem('token');
 
       const response = await api.get('/api/interests/my', {
@@ -627,11 +640,14 @@ useEffect(() => {
      
     } catch (error) {
       console.error('Error fetching my interests:', error);
+      setInterestsError('Failed to load your interests');
     }
   }, []);
 
+  // Fetch chat rooms with error handling
   const fetchChatRooms = useCallback(async () => {
     try {
+      setChatError(null);
       const token = localStorage.getItem('token');
       if (!token) {
         toast.error("Please log in to access chat");
@@ -644,44 +660,73 @@ useEffect(() => {
         }
       });
 
-      const enhancedRooms = response.data.map((room: any) => ({
+      const enhancedRooms: CombinedChatRoom[] = response.data.map((room: any) => ({
         ...room,
         otherParty: room.clientId === user?.userId ? room.provider : room.client,
         lastMessage: room.messages?.[0] || null,
-        unreadCount: room.unreadCount || 0
+        unreadCount: room.unreadCount || 0,
+        fromInterest: room.fromInterest || false
       }));
 
       setChatRooms(enhancedRooms);
     } catch (error) {
       console.error('Error fetching chat rooms:', error);
-      toast.error('Failed to load chat rooms');
+      setChatError('Failed to load chat rooms');
     }
   }, [user?.userId]);
 
-  const fetchChatMessages = useCallback(async (roomId: number) => {
-    try {
-      const response = await api.get(`/api/chat/${roomId}/messages`);
-      setChatMessages(response.data);
-    } catch (error) {
-      console.error('Error fetching chat messages:', error);
-    }
-  }, []);
+ const fetchChatMessages = useCallback(async (roomId: number) => {
+  try {
+    setChatError(null);
+    const token = localStorage.getItem('token');
+    const response = await api.get(`/api/chat/${roomId}/messages`, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+    setChatMessages(response.data || []); // Ensure we always set an array
+  } catch (error) {
+    console.error('Error fetching chat messages:', error);
+    setChatError('Failed to load chat messages');
+    setChatMessages([]); // Set empty array on error
+  }
+}, []);
+const sendChatMessage = useCallback(async () => {
+  if (!currentChatRoom || !newMessage.trim()) return;
 
-  const sendChatMessage = useCallback(async () => {
-    if (!currentChatRoom || !newMessage.trim()) return;
+  try {
+    const token = localStorage.getItem('token');
+    const response = await api.post(`/api/chat/${currentChatRoom.id}/messages`, {
+      content: newMessage
+    }, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+    
+    setChatMessages(prev => [...prev, response.data]);
+    setNewMessage('');
+  } catch (error) {
+    console.error('Error sending message:', error);
+    toast.error('Failed to send message');
+  }
+}, [currentChatRoom, newMessage]);
 
-    try {
-      const response = await api.post(`/api/chat/${currentChatRoom.id}/messages`, {
-        content: newMessage
-      });
-      setChatMessages(prev => [...prev, response.data]);
-      setNewMessage('');
-    } catch (error) {
-      console.error('Error sending message:', error);
-    }
-  }, [currentChatRoom, newMessage]);
+  // Check if request is relevant to provider
+  const isRequestRelevant = useCallback((request: Request): boolean => {
+    if (!provider || !Array.isArray(provider.services)) return false;
+    if (request.serviceId === undefined) return false;
 
-  // FIXED: Simplified data loading to prevent conflicts
+    return provider.services.some(s => s.id === request.serviceId) &&
+           (!request.collegeFilterId || request.collegeFilterId === provider.collegeId);
+  }, [provider]);
+
+  // Check if provider already bid on request
+  const hasAlreadyBid = useCallback((requestId: number) => {
+    return myBids.some(bid => bid.requestId === requestId && bid.status !== 'withdrawn');
+  }, [myBids]);
+
+  // Load all data on component mount
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
@@ -700,6 +745,7 @@ useEffect(() => {
     loadData();
   }, [fetchAvailableRequests, fetchMyBids, fetchMyInterests]);
 
+  // WebSocket message handling
   useEffect(() => {
     if (!lastMessage) return;
 
@@ -726,130 +772,148 @@ useEffect(() => {
             canWithdraw: ['pending', 'accepted'].includes(data.status) && !bid.request?.status?.includes('closed')
           } : bid
         ));
+      } else if (data.type === 'new_message') {
+        if (currentChatRoom && currentChatRoom.id === data.roomId) {
+          setChatMessages(prev => [...prev, data.message]);
+        }
       }
     } catch (error) {
       console.error('WebSocket error:', error);
-      console.error('lastMessage.data type:', typeof lastMessage.data);
-      console.error('lastMessage.data value:', lastMessage.data);
     }
-  }, [lastMessage]);
+  }, [lastMessage, currentChatRoom]);
   
-  const handleExpressInterest = async (requestId: number) => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        toast.error("Authentication required");
-        return;
-      }
-
-      const existingRequest = availableRequests.find(req => req.id === requestId);
-      const hasExistingInterest = existingRequest?.interests?.some(i => 
-        Number(i.providerId) === Number(providerId)
-      );
-      
-      if (hasExistingInterest) {
-        toast.info("You have already expressed interest in this request");
-        return;
-      }
-
-      const tempId = Date.now() + Math.random();
-
-      setAvailableRequests(prev => 
-        prev.map(req => {
-          if (req.id !== requestId) return req;
-          
-          const existingInterests = req.interests || [];
-          const tempInterest: Interest = {
-            id: tempId,
-            requestId,
-            providerId: providerId!,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            status: 'pending'
-          };
-          
-          return {
-            ...req,
-            interests: [...existingInterests, tempInterest]
-          };
-        })
-      );
-
-      const { data } = await api.post<Interest>(
-        `/api/interests/${requestId}`,
-        {},
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      setAvailableRequests(prev => 
-        prev.map(req => {
-          if (req.id !== requestId) return req;
-          
-          const existingInterests = req.interests || [];
-          const cleanedInterests = existingInterests.filter(i => 
-            i.id !== tempId && Number(i.providerId) !== Number(providerId)
-          );
-          
-          return {
-            ...req,
-            interests: [...cleanedInterests, data]
-          };
-        })
-      );
-
-      setMyInterests(prev => {
-        const filtered = prev.filter(i => i.requestId !== requestId);
-        return [...filtered, data];
-      });
-
-      toast.success("Interest expressed successfully!");
-    } catch (error: any) {
-      console.error("Express interest error:", {
-        error,
-        requestId,
-        providerId,
-        time: new Date().toISOString()
-      });
-      
-      setAvailableRequests(prev => 
-        prev.map(req => {
-          if (req.id !== requestId) return req;
-          
-          const existingInterests = req.interests || [];
-          return {
-            ...req,
-            interests: existingInterests.filter(i => 
-              Number(i.providerId) !== Number(providerId)
-            )
-          };
-        })
-      );
-      
-      const errorMessage = error.response?.data?.error 
-        || error.message 
-        || "Failed to express interest";
-        
-      toast.error(errorMessage);
-      
-      if (error.response?.status === 409) {
-        fetchMyInterests();
-        fetchAvailableRequests();
-      }
+const handleExpressInterest = async (requestId: number) => {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      toast.error("Authentication required");
+      return;
     }
-  };
 
-  const isRequestRelevant = (request: Request): boolean => {
-    if (!provider || !Array.isArray(provider.services)) return false;
-    if (request.serviceId === undefined) return false;
+    const existingRequest = availableRequests.find(req => req.id === requestId);
+    const hasExistingInterest = existingRequest?.interests?.some(i => 
+      Number(i.providerId) === Number(providerId)
+    );
+    
+    if (hasExistingInterest) {
+      toast.info("You have already expressed interest in this request");
+      return;
+    }
 
-    return provider.services.some(s => s.id === request.serviceId) &&
-           (!request.collegeFilterId || request.collegeFilterId === provider.collegeId);
-  };
+    const tempId = Date.now() + Math.random();
+
+    setAvailableRequests(prev => 
+      prev.map(req => {
+        if (req.id !== requestId) return req;
+        
+        const existingInterests = req.interests || [];
+        const tempInterest: Interest = {
+          id: tempId,
+          requestId,
+          providerId: providerId!,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          status: 'pending'
+        };
+        
+        return {
+          ...req,
+          interests: [...existingInterests, tempInterest]
+        };
+      })
+    );
+
+    const { data } = await api.post<Interest>(
+      `/api/interests/${requestId}`,
+      {},
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    setAvailableRequests(prev => 
+      prev.map(req => {
+        if (req.id !== requestId) return req;
+        
+        const existingInterests = req.interests || [];
+        const cleanedInterests = existingInterests.filter(i => 
+          i.id !== tempId && Number(i.providerId) !== Number(providerId)
+        );
+        
+        return {
+          ...req,
+          interests: [...cleanedInterests, data]
+        };
+      })
+    );
+
+    // Fixed: Create proper InterestWithChatRoom object
+    setMyInterests(prev => {
+      const filtered = prev.filter(i => i.requestId !== requestId);
+      const request = availableRequests.find(req => req.id === requestId);
+      
+      const interestWithChatRoom: InterestWithChatRoom = {
+        ...data,
+        chatRoom: {} as ChatRoom, // Empty chat room object for now
+        request: request || {
+          id: requestId,
+          userId: 0,
+          title: 'Request',
+          description: '',
+          budget: 0,
+          category: '',
+          location: '',
+          serviceName: '',
+          desired_price: 0,
+          desiredPrice: 0,
+          isService: true,
+          status: 'open' as const,
+          createdAt: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        } as Request
+      };
+      
+      return [...filtered, interestWithChatRoom];
+    });
+
+    toast.success("Interest expressed successfully!");
+  } catch (error: any) {
+    console.error("Express interest error:", {
+      error,
+      requestId,
+      providerId,
+      time: new Date().toISOString()
+    });
+    
+    setAvailableRequests(prev => 
+      prev.map(req => {
+        if (req.id !== requestId) return req;
+        
+        const existingInterests = req.interests || [];
+        return {
+          ...req,
+          interests: existingInterests.filter(i => 
+            Number(i.providerId) !== Number(providerId)
+          )
+        };
+      })
+    );
+    
+    const errorMessage = error.response?.data?.error 
+      || error.message 
+      || "Failed to express interest";
+      
+    toast.error(errorMessage);
+    
+    if (error.response?.status === 409) {
+      fetchMyInterests();
+      fetchAvailableRequests();
+    }
+  }
+};
 
   const handleRefresh = async () => {
     try {
@@ -869,6 +933,9 @@ useEffect(() => {
           break;
         case 'myinterests':
           await fetchMyInterests();
+          break;
+        case 'chat':
+          await fetchChatRooms();
           break;
       }
     } catch (error) {
@@ -903,7 +970,7 @@ useEffect(() => {
 
   const handleEditBid = async (bidId: number, newPrice: number, newMessage: string) => {
     try {
-      const response = await api.put(`/api/bids/${bidId}`, {
+      await api.put(`/api/bids/${bidId}`, {
         price: newPrice,
         message: newMessage
       });
@@ -914,8 +981,10 @@ useEffect(() => {
 
       setShowEditBidModal(false);
       setSelectedBid(null);
+      toast.success('Bid updated successfully!');
     } catch (error) {
       console.error('Error editing bid:', error);
+      toast.error('Failed to update bid');
     }
   };
 
@@ -931,8 +1000,11 @@ useEffect(() => {
         ...req,
         bids: req.bids?.filter(bid => bid.id !== bidId) || []
       })));
+
+      toast.success('Bid withdrawn successfully!');
     } catch (error) {
       console.error('Error withdrawing bid:', error);
+      toast.error('Failed to withdraw bid');
     }
   };
 
@@ -965,59 +1037,55 @@ useEffect(() => {
     );
   };
 
-  const hasAlreadyBid = (requestId: number) => {
-    return myBids.some(bid => bid.requestId === requestId && bid.status !== 'withdrawn');
+  const handleProfileUpdate = async (updatedProfile: ProviderProfileFormData) => {
+    try {
+      setIsLoading(true);
+      await api.put('/api/provider/profile', updatedProfile, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      await fetchProviderProfile();
+      toast.success('Profile updated successfully!');
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      toast.error('Failed to update profile');
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-const handleProfileUpdate = async (updatedProfile: ProviderProfileFormData) => {
-  try {
-    const response = await api.put('/api/provider/profile', updatedProfile, {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('token')}`,
-        'Content-Type': 'application/json'
-      }
-    });
-    
-    // ✅ Force a fresh fetch to ensure all data is current
-    await fetchProviderProfile();
-    
-    toast.success('Profile updated successfully!');
-  } catch (error) {
-    console.error('Error updating profile:', error);
-    toast.error('Failed to update profile');
-    throw error;
-  }
-};
+  const fetchProviderProfile = async () => {
+    try {
+      const res = await api.get('/api/provider/profile');
+      setProvider(res.data);
+    } catch (error) {
+      console.error('Error fetching provider profile:', error);
+    }
+  };
 
-// Add this function to refresh provider profile data
-const fetchProviderProfile = async () => {
-  try {
-    const res = await api.get('/api/provider/profile');
-    setProvider(res.data);
-  } catch (error) {
-    console.error('Error fetching provider profile:', error);
-  }
-};
+  const handleImageUpload = async (file: File): Promise<string> => {
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      
+      const response = await api.post('/api/provider/profile/upload', formData, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      
+      return response.data.imageUrl || response.data.url || response.data;
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      throw error;
+    }
+  };
 
-const handleImageUpload = async (file: File): Promise<string> => {
-  try {
-    const formData = new FormData();
-    formData.append('image', file);
-    
-    const response = await api.post('/api/provider/profile/upload', formData, {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('token')}`,
-        'Content-Type': 'multipart/form-data'
-      }
-    });
-    
-    // ✅ Check both possible response formats
-    return response.data.imageUrl || response.data.url || response.data;
-  } catch (error) {
-    console.error('Error uploading image:', error);
-    throw error;
-  }
-};
   const withdrawInterest = async (interestId: number) => {
     try {
       await api.delete(`/api/interests/${interestId}`);
@@ -1150,7 +1218,7 @@ const handleImageUpload = async (file: File): Promise<string> => {
       return null;
     }
 
-    const hasBid = myBids.some(bid => bid.requestId === request.id && bid.status !== 'withdrawn');
+    const hasBid = hasAlreadyBid(request.id);
     
     const hasInterest = 
       request.interests?.some(i => 
@@ -1211,18 +1279,24 @@ const handleImageUpload = async (file: File): Promise<string> => {
   };
 
   const getDisplayName = (party: User | ProviderProfile | undefined): string => {
-    if (!party) return 'Unknown';
+  if (!party) return 'Unknown User';
+  
+  // Handle User type
+  if ('role' in party) {
+    return party.name || party.full_name || 'User';
+  }
+  
+  // Handle ProviderProfile type
+  if ('firstName' in party && 'lastName' in party) {
+    const name = `${party.firstName || ''} ${party.lastName || ''}`.trim();
+    if (name) return name;
     
-    if ('name' in party) {
-      return party.name || party.full_name || 'User';
-    }
-    
-    if (party.user?.fullName) {
-      return party.user.fullName;
-    }
-    
-    return `${party.firstName} ${party.lastName}`.trim() || 'Provider';
-  };
+    // Fallback to user data if available
+    if (party.user?.fullName) return party.user.fullName;
+  }
+  
+  return 'Unknown User';
+};
 
   function isUser(party: User | ProviderProfile): party is User {
     return (party as User).role !== undefined;
@@ -1244,13 +1318,217 @@ const handleImageUpload = async (file: File): Promise<string> => {
     return undefined;
   };
 
+  // Enhanced Chat Interface Component
+  const ChatInterface = ({ room, onClose }: { room: CombinedChatRoom; onClose: () => void }) => {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messageInput, setMessageInput] = useState('');
+  const [sending, setSending] = useState(false);
+
+   useEffect(() => {
+    if (room) {
+      const loadMessages = async () => {
+        try {
+          setChatError(null);
+          const token = localStorage.getItem('token');
+          const response = await api.get(`/api/chat/${room.id}/messages`, {
+            headers: {
+              Authorization: `Bearer ${token}`
+            }
+          });
+          setMessages(response.data || []);
+        } catch (error) {
+          console.error('Error fetching chat messages:', error);
+          setChatError('Failed to load chat messages');
+          setMessages([]);
+        }
+      };
+      loadMessages();
+    }
+  }, [room]);
+
+   const handleSendMessage = async () => {
+    if (!messageInput.trim() || sending) return;
+
+    setSending(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await api.post(`/api/chat/${room.id}/messages`, {
+        content: messageInput
+      }, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      
+      setMessages(prev => [...prev, response.data]);
+      setMessageInput('');
+    } catch (error) {
+      console.error('Error sending message:', error);
+      toast.error('Failed to send message');
+    } finally {
+      setSending(false);
+    }
+  };
+
+    const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
+
+   return (
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl h-96 flex flex-col">
+        <div className="flex items-center justify-between p-4 border-b">
+          <h3 className="text-lg font-semibold">
+            Chat with {getDisplayName(room.otherParty)}
+          </h3>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <XMarkIcon className="h-6 w-6" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {messages.length === 0 ? (
+            <div className="text-center text-gray-500 mt-8">
+              <p>No messages yet. Start the conversation!</p>
+            </div>
+          ) : (
+            messages.map((message) => (
+              <div
+                key={message.id}
+                className={`flex ${message.senderId === userId ? 'justify-end' : 'justify-start'}`}
+              >
+                <div
+                  className={`max-w-xs px-3 py-2 rounded-lg ${
+                    message.senderId === userId
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-200 text-gray-800'
+                  }`}
+                >
+                  <p className="text-sm">{message.content}</p>
+                  <p className="text-xs mt-1 opacity-75">
+                    {formatRelativeTime(message.createdAt)}
+                  </p>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="p-4 border-t">
+          <div className="flex space-x-2">
+            <input
+              type="text"
+              value={messageInput}
+              onChange={(e) => setMessageInput(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder="Type your message..."
+              className="flex-1 border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={sending}
+            />
+            <button
+              onClick={handleSendMessage}
+              disabled={!messageInput.trim() || sending}
+              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {sending ? 'Sending...' : 'Send'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+  // Improved BidCard Component
+  const BidCard = ({ bid, onEdit, onWithdraw, onView }: { 
+    bid: Bid | ExtendedBid;
+    onEdit?: () => void;
+    onWithdraw?: () => void;
+    onView?: () => void;
+  }) => {
+    return (
+      <div className="bg-white p-4 sm:p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow">
+        <div className="flex justify-between items-start mb-4">
+          <div className="flex-1">
+            <h3 className="text-base sm:text-lg font-semibold mb-2">
+              {'request' in bid && bid.request?.title 
+                ? bid.request.title 
+                : `Request #${bid.requestId}`}
+            </h3>
+            <div className="space-y-2">
+              <p className="text-lg font-bold text-green-600">
+                KSh {bid.price?.toLocaleString()}
+              </p>
+              {bid.message && (
+                <p className="text-gray-600 text-sm">{bid.message}</p>
+              )}
+              {'request' in bid && bid.request?.budget && (
+                <p className="text-sm text-gray-500">
+                  Client Budget: KSh {bid.request.budget.toLocaleString()}
+                </p>
+              )}
+            </div>
+          </div>
+          <div className="ml-4">
+            {getBidStatusBadge(bid.status)}
+          </div>
+        </div>
+        
+        <div className="flex items-center justify-between text-xs text-gray-500 mb-4">
+          <span>Submitted: {formatRelativeTime(bid.createdAt)}</span>
+          {'isGraduateOfRequestedCollege' in bid && bid.isGraduateOfRequestedCollege && (
+            <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full">
+              Meets college requirement
+            </span>
+          )}
+        </div>
+        
+        <div className="flex flex-wrap gap-2">
+          {onView && (
+            <button
+              onClick={onView}
+              className="flex items-center px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
+            >
+              <EyeIcon className="h-3 w-3 mr-1" />
+              View Details
+            </button>
+          )}
+          {onEdit && ('canEdit' in bid && bid.canEdit) && (
+            <button
+              onClick={onEdit}
+              className="flex items-center px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+            >
+              <PencilIcon className="h-3 w-3 mr-1" />
+              Edit Bid
+            </button>
+          )}
+          {onWithdraw && ('canWithdraw' in bid && bid.canWithdraw) && (
+            <button
+              onClick={onWithdraw}
+              className="flex items-center px-3 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
+            >
+              <TrashIcon className="h-3 w-3 mr-1" />
+              Withdraw
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {showProfileModal && (
         <ProfileCompletionModal
           isOpen={showProfileModal}
           onComplete={async (profile) => {
-            toast.success("✅ Profile updated successfully");
+            toast.success("Profile updated successfully");
             await handleProfileComplete(profile);
           }}
           onClose={() => setShowProfileModal(false)}
@@ -1388,9 +1666,7 @@ const handleImageUpload = async (file: File): Promise<string> => {
             </div>
 
             {(loading || isLoading) ? (
-              <div className="flex justify-center items-center h-48 sm:h-64">
-                <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-t-2 border-b-2 border-indigo-500"></div>
-              </div>
+              <LoadingSpinner message="Loading dashboard data..." />
             ) : (
               <>
                 {activeTab === 'available' && (
@@ -1407,76 +1683,97 @@ const handleImageUpload = async (file: File): Promise<string> => {
                       refreshWithLocation={refreshWithLocation}
                       fetchAvailableRequests={fetchAvailableRequests}
                     />
-                    {availableRequests.length === 0 ? (
+                    
+                    {requestsError ? (
+                      <ErrorDisplay 
+                        error={requestsError} 
+                        onRetry={fetchAvailableRequests}
+                        title="Failed to load requests"
+                      />
+                    ) : availableRequests.length === 0 ? (
                       <div className="text-center py-8 sm:py-12 bg-white rounded-lg shadow">
                         <ClockIcon className="mx-auto h-8 w-8 sm:h-10 sm:w-10 text-gray-400" />
                         <h3 className="mt-2 text-sm sm:text-base md:text-lg font-medium text-gray-900">
                           No available requests
                         </h3>
                         <p className="mt-1 text-xs sm:text-sm text-gray-500">
-                          Check back later for new service requests.
+                          {useLocationFilter 
+                            ? 'No requests found in your area. Try increasing the search radius.'
+                            : 'Check back later for new service requests.'}
                         </p>
                       </div>
                     ) : (
-                      availableRequests.map((request) => (
-                        <div key={request.id} className="bg-white rounded-lg shadow p-4 mb-4">
-                          <div className="flex flex-col sm:flex-row justify-between gap-4">
-                            <div className="flex-1">
-                              <h3 className="text-lg font-semibold text-gray-800 mb-2">
-                                {request.serviceName || 'Service Request'}
-                              </h3>
-
-                              <p className="text-gray-600 mb-3">{request.description}</p>
-
-                              <div className="grid grid-cols-2 gap-2 text-sm">
-                                <div className="flex items-center">
-                                  <CurrencyDollarIcon className="h-4 w-4 mr-1 text-gray-500" />
-                                  <span>
-                                       Budget: KSh {request.budget?.toLocaleString() || request.desired_price?.toLocaleString() || 'Negotiable'}
-                                  </span>
+                      <div className="space-y-4">
+                        {availableRequests.map((request) => (
+                          <div key={request.id} className="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow">
+                            <div className="flex flex-col sm:flex-row justify-between gap-4">
+                              <div className="flex-1">
+                                <div className="flex items-start justify-between mb-2">
+                                  <h3 className="text-lg font-semibold text-gray-800">
+                                    {request.serviceName || 'Service Request'}
+                                  </h3>
+                                  {isRequestRelevant(request) && (
+                                    <span className="ml-2 px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                                      Relevant
+                                    </span>
+                                  )}
                                 </div>
 
-                                <div className="flex items-center">
-                                  <MapPinIcon className="h-4 w-4 mr-1 text-gray-500" />
-                                  <span>Location: {formatLocation(request.location)}</span>
-                                </div>
+                                <p className="text-gray-600 mb-3 line-clamp-2">{request.description}</p>
 
-                                <div className="flex items-center">
-                                  <CalendarIcon className="h-4 w-4 mr-1 text-gray-500" />
-                                  <span title={formatDate(request.createdAt)}>
-                                    {formatRelativeTime(request.createdAt)}
-                                  </span>
-                                </div>
-
-                                {request.deadline && (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
                                   <div className="flex items-center">
-                                    <ClockIcon className="h-4 w-4 mr-1 text-gray-500" />
-                                    <span title={formatDate(request.deadline)}>
-                                      Deadline: {formatRelativeTime(request.deadline)}
-                                      {new Date(request.deadline) < new Date() && (
-                                        <span className="ml-1 text-red-600 text-xs">(Expired)</span>
-                                      )}
+                                    <CurrencyDollarIcon className="h-4 w-4 mr-1 text-gray-500 flex-shrink-0" />
+                                    <span>
+                                      Budget: KSh {request.budget?.toLocaleString() || request.desired_price?.toLocaleString() || 'Negotiable'}
                                     </span>
                                   </div>
-                                )}
 
-                                <div className="flex items-center">
-                                  <TagIcon className="h-4 w-4 mr-1 text-gray-500" />
-                                  <span>Status: {request.status || 'Open'}</span>
+                                  <div className="flex items-center">
+                                    <MapPinIcon className="h-4 w-4 mr-1 text-gray-500 flex-shrink-0" />
+                                    <span className="truncate">Location: {formatLocation(request.location)}</span>
+                                  </div>
+
+                                  <div className="flex items-center">
+                                    <CalendarIcon className="h-4 w-4 mr-1 text-gray-500 flex-shrink-0" />
+                                    <span title={formatDate(request.createdAt)}>
+                                      {formatRelativeTime(request.createdAt)}
+                                    </span>
+                                  </div>
+
+                                  {request.deadline && (
+                                    <div className="flex items-center">
+                                      <ClockIcon className="h-4 w-4 mr-1 text-gray-500 flex-shrink-0" />
+                                      <span title={formatDate(request.deadline)} className="truncate">
+                                        Deadline: {formatRelativeTime(request.deadline)}
+                                        {new Date(request.deadline) < new Date() && (
+                                          <span className="ml-1 text-red-600 text-xs">(Expired)</span>
+                                        )}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="mt-3 flex items-center space-x-4 text-sm text-gray-500">
+                                  {request.bids && request.bids.length > 0 && (
+                                    <span className="text-blue-600">
+                                      {request.bids.length} {request.bids.length === 1 ? 'bid' : 'bids'}
+                                    </span>
+                                  )}
+                                  {request.interests && request.interests.length > 0 && (
+                                    <span className="text-green-600">
+                                      {request.interests.length} interested
+                                    </span>
+                                  )}
+                                  <span className="capitalize">{request.status || 'Open'}</span>
                                 </div>
                               </div>
 
-                              {request.bids && request.bids.length > 0 && (
-                                <div className="mt-3 text-sm text-blue-600">
-                                  {request.bids.length} {request.bids.length === 1 ? 'bid' : 'bids'} placed
-                                </div>
-                              )}
+                              {renderRequestActions(request)}
                             </div>
-
-                            {renderRequestActions(request)}
                           </div>
-                        </div>
-                      ))
+                        ))}
+                      </div>
                     )}
                   </div>
                 )}
@@ -1525,106 +1822,53 @@ const handleImageUpload = async (file: File): Promise<string> => {
                       </div>
                     </div>
 
-                    <div className="space-y-3 sm:space-y-4">
-                      {filteredAndSortedBids.length === 0 ? (
-                        <div className="text-center py-8 sm:py-12 bg-white rounded-lg shadow">
-                          <CurrencyDollarIcon className="mx-auto h-8 w-8 sm:h-10 sm:w-10 text-gray-400" />
-                          <h3 className="mt-2 text-sm sm:text-base md:text-lg font-medium text-gray-900">No bids found</h3>
-                          <p className="mt-1 text-xs sm:text-sm text-gray-500">
-                            {bidFilters.status !== 'all' || bidFilters.searchTerm 
-                              ? 'Try adjusting your filters.' 
-                              : 'Start bidding on available requests to see them here.'}
-                          </p>
-                        </div>
-                      ) : (
-                        filteredAndSortedBids.map((bid) => (
-                          <div key={bid.id} className="bg-white rounded-lg shadow p-3 sm:p-4 md:p-6">
-                            <div className="flex flex-col sm:flex-row justify-between items-start gap-3 sm:gap-4">
-                              <div className="flex-1">
-                                <div className="flex flex-wrap items-center gap-1 sm:gap-2 mb-1 sm:mb-2">
-                                  <h3 className="text-sm sm:text-base md:text-lg font-medium text-gray-900">
-                                    {bid.request?.title || `Request #${bid.requestId}`}
-                                  </h3>
-                                  {getBidStatusBadge(bid.status)}
-                                </div>
-                                
-                                {bid.request?.description && (
-                                  <p className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">{bid.request.description}</p>
-                                )}
-                                
-                                <p className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Your message: {bid.message}</p>
-                                
-                                <div className="flex flex-wrap items-center gap-1 sm:gap-2 text-xs sm:text-sm text-gray-500">
-                                  <span className="font-medium text-sm sm:text-base md:text-lg text-gray-900">KSh {bid.price?.toLocaleString()}</span>
-                                  <span>•</span>
-                                  <span>Submitted: {new Date(bid.createdAt).toLocaleDateString()}</span>
-                                  {bid.request?.budget && (
-                                    <>
-                                      <span>•</span>
-                                      <span>Client Budget: KSh {bid.request.budget?.toLocaleString()}</span>
-                                    </>
-                                  )}
-                                </div>
-
-                                {bid.isGraduateOfRequestedCollege && (
-                                  <span className="inline-block mt-1 sm:mt-2 px-1.5 py-0.5 text-xxs sm:text-xs rounded-full bg-green-100 text-green-800">
-                                    Meets college requirement
-                                  </span>
-                                )}
-
-                                {bid.request?.client && (
-                                  <div className="mt-1 sm:mt-2 text-xs sm:text-sm text-gray-500">
-                                    Client: {bid.request.client.name}
-                                  </div>
-                                )}
-                              </div>
-                              
-                              <div className="w-full sm:w-auto flex flex-wrap sm:flex-col gap-1 sm:gap-2 justify-end">
-                                <button
-                                  onClick={() => {
-                                    setSelectedBid(bid);
-                                    setShowBidDetailsModal(true);
-                                  }}
-                                  className="inline-flex items-center px-2 py-1 sm:px-2 sm:py-1 md:px-3 md:py-1 border border-gray-300 rounded-md text-xs sm:text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-                                >
-                                  <EyeIcon className="h-3 w-3 sm:h-4 sm:w-4 mr-0.5 sm:mr-1" />
-                                  View
-                                </button>
-                                
-                                {bid.canEdit && (
-                                  <button
-                                    onClick={() => {
-                                      setSelectedBid(bid);
-                                      setShowEditBidModal(true);
-                                    }}
-                                    className="inline-flex items-center px-2 py-1 sm:px-2 sm:py-1 md:px-3 md:py-1 border border-indigo-300 rounded-md text-xs sm:text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100"
-                                  >
-                                    <PencilIcon className="h-3 w-3 sm:h-4 sm:w-4 mr-0.5 sm:mr-1" />
-                                    Edit
-                                  </button>
-                                )}
-                                
-                                {bid.canWithdraw && (
-                                  <button
-                                    onClick={() => handleWithdrawBid(bid.id)}
-                                    className="inline-flex items-center px-2 py-1 sm:px-2 sm:py-1 md:px-3 md:py-1 border border-red-300 rounded-md text-xs sm:text-sm font-medium text-red-700 bg-red-50 hover:bg-red-100"
-                                  >
-                                    <TrashIcon className="h-3 w-3 sm:h-4 sm:w-4 mr-0.5 sm:mr-1" />
-                                    Withdraw
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
+                    {bidsError ? (
+                      <ErrorDisplay 
+                        error={bidsError} 
+                        onRetry={fetchMyBids}
+                        title="Failed to load bids"
+                      />
+                    ) : filteredAndSortedBids.length === 0 ? (
+                      <div className="text-center py-8 sm:py-12 bg-white rounded-lg shadow">
+                        <CurrencyDollarIcon className="mx-auto h-8 w-8 sm:h-10 sm:w-10 text-gray-400" />
+                        <h3 className="mt-2 text-sm sm:text-base md:text-lg font-medium text-gray-900">No bids found</h3>
+                        <p className="mt-1 text-xs sm:text-sm text-gray-500">
+                          {bidFilters.status !== 'all' || bidFilters.searchTerm 
+                            ? 'Try adjusting your filters.' 
+                            : 'Start bidding on available requests to see them here.'}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {filteredAndSortedBids.map((bid) => (
+                          <BidCard
+                            key={bid.id}
+                            bid={bid}
+                            onView={() => {
+                              setSelectedBid(bid);
+                              setShowBidDetailsModal(true);
+                            }}
+                            onEdit={bid.canEdit ? () => {
+                              setSelectedBid(bid);
+                              setShowEditBidModal(true);
+                            } : undefined}
+                            onWithdraw={bid.canWithdraw ? () => handleWithdrawBid(bid.id) : undefined}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 
                 {activeTab === 'myinterests' && (
                   <div className="space-y-4">
-                    {myInterests.length === 0 ? (
+                    {interestsError ? (
+                      <ErrorDisplay 
+                        error={interestsError} 
+                        onRetry={fetchMyInterests}
+                        title="Failed to load interests"
+                      />
+                    ) : myInterests.length === 0 ? (
                       <div className="text-center py-8 bg-white rounded-lg shadow">
                         <HandThumbUpIcon className="mx-auto h-10 w-10 text-gray-400" />
                         <h3 className="mt-2 text-lg font-medium text-gray-900">No interests yet</h3>
@@ -1633,114 +1877,164 @@ const handleImageUpload = async (file: File): Promise<string> => {
                         </p>
                       </div>
                     ) : (
-                      myInterests.map(interest => (
-                        <div key={interest.id} className="bg-white rounded-lg shadow p-4">
-                          <h3 className="font-medium">Request ID: {interest.requestId}</h3>
-                          <p className="text-gray-600 text-sm mt-1">
-                            Expressed on: {new Date(interest.createdAt).toLocaleDateString()}
-                          </p>
-                          <div className="mt-2 flex justify-end">
-                            <button
-                              onClick={() => withdrawInterest(interest.id)}
-                              className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded hover:bg-red-200"
-                            >
-                              Withdraw Interest
-                            </button>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                )}
-
-         
-
-                {activeTab === 'chat' && (
-                  <div className="space-y-4">
-                    {chatRooms.length === 0 ? (
-                      <div className="text-center py-8 bg-white rounded-lg shadow">
-                        <div className="text-gray-400 text-lg mb-2">💬</div>
-                        <h3 className="text-lg font-medium text-gray-900">No conversations yet</h3>
-                        <p className="text-sm text-gray-500">
-                          Chat rooms will appear here when clients contact you about your bids or services.
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="grid gap-4">
-                        {chatRooms.map(room => {
-                          const isProvider = room.providerId === user?.userId;
-                          const otherParty = isProvider ? room.client : room.provider;
-                          const isInterestRoom = room.fromInterest;
-                          
-                          return (
-                            <div 
-                              key={room.id}
-                              className="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow cursor-pointer"
-                              onClick={() => navigate(`/chat/${room.id}`)}
-                            >
-                              <div className="flex items-start justify-between">
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-3 mb-2">
-                                    <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
-                                      {getAvatarUrl(otherParty) ? (
-                                        <img 
-                                          src={getAvatarUrl(otherParty)} 
-                                          alt={getDisplayName(otherParty)}
-                                          className="w-10 h-10 rounded-full object-cover"
-                                        />
-                                      ) : (
-                                        <span className="text-sm font-medium text-gray-600">
-                                          {getDisplayName(otherParty)?.charAt(0) || '?'}
-                                        </span>
-                                      )}
-                                    </div>
-                                    <div>
-                                      <h3 className="font-medium text-gray-900">
-                                        {getDisplayName(otherParty) || 'Client'}
-                                        {isInterestRoom && (
-                                          <span className="ml-2 px-2 py-0.5 text-xs bg-green-100 text-green-800 rounded-full">
-                                            From Interest
-                                          </span>
-                                        )}
-                                      </h3>
-                                      <p className="text-sm text-gray-500">
-                                        {room.request?.productName || `Request #${room.requestId}`}
-                                      </p>
-                                    </div>
-                                  </div>
-                                  
-                                  {room.lastMessage && (
-                                    <div className="text-sm text-gray-600">
-                                      <p className="truncate">
-                                        {room.lastMessage.content}
-                                      </p>
-                                      <p className="text-xs text-gray-400 mt-1">
-                                        {new Date(room.lastMessage.createdAt).toLocaleString()}
-                                      </p>
-                                    </div>
-                                  )}
-                                </div>
-                                
-                                <div className="text-right">
-                                  {(room.unreadCount ?? 0) > 0 && (
-                                    <span className="inline-flex items-center justify-center w-6 h-6 text-xs font-medium text-white bg-red-500 rounded-full">
-                                      {room.unreadCount}
-                                    </span>
+                      <div className="space-y-4">
+                        {myInterests.map(interest => (
+                          <div key={interest.id} className="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <h3 className="font-medium text-gray-900 mb-2">
+                                  Request ID: {interest.requestId}
+                                </h3>
+                                <div className="text-sm text-gray-600 space-y-1">
+                                  <p>Status: <span className="capitalize font-medium">{interest.status}</span></p>
+                                  <p>Expressed on: {formatDate(interest.createdAt)}</p>
+                                  {interest.chatRoom && (
+                                    <p className="text-green-600">
+                                      💬 Chat room created - you can now message the client
+                                    </p>
                                   )}
                                 </div>
                               </div>
+                              <div className="flex space-x-2">
+                                {interest.chatRoom && (
+                                  <button
+                                    onClick={() => navigate(`/chat/${interest.chatRoom.id}`)}
+                                    className="flex items-center px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                                  >
+                                    <ChatBubbleLeftIcon className="h-4 w-4 mr-1" />
+                                    Chat
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => withdrawInterest(interest.id)}
+                                  className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
+                                >
+                                  Withdraw Interest
+                                </button>
+                              </div>
                             </div>
-                          );
-                        })}
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
                 )}
+
+            {activeTab === 'chat' && (
+  <div className="space-y-4">
+    {chatError ? (
+      <ErrorDisplay 
+        error={chatError} 
+        onRetry={fetchChatRooms}
+        title="Failed to load chat rooms"
+      />
+    ) : chatRooms.length === 0 ? (
+      <div className="text-center py-8 bg-white rounded-lg shadow">
+        <ChatBubbleLeftIcon className="mx-auto h-10 w-10 text-gray-400" />
+        <h3 className="text-lg font-medium text-gray-900">No conversations yet</h3>
+        <p className="text-sm text-gray-500">
+          Chat rooms will appear here when clients contact you about your bids or services.
+        </p>
+      </div>
+    ) : (
+      <div className="grid gap-4">
+        {chatRooms.map(room => {
+          // Fixed logic for determining parties
+          const otherParty = room.clientId === user?.userId ? room.provider : room.client;
+          const displayName = getDisplayName(otherParty);
+          const avatarUrl = getAvatarUrl(otherParty);
+          
+          return (
+            <div 
+              key={room.id}
+              className="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow cursor-pointer"
+              onClick={() => navigate(`/chat/${room.id}`)}
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
+                      {avatarUrl ? (
+                        <img 
+                          src={avatarUrl} 
+                          alt={displayName}
+                          className="w-10 h-10 rounded-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                          }}
+                        />
+                      ) : (
+                        <span className="text-sm font-medium text-gray-600">
+                          {displayName.charAt(0).toUpperCase() || '?'}
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <h3 className="font-medium text-gray-900">
+                        {displayName}
+                        {room.fromInterest && (
+                          <span className="ml-2 px-2 py-0.5 text-xs bg-green-100 text-green-800 rounded-full">
+                            From Interest
+                          </span>
+                        )}
+                      </h3>
+                      <p className="text-sm text-gray-500">
+                        {room.request?.productName || room.request?.title || `Request #${room.requestId}`}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {room.lastMessage && (
+                    <div className="text-sm text-gray-600">
+                      <p className="truncate">
+                        {room.lastMessage.content}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        {formatRelativeTime(room.lastMessage.createdAt)}
+                      </p>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="text-right">
+                  {(room.unreadCount ?? 0) > 0 && (
+                    <span className="inline-flex items-center justify-center w-6 h-6 text-xs font-medium text-white bg-red-500 rounded-full">
+                      {room.unreadCount}
+                    </span>
+                  )}
+                  <div className="mt-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setCurrentChatRoom(room);
+                      }}
+                      className="text-sm text-blue-600 hover:text-blue-800"
+                    >
+                      Open Chat
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    )}
+  </div>
+)}
               </>
             )}
           </>
         )}
       </main>
+
+      {/* Chat Interface Modal */}
+      {currentChatRoom && (
+        <ChatInterface 
+          room={currentChatRoom} 
+          onClose={() => setCurrentChatRoom(null)} 
+        />
+      )}
 
       {selectedRequest && (
         <NewBidModal
@@ -1765,9 +2059,7 @@ const handleImageUpload = async (file: File): Promise<string> => {
                 className="text-gray-400 hover:text-gray-600"
               >
                 <span className="sr-only">Close</span>
-                <svg className="h-5 w-5 sm:h-6 sm:w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <XMarkIcon className="h-5 w-5 sm:h-6 sm:w-6" />
               </button>
             </div>
             
@@ -1794,7 +2086,7 @@ const handleImageUpload = async (file: File): Promise<string> => {
                   </div>
                   <p className="text-gray-700 text-xs sm:text-sm">{selectedBid.message}</p>
                   <p className="text-xxs sm:text-xs text-gray-500 mt-1 sm:mt-2">
-                    Submitted: {new Date(selectedBid.createdAt).toLocaleString()}
+                    Submitted: {formatDate(selectedBid.createdAt)}
                   </p>
                 </div>
               </div>
@@ -1846,9 +2138,7 @@ const handleImageUpload = async (file: File): Promise<string> => {
                 className="text-gray-400 hover:text-gray-600"
               >
                 <span className="sr-only">Close</span>
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <XMarkIcon className="h-6 w-6" />
               </button>
             </div>
             
@@ -1915,9 +2205,10 @@ const handleImageUpload = async (file: File): Promise<string> => {
                 </button>
                 <button
                   type="submit"
-                  className="px-3 py-1 sm:px-4 sm:py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  disabled={isLoading}
+                  className="px-3 py-1 sm:px-4 sm:py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
                 >
-                  Save Changes
+                  {isLoading ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
             </form>
@@ -1926,91 +2217,34 @@ const handleImageUpload = async (file: File): Promise<string> => {
       )}
 
       {showEnhancedProfile && provider && (
-  <EnhancedProviderProfile
-    isOpen={showEnhancedProfile}
-    onClose={() => setShowEnhancedProfile(false)}
-    profile={{
-      id: provider.id,
-      firstName: provider.firstName || '',
-      lastName: provider.lastName || '',
-      bio: provider.bio || '',
-      phoneNumber: provider.phoneNumber || '',
-      address: provider.address || '',
-      latitude: provider.latitude,
-      longitude: provider.longitude,
-      collegeId: provider.collegeId,
-      college: provider.college || colleges.find(c => c.id === provider.collegeId),
-      services: provider.services || [],
-      pastWorks: provider.pastWorks || [],
-      profileImageUrl: provider.profileImageUrl || '',
-      isProfileComplete: provider.isProfileComplete || false,
-      rating: provider.rating,
-      completedRequests: provider.completedRequests || 0
-    }}
-    colleges={colleges}
-    services={allServices}
-    onProfileUpdate={handleProfileUpdate}
-    onImageUpload={handleImageUpload}
-  />
-)}
-    </div>
-  );
-}
-
-function BidCard({ bid, onEdit, onWithdraw, onView }: { 
-  bid: Bid | ExtendedBid;
-  onEdit?: () => void;
-  onWithdraw?: () => void;
-  onView?: () => void;
-}) {
-  return (
-    <div className="bg-white p-6 rounded-lg shadow-md">
-      <div className="flex justify-between items-start">
-        <div>
-          <h3 className="text-lg font-semibold">Bid on Request #{bid.requestId}</h3>
-          <p className="text-gray-600">Your price: KSh {bid.price?.toLocaleString()}</p>
-          {bid.message && (
-            <p className="text-gray-600 mt-2">Your message: {bid.message}</p>
-          )}
-          {('isGraduateOfRequestedCollege' in bid && bid.isGraduateOfRequestedCollege) && (
-            <span className="inline-block mt-2 px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">
-              Meets college requirement
-            </span>
-          )}
-        </div>
-        <div className="text-right">
-          <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">
-            {new Date(bid.createdAt).toLocaleDateString()}
-          </span>
-        </div>
-      </div>
-      
-      <div className="mt-4 flex space-x-2">
-        {onView && (
-          <button
-            onClick={onView}
-            className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
-          >
-            View Details
-          </button>
-        )}
-        {onEdit && ('canEdit' in bid && bid.canEdit) && (
-          <button
-            onClick={onEdit}
-            className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
-          >
-            Edit Bid
-          </button>
-        )}
-        {onWithdraw && ('canWithdraw' in bid && bid.canWithdraw) && (
-          <button
-            onClick={onWithdraw}
-            className="px-3 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
-          >
-            Withdraw
-          </button>
-        )}
-      </div>
+        <EnhancedProviderProfile
+          isOpen={showEnhancedProfile}
+          onClose={() => setShowEnhancedProfile(false)}
+          profile={{
+            id: provider.id,
+            firstName: provider.firstName || '',
+            lastName: provider.lastName || '',
+            bio: provider.bio || '',
+            phoneNumber: provider.phoneNumber || '',
+            address: provider.address || '',
+            latitude: provider.latitude,
+            longitude: provider.longitude,
+            collegeId: provider.collegeId,
+            college: provider.college || colleges.find(c => c.id === provider.collegeId),
+            services: provider.services || [],
+            pastWorks: provider.pastWorks || [],
+            profileImageUrl: provider.profileImageUrl || '',
+            isProfileComplete: provider.isProfileComplete || false,
+            rating: provider.rating,
+            completedRequests: provider.completedRequests || 0
+          }}
+          colleges={colleges}
+          services={allServices}
+          onProfileUpdate={handleProfileUpdate}
+          onImageUpload={handleImageUpload}
+          isOwnProfile={true}
+        />
+      )}
     </div>
   );
 }

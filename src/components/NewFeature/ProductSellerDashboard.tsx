@@ -2,12 +2,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Navigate } from 'react-router-dom';
 import api from '../../api/api';
-import { BellIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
+import { BellIcon, ArrowPathIcon, UserIcon, CogIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../../context/AuthContext';
 import { ProductManagementSection } from '../NewFeature/ProductManagementSection';
 import { useNavigate } from 'react-router-dom';
 import useWebSocket from '../../hooks/useWebSocket';
 import { toast } from 'react-toastify';
+import {ProductSellerProfileSection }from './ProductSellerProfile';
 
 interface ChatRoom {
   id: number;
@@ -22,14 +23,97 @@ interface ChatRoom {
   fromInterest?: boolean;
 }
 
+interface ProfileData {
+  id: number;
+  userId: number;
+  firstName: string;
+  lastName: string;
+  phoneNumber: string;
+  collegeId?: number;
+  latitude?: number | null;
+  longitude?: number | null;
+  address?: string;
+  bio?: string;
+  profileImageUrl?: string;
+  isProfileComplete: boolean;
+  rating?: number;
+  completedRequests?: number;
+  createdAt: string;
+  updatedAt: string;
+  college?: any;
+  services?: any[];
+  pastWorks?: any[];
+}
+
 export function ProductSellerDashboard() {
-  const [activeTab, setActiveTab] = useState<'products' | 'chat'>('products');
+  const [activeTab, setActiveTab] = useState<'products' | 'chat' | 'profile'>('products');
   const [chatRooms, setChatRooms] = useState<ChatRoom[]>([]);
+  const [profileData, setProfileData] = useState<ProfileData | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState(false);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { notifications, unreadCount } = useWebSocket();
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+
+const fetchProfile = useCallback(async () => {
+  if (!user) {
+    console.log('No user found, skipping profile fetch');
+    return;
+  }
+  
+  try {
+    setLoadingProfile(true);
+    
+    // Get token with validation
+    const token = localStorage.getItem('token');
+    
+    if (!token) {
+      console.error('No token found in localStorage');
+      toast.error('Please login again');
+      // Optional: redirect to login
+      // navigate('/login');
+      return;
+    }
+    
+    // Add timeout and better error handling
+    const response = await api.get('/api/product-seller', {
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      timeout: 10000, // 10 second timeout
+    });
+    
+  
+    setProfileData(response.data);
+    
+  } catch (error: any) {
+    console.error('Error fetching profile:', {
+      message: error.message,
+      status: error.response?.status,
+      data: error.response?.data,
+      config: error.config
+    });
+    
+    // Specific error messages
+    if (error.response?.status === 401) {
+      toast.error('Session expired. Please login again.');
+      localStorage.removeItem('token');
+      // Optional: redirect to login
+      // navigate('/login');
+    } else if (error.response?.status === 404) {
+      toast.error('Profile not found. Please complete your profile.');
+    } else if (error.code === 'ECONNABORTED') {
+      toast.error('Request timeout. Please try again.');
+    } else {
+      toast.error('Failed to load profile data');
+    }
+  } finally {
+    setLoadingProfile(false);
+  }
+}, [user]);
+
 
   const fetchChatRooms = useCallback(async () => {
     try {
@@ -64,6 +148,8 @@ export function ProductSellerDashboard() {
       setRefreshing(true);
       if (activeTab === 'chat') {
         await fetchChatRooms();
+      } else if (activeTab === 'profile') {
+        await fetchProfile();
       }
     } catch (error) {
       console.error('Refresh failed:', error);
@@ -97,13 +183,20 @@ export function ProductSellerDashboard() {
     return party.avatar || party.profileImageUrl;
   };
 
+  useEffect(() => {
+    if (activeTab === 'profile') {
+      fetchProfile();
+    }
+  }, [activeTab, fetchProfile]);
+
   if (!user || (user.role !== 'service_provider' && user.role !== 'product_seller')) {
     return <Navigate to="/login" replace />;
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow">
+      {/* Constant Navigation Bar */}
+      <header className="bg-white shadow sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-3 py-3 sm:px-4 sm:py-4 lg:px-6 lg:py-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-0">
           <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">Product Seller Dashboard</h1>
           <div className="flex items-center justify-end sm:justify-normal space-x-2 sm:space-x-3 w-full sm:w-auto">
@@ -154,19 +247,57 @@ export function ProductSellerDashboard() {
                 </div>
               )}
             </div>
-            
-            <button
-              onClick={logout}
-              className="text-xs sm:text-sm text-red-600 hover:text-red-800 px-2 py-1 sm:px-3 sm:py-1.5 lg:px-4 lg:py-2 rounded hover:bg-red-50"
-            >
-              Logout
-            </button>
+
+            {/* User Menu */}
+            <div className="relative">
+              <button
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                className="flex items-center space-x-2 p-1 sm:p-2 rounded-full hover:bg-gray-100"
+              >
+                <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
+                  {profileData?.profileImageUrl ? (
+                    <img
+                      src={profileData.profileImageUrl}
+                      alt="Profile"
+                      className="w-8 h-8 rounded-full object-cover"
+                    />
+                  ) : (
+                    <UserIcon className="h-5 w-5 text-gray-600" />
+                  )}
+                </div>
+                <span className="hidden sm:inline text-sm font-medium text-gray-700">
+                  {profileData ? `${profileData.firstName} ${profileData.lastName}` : user.full_name}
+                </span>
+                <CogIcon className="h-4 w-4 text-gray-600" />
+              </button>
+
+              {showUserMenu && (
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg overflow-hidden z-10">
+                  <div className="py-1">
+                    <button
+                      onClick={() => {
+                        setActiveTab('profile');
+                        setShowUserMenu(false);
+                      }}
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    >
+                      Profile Settings
+                    </button>
+                    <button
+                      onClick={logout}
+                      className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                    >
+                      Logout
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </header>
 
-      <main className="max-w-7xl mx-auto px-2 sm:px-4 py-3 sm:py-4 lg:px-6 lg:py-6">
-        <div className="border-b border-gray-200 mb-3 sm:mb-6 overflow-x-auto">
+        {/* Navigation Tabs - Now part of the constant header */}
+        <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-6">
           <nav className="-mb-px flex space-x-1 sm:space-x-2 md:space-x-4 lg:space-x-8 min-w-max">
             <button
               onClick={() => setActiveTab('products')}
@@ -183,9 +314,17 @@ export function ProductSellerDashboard() {
             >
               Messages ({chatRooms.filter(r => (r.unreadCount ?? 0) > 0).length})
             </button>
+            <button
+              onClick={() => setActiveTab('profile')}
+              className={`${activeTab === 'profile' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+            >
+              Profile
+            </button>
           </nav>
         </div>
+      </header>
 
+      <main className="max-w-7xl mx-auto px-2 sm:px-4 py-3 sm:py-4 lg:px-6 lg:py-6 mt-4">
         {activeTab === 'products' && <ProductManagementSection />}
 
         {activeTab === 'chat' && (
@@ -268,6 +407,14 @@ export function ProductSellerDashboard() {
               </div>
             )}
           </div>
+        )}
+
+        {activeTab === 'profile' && (
+          <ProductSellerProfileSection
+            profileData={profileData}
+            loading={loadingProfile}
+            onProfileUpdate={fetchProfile}
+          />
         )}
       </main>
     </div>

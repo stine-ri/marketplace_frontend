@@ -4,10 +4,15 @@ export type Service = {
   id: number;
   name: string;
   category?: string;
-  price?: number; 
+  price: number | string | null; 
   lat: number;
   lng: number;
-  description?:string;
+  description?: string;
+  // Add the missing properties:
+  duration?: string;
+  isPopular?: boolean;
+  features?: string[];
+  replace?: never; 
 };
 
 export type College = {
@@ -75,6 +80,7 @@ export interface Request {
   updated_at:string;
   interests?: Interest[]; 
   bids?: Bid[];
+  images?: string[]; 
   college?: {
     id: number;
     name: string;
@@ -228,6 +234,7 @@ export type ProviderProfileFormData = Omit<ProviderProfile,
   college?: College; // For form selection
   servicesDetails?: Service[]; // For displaying selected services
    pastWorks?: PastWork[];
+   reviewCount?: number;
 };
 
 export type ProviderProfileUpdateResponse = {
@@ -338,6 +345,7 @@ export interface ChatMessage {
 export type CombinedChatRoom = ChatRoom & {
   fromInterest?: boolean;
   request?: Request;
+  otherParty?: User;
 };
 
 export interface InterestWithChatRoom extends Interest {
@@ -351,4 +359,49 @@ export interface Category {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+}
+export interface InterestUI extends Omit<Interest, 'chatRoom' | 'request'> {
+  chatRoom?: ChatRoom; // Make optional
+  request?: Request; // Make optional
+  isTemp?: boolean; // Flag to indicate temporary interest
+}
+
+// websocket
+export interface ServiceRequest {
+  id: number;
+  requestTitle: string;
+  description?: string;
+  budgetMin?: string;
+  budgetMax?: string;
+  deadline?: string;
+  urgency: 'low' | 'normal' | 'high' | 'urgent';
+  location?: string;
+  clientNotes?: string;
+  status: 'pending' | 'accepted' | 'declined' | 'completed';
+  createdAt: string;
+  client: {
+    id: number;
+    full_name: string;
+    avatar?: string;
+    email?: string;
+    phone?: string;
+  };
+  provider?: {
+    id: number;
+    full_name: string;
+    avatar?: string;
+  };
+  service: {
+    id: number;
+    name: string;
+    description?: string;
+  };
+  chatRoom?: {
+    id: number;
+  };
+}
+
+export interface WebSocketMessage {
+  type: string;
+  data: any;
 }

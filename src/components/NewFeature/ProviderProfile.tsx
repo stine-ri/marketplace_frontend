@@ -22,6 +22,7 @@ interface EnhancedProviderProfileProps {
   onImageUpload?: (file: File) => Promise<string>;
   isOpen: boolean;
   onClose: () => void;
+  isOwnProfile: boolean; 
 }
 
 const EnhancedProviderProfile: React.FC<EnhancedProviderProfileProps> = ({
@@ -31,7 +32,8 @@ const EnhancedProviderProfile: React.FC<EnhancedProviderProfileProps> = ({
   onProfileUpdate,
   onImageUpload,
   isOpen,
-  onClose
+  onClose,
+  isOwnProfile,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedProfile, setEditedProfile] = useState<ProviderProfileFormData>({
@@ -66,26 +68,44 @@ const EnhancedProviderProfile: React.FC<EnhancedProviderProfileProps> = ({
     }));
   };
 
-  const handleServiceToggle = (serviceId: number) => {
-    const service = services.find(s => s.id === serviceId);
-    if (!service) return;
+  // In EnhancedProviderProfile component, update the service toggle function
+const handleServiceToggle = (serviceId: number) => {
+  const service = services.find(s => s.id === serviceId);
+  if (!service) return;
 
-    setEditedProfile(prev => {
-      const isSelected = prev.services.some(s => s.id === serviceId);
-      
-      if (isSelected) {
-        return {
-          ...prev,
-          services: prev.services.filter(s => s.id !== serviceId)
-        };
-      } else {
-        return {
-          ...prev,
-          services: [...prev.services, service]
-        };
-      }
-    });
-  };
+  setEditedProfile(prev => {
+    const isSelected = prev.services.some(s => s.id === serviceId);
+    
+    if (isSelected) {
+      return {
+        ...prev,
+        services: prev.services.filter(s => s.id !== serviceId)
+      };
+    } else {
+      // Add service with default price or existing price if available
+      const existingService = profile.services.find(s => s.id === serviceId);
+      return {
+        ...prev,
+        services: [...prev.services, {
+          ...service,
+          price: existingService?.price || service.price || 0
+        }]
+      };
+    }
+  });
+};
+
+// Add a function to update service price
+const updateServicePrice = (serviceId: number, price: string) => {
+  setEditedProfile(prev => ({
+    ...prev,
+    services: prev.services.map(service => 
+      service.id === serviceId 
+        ? { ...service, price: parseFloat(price) || 0 }
+        : service
+    )
+  }));
+};
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -307,10 +327,17 @@ const handlePastWorkImageUpload = async (event: React.ChangeEvent<HTMLInputEleme
     setIsEditing(false);
   };
 
-  const formatPrice = (price: number | undefined): string => {
-    if (!price) return 'Price not set';
-    return `KSh ${price.toLocaleString()}`;
-  };
+const formatPrice = (price: string | number | null | undefined): string => {
+  if (price === undefined || price === null) return 'Price not set';
+
+  // Convert to number safely
+  const numericPrice = typeof price === 'string' ? parseFloat(price) : price;
+
+  if (isNaN(numericPrice)) return 'Price not set';
+
+  return `KSh ${numericPrice.toLocaleString()}`;
+};
+
 
   if (!isOpen) return null;
 
@@ -321,35 +348,35 @@ const handlePastWorkImageUpload = async (event: React.ChangeEvent<HTMLInputEleme
         <div className="min-h-screen flex items-center justify-center p-2 sm:p-4">
           <div className="relative bg-white/95 backdrop-blur-sm rounded-3xl shadow-[0_0_50px_rgba(0,0,0,0.08)] border border-white/50 w-full max-w-7xl max-h-[95vh] overflow-hidden">
             {/* Header */}
-            <div className="sticky top-0 bg-white/80 backdrop-blur-md border-b border-slate-100/80 px-4 sm:px-6 py-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 z-10">
-              <div className="flex-1 min-w-0">
-                <h2 className="text-xl sm:text-2xl font-light text-slate-800 truncate">
-                  {isEditing ? 'Edit Profile' : 'Provider Profile'}
-                </h2>
-                <p className="text-sm text-slate-500 mt-1 truncate">
-                  {isEditing ? 'Update your profile information' : 'View your complete profile'}
-                </p>
-              </div>
-              
-              <div className="flex items-center space-x-2 sm:space-x-3 flex-shrink-0">
-                {!isEditing && (
-                  <button
-                    onClick={() => setIsEditing(true)}
-                    className="inline-flex items-center px-4 py-2.5 bg-white text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 shadow-sm text-sm font-medium"
-                  >
-                    <PencilIcon className="h-4 w-4 mr-2" />
-                    <span className="hidden sm:inline">Edit Profile</span>
-                    <span className="sm:hidden">Edit</span>
-                  </button>
-                )}
-                <button
-                  onClick={onClose}
-                  className="p-2.5 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-xl transition-colors border border-transparent hover:border-slate-200"
-                >
-                  <XMarkIcon className="h-5 w-5" />
-                </button>
-              </div>
-            </div>
+<div className="sticky top-0 bg-white/80 backdrop-blur-md border-b border-slate-100/80 px-4 sm:px-6 py-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 z-10">
+  <div className="flex-1 min-w-0">
+    <h2 className="text-xl sm:text-2xl font-light text-slate-800 truncate">
+      {isEditing ? 'Edit Profile' : 'Provider Profile'}
+    </h2>
+    <p className="text-sm text-slate-500 mt-1 truncate">
+      {isEditing ? 'Update your profile information' : 'View your complete profile'}
+    </p>
+  </div>
+  
+  <div className="flex items-center space-x-2 sm:space-x-3 flex-shrink-0">
+    {!isEditing && isOwnProfile && (
+      <button
+        onClick={() => setIsEditing(true)}
+        className="inline-flex items-center px-4 py-2.5 bg-white text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 shadow-sm text-sm font-medium"
+      >
+        <PencilIcon className="h-4 w-4 mr-2" />
+        <span className="hidden sm:inline">Edit Profile</span>
+        <span className="sm:hidden">Edit</span>
+      </button>
+    )}
+    <button
+      onClick={onClose}
+      className="p-2.5 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-xl transition-colors border border-transparent hover:border-slate-200"
+    >
+      <XMarkIcon className="h-5 w-5" />
+    </button>
+  </div>
+</div>
 
             {/* Content */}
             <div className="overflow-y-auto max-h-[calc(95vh-80px)] px-4 sm:px-6 py-6">
@@ -517,35 +544,60 @@ const handlePastWorkImageUpload = async (event: React.ChangeEvent<HTMLInputEleme
                   <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-100/80 p-4 sm:p-6 shadow-sm">
                     <h4 className="text-lg font-medium text-slate-800 mb-6">Services Offered *</h4>
                     
-                    {isEditing ? (
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-4">
-                        {services.map(service => (
-                          <label key={service.id} className="group flex items-start space-x-3 p-4 border-2 border-slate-100 rounded-xl hover:bg-blue-50/30 hover:border-blue-200/50 cursor-pointer transition-all">
-                            <input
-                              type="checkbox"
-                              checked={editedProfile.services.some(s => s.id === service.id)}
-                              onChange={() => handleServiceToggle(service.id)}
-                              className="mt-1 h-4 w-4 text-blue-500 border-slate-300 rounded focus:ring-blue-500/20 focus:ring-2"
-                            />
-                            <div className="flex-1 min-w-0">
-                              <div className="font-medium text-slate-800 group-hover:text-blue-800 text-sm">
-                                {service.name}
-                              </div>
-                              {service.description && (
-                                <div className="text-xs text-slate-500 mt-1 line-clamp-2">
-                                  {service.description}
-                                </div>
-                              )}
-                              {service.price && (
-                                <div className="text-xs text-blue-600 mt-1 font-medium">
-                                  {formatPrice(service.price)}
-                                </div>
-                              )}
-                            </div>
-                          </label>
-                        ))}
-                      </div>
-                    ) : (
+{isEditing ? (
+  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-4">
+    {services.map(service => {
+      const isSelected = editedProfile.services.some(s => s.id === service.id);
+      const selectedService = editedProfile.services.find(s => s.id === service.id);
+      
+      return (
+        <label key={service.id} className={`group flex flex-col p-4 border-2 rounded-xl transition-all ${
+          isSelected 
+            ? 'bg-blue-50/80 border-blue-200/50' 
+            : 'border-slate-100 hover:bg-slate-50/30 hover:border-slate-200'
+        }`}>
+          <div className="flex items-start space-x-3 mb-3">
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={() => handleServiceToggle(service.id)}
+              className="mt-1 h-4 w-4 text-blue-500 border-slate-300 rounded focus:ring-blue-500/20 focus:ring-2"
+            />
+            <div className="flex-1 min-w-0">
+              <div className="font-medium text-slate-800 group-hover:text-blue-800 text-sm">
+                {service.name}
+              </div>
+              {service.description && (
+                <div className="text-xs text-slate-500 mt-1 line-clamp-2">
+                  {service.description}
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {isSelected && (
+            <div className="mt-3 pt-3 border-t border-slate-100">
+              <label className="text-xs font-medium text-slate-700 mb-2 block">
+                Set Your Price (KSh)
+              </label>
+              <input
+                type="number"
+                value={selectedService?.price || ''}
+                onChange={(e) => updateServicePrice(service.id, e.target.value)}
+                placeholder="Enter price"
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 bg-white/70"
+                min="0"
+                step="50"
+              />
+            </div>
+          )}
+        </label>
+      );
+    })}
+  </div>
+) : (
+
+
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 lg:gap-4">
                         {editedProfile.services.map(service => (
                           <div key={service.id} className="bg-slate-50/70 p-4 rounded-xl border border-slate-100">

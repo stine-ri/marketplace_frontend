@@ -642,6 +642,7 @@ const handleRemovePastWork = (index: number) => {
   onProfileUpdate={async () => {}} // ✅ Add required noop
   isOpen={showPreview} // ✅ Control modal visibility
   onClose={() => setShowPreview(false)} // ✅ Close handler
+  isOwnProfile={true} // ✅ Indicate it's the user's own profile
 />
         
         <div className="flex justify-end mt-4">

@@ -3,12 +3,12 @@ import { StarIcon, ShoppingCartIcon, UserIcon } from '@heroicons/react/24/outlin
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 import { formatPrice } from '../../utilis/priceFormatter';
 import { Product } from '../../types/types'; 
+
 interface ProductCardProps {
   product: Product;
   onViewDetails: (product: any) => void; 
   onPurchase: (product: any) => void;     
   showPurchaseButton?: boolean;
- 
 }
 
 export const ProductCard = ({ 
@@ -16,13 +16,15 @@ export const ProductCard = ({
   onViewDetails,  // Changed from onClick
   onPurchase,     // New prop
   showPurchaseButton = false 
-  
 }: ProductCardProps) => {
   // Provide default value of 0 if rating is undefined/null
   const rating = product.provider.rating || 0;
   const fullStars = Math.floor(rating);
   const hasHalfStar = rating % 1 >= 0.5;
   const firstImage = product.images?.[0] || '';
+
+  // Check if product is available (only based on status, not stock)
+  const isAvailable = product.status === 'published';
 
   const getInitials = () => {
     const firstInitial = product.provider.firstName?.charAt(0) || '';
@@ -64,17 +66,11 @@ export const ProductCard = ({
           </div>
         )}
         
-        {/* Stock badge */}
-        {product.stock !== undefined && (
+        {/* Status badge (only show if not available) */}
+        {!isAvailable && (
           <div className="absolute top-2 left-2">
-            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-              product.stock > 10 
-                ? 'bg-green-100 text-green-800' 
-                : product.stock > 0 
-                  ? 'bg-yellow-100 text-yellow-800'
-                  : 'bg-red-100 text-red-800'
-            }`}>
-              {product.stock > 0 ? `${product.stock} left` : 'Out of stock'}
+            <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+              Not Available
             </span>
           </div>
         )}
@@ -135,45 +131,44 @@ export const ProductCard = ({
           </div>
 
           {/* Rating */}
-          {/* Rating */}
-<div className="flex items-center gap-1 mb-4">
-  <div className="flex items-center">
-    {[...Array(5)].map((_, i) => {
-      if (i < fullStars) {
-        return (
-          <StarIconSolid key={i} className="w-4 h-4 text-yellow-400" />
-        );
-      } else if (i === fullStars && hasHalfStar) {
-        return (
-          <div key={i} className="relative">
-            <StarIcon className="w-4 h-4 text-gray-300" />
-            <div className="absolute inset-0 overflow-hidden w-1/2">
-              <StarIconSolid className="w-4 h-4 text-yellow-400" />
+          <div className="flex items-center gap-1 mb-4">
+            <div className="flex items-center">
+              {[...Array(5)].map((_, i) => {
+                if (i < fullStars) {
+                  return (
+                    <StarIconSolid key={i} className="w-4 h-4 text-yellow-400" />
+                  );
+                } else if (i === fullStars && hasHalfStar) {
+                  return (
+                    <div key={i} className="relative">
+                      <StarIcon className="w-4 h-4 text-gray-300" />
+                      <div className="absolute inset-0 overflow-hidden w-1/2">
+                        <StarIconSolid className="w-4 h-4 text-yellow-400" />
+                      </div>
+                    </div>
+                  );
+                } else {
+                  return (
+                    <StarIcon key={i} className="w-4 h-4 text-gray-300" />
+                  );
+                }
+              })}
             </div>
+            <span className="text-sm text-gray-600 ml-1">
+              {rating > 0 ? rating.toFixed(1) : 'New'}
+            </span>
           </div>
-        );
-      } else {
-        return (
-          <StarIcon key={i} className="w-4 h-4 text-gray-300" />
-        );
-      }
-    })}
-  </div>
-  <span className="text-sm text-gray-600 ml-1">
-    {rating > 0 ? rating.toFixed(1) : 'New'}
-  </span>
-</div>
 
           {/* Action buttons */}
           <div className="flex flex-col gap-2">
             {showPurchaseButton && (
               <button
                 onClick={handlePurchaseClick}
-                disabled={product.stock === 0}
+                disabled={!isAvailable}
                 className="w-full inline-flex items-center justify-center px-4 py-2.5 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <ShoppingCartIcon className="w-4 h-4 mr-2" />
-                {product.stock === 0 ? 'Out of Stock' : 'Purchase'}
+                {!isAvailable ? 'Not Available' : 'Purchase'}
               </button>
             )}
             

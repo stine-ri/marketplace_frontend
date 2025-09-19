@@ -12,7 +12,7 @@ export const ProductManagementSection = () => {
   const [loading, setLoading] = useState(true);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'products' | 'sales'>('products');
-  const [productStatusFilter, setProductStatusFilter] = useState<'all' | 'published' | 'draft' | 'archived'>('all');
+  const [productStatusFilter, setProductStatusFilter] = useState<'all' | 'published' | 'archived'>('all');
   const [saleStatusFilter, setSaleStatusFilter] = useState<'all' | 'pending' | 'completed' | 'cancelled'>('all');
 
   const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com';
@@ -122,7 +122,7 @@ export const ProductManagementSection = () => {
     return category ? category.name : 'Unknown Category';
   };
 
-  const updateProductStatus = async (productId: number, status: 'published' | 'draft' | 'archived') => {
+  const updateProductStatus = async (productId: number, status: 'published' | 'archived') => {
     try {
       const headers = getAuthHeaders();
       const response = await fetch(`${BASE_URL}/api/product/${productId}/status`, {
@@ -229,7 +229,6 @@ export const ProductManagementSection = () => {
               >
                 <option value="all">All Statuses</option>
                 <option value="published">Published</option>
-                <option value="draft">Draft</option>
                 <option value="archived">Archived</option>
               </select>
             </div>
@@ -270,9 +269,6 @@ export const ProductManagementSection = () => {
                       Price
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Stock
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Category
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -303,7 +299,6 @@ export const ProductManagementSection = () => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                           product.status === 'published' ? 'bg-green-100 text-green-800' :
-                          product.status === 'draft' ? 'bg-yellow-100 text-yellow-800' :
                           'bg-gray-100 text-gray-800'
                         }`}>
                           {product.status}
@@ -313,37 +308,27 @@ export const ProductManagementSection = () => {
                         {formatPrice(product.price)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {product.stock ?? 'N/A'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {getCategoryName(product.categoryId)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex space-x-2">
-                          <button
-                            onClick={() => {
-                              if (product.status === 'published') {
-                                updateProductStatus(product.id, 'draft');
-                              } else {
-                                updateProductStatus(product.id, 'published');
-                              }
-                            }}
-                            className="text-indigo-600 hover:text-indigo-900"
-                            title={product.status === 'published' ? 'Unpublish' : 'Publish'}
-                          >
-                            {product.status === 'published' ? (
-                              <ArrowDownIcon className="h-4 w-4" />
-                            ) : (
+                          {product.status === 'archived' ? (
+                            <button
+                              onClick={() => updateProductStatus(product.id, 'published')}
+                              className="text-indigo-600 hover:text-indigo-900"
+                              title="Restore Product"
+                            >
                               <ArrowUpIcon className="h-4 w-4" />
-                            )}
-                          </button>
-                          <button
-                            onClick={() => updateProductStatus(product.id, 'archived')}
-                            className="text-gray-600 hover:text-gray-900"
-                            title="Archive"
-                          >
-                            <ArchiveBoxIcon className="h-4 w-4" />
-                          </button>
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => updateProductStatus(product.id, 'archived')}
+                              className="text-gray-600 hover:text-gray-900"
+                              title="Archive"
+                            >
+                              <ArchiveBoxIcon className="h-4 w-4" />
+                            </button>
+                          )}
                           <button
                             onClick={() => deleteProduct(product.id)}
                             className="text-red-600 hover:text-red-900"

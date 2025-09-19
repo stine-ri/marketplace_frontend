@@ -256,15 +256,16 @@ const PurchaseModal = ({ isOpen, onClose, product, onPurchase }: {
 
 // Utility functions
 const extractNameFromObject = (obj: any): string => {
-  if (!obj) return '';
+  if (!obj) return 'Verified Provider'; // Default fallback for non-existent users
   if (typeof obj === 'string') return obj;
   if (typeof obj === 'object') {
     if (obj.firstName) {
-      return `${obj.firstName} ${obj.lastName || ''}`.trim();
+      const name = `${obj.firstName} ${obj.lastName || ''}`.trim();
+      return name || 'Verified Provider'; // Fallback if name is empty
     }
-    return obj.name || obj.title || obj.company || '';
+    return obj.name || obj.title || obj.company || 'Verified Provider';
   }
-  return String(obj);
+  return String(obj) || 'Verified Provider'; // Final fallback
 };
 
 const getCategoryIcon = (category: any): string => {
@@ -433,6 +434,7 @@ const getUserDashboard = (user: any) => {
     default: return '/client/dashboard';
   }
 };
+
 const ServicesProductsComponent = () => {
   const { isAuthenticated, user } = useAuth();
   const [activeTab, setActiveTab] = useState<'services' | 'products'>('services');
@@ -461,7 +463,7 @@ const ServicesProductsComponent = () => {
         <span>Please login to {action}</span>
         <button
           onClick={() => window.location.href = '/login'}
-          className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition-colors"
+          className="bg-white text-blue-600 px-3 py-1 rounded text-sm hover:bg-blue-50 transition-colors border border-blue-200"
         >
           Login Now
         </button>
@@ -509,7 +511,7 @@ const ServicesProductsComponent = () => {
           onClick={() =>
             (window.location.href = '/register?role=client')
           }
-          className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition-colors"
+          className="bg-white text-blue-600 px-3 py-1 rounded text-sm hover:bg-blue-50 transition-colors border border-blue-200"
         >
           Register as Client
         </button>
@@ -522,6 +524,7 @@ const ServicesProductsComponent = () => {
     );
   }
 };
+
 const handleBookNow = async (item: any) => {
   if (!isAuthenticated) {
     showLoginPrompt("book services");
@@ -542,7 +545,7 @@ const handleBookNow = async (item: any) => {
         <span>You need a Service Provider account to express interest in this service</span>
         <button
           onClick={() => (window.location.href = "/register?role=service_provider")}
-          className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition-colors"
+          className="bg-white text-blue-600 px-3 py-1 rounded text-sm hover:bg-blue-50 transition-colors border border-blue-200"
         >
           Register as Service Provider
         </button>
@@ -607,7 +610,7 @@ const handleViewDetails = async (item: any) => {
               <span>You need a client account to view product details</span>
               <button
                 onClick={() => window.location.href = '/register?role=client'}
-                className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition-colors"
+                className="bg-white text-blue-600 px-3 py-1 rounded text-sm hover:bg-blue-50 transition-colors border border-blue-200"
               >
                 Register as Client
               </button>
@@ -652,7 +655,7 @@ const handlePurchase = (item: any) => {
           <span>You need a client account to purchase products</span>
           <button
             onClick={() => window.location.href = '/register?role=client'}
-            className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition-colors"
+            className="bg-white text-blue-600 px-3 py-1 rounded text-sm hover:bg-blue-50 transition-colors border border-blue-200"
           >
             Register as Client
           </button>
@@ -1288,13 +1291,13 @@ const handlePurchase = (item: any) => {
                     <button 
                       key={index}
                       onClick={() => setSearchQuery(term)} 
-                      className="text-white hover:text-yellow-300 transition-all px-3 py-1 rounded-full border border-white/30 hover:border-yellow-300/50 hover:bg-white/10 transform hover:scale-105"
-                    >
-                      {term}
-                    </button>
-                  ))}
-                </div>
-              )}
+                    className="text-white hover:text-yellow-300 transition-all px-3 py-1 rounded-full border border-white/30 hover:border-yellow-300/50 hover:bg-white/10 transform hover:scale-105"
+                  >
+                    {term}
+                  </button>
+                ))}
+              </div>
+            )}
             </div>
 
             {/* Selected Category Display */}
@@ -1377,7 +1380,7 @@ const handlePurchase = (item: any) => {
                   )}
                   <button 
                     onClick={handleRegisterRedirect}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors inline-flex items-center"
+                    className="bg-white text-blue-600 px-6 py-2 rounded-lg transition-colors inline-flex items-center border border-blue-200 hover:bg-blue-50"
                   >
                     Join as Provider <ArrowRight size={16} className="ml-2" />
                   </button>
@@ -1410,7 +1413,10 @@ const handlePurchase = (item: any) => {
                           <div className="flex-1">
                             <h4 className="text-xl font-semibold text-gray-900">{item.name}</h4>
                             <p className="text-blue-600 font-medium mt-1">
-                              {extractNameFromObject(item.provider || item.seller) || 'Verified Provider'}
+                              {item.type === 'service' 
+                                ? `Service from ${extractNameFromObject(item.provider)}`
+                                : `Product from ${extractNameFromObject(item.seller)}`
+                              }
                             </p>
                           </div>
                           <div className="flex items-center gap-2 ml-4">
@@ -1428,7 +1434,7 @@ const handlePurchase = (item: any) => {
                           )}
                           <div className="flex items-center gap-1 text-sm text-gray-600">
                             <Star className="w-4 h-4 text-yellow-400 fill-current" />
-                            {item.rating} ({item.reviews} reviews)
+                            {(item.rating || 0).toFixed(1)} ({item.reviews || 0} reviews)
                           </div>
                         </div>
                          <div className="mt-4 flex gap-2">
@@ -1437,7 +1443,7 @@ const handlePurchase = (item: any) => {
                             <button 
                               onClick={() => handleBookNow(item)}
                               disabled={processingAction === `booking-${item.id}`}
-                              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                              className="bg-white text-blue-600 px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center border border-blue-200 hover:bg-blue-50"
                             >
                               {processingAction === `booking-${item.id}` ? (
                                 <>
@@ -1454,7 +1460,7 @@ const handlePurchase = (item: any) => {
                               <button 
                                 onClick={() => handlePurchase(item)}
                                 disabled={processingAction === `purchase-${item.id}`}
-                                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                                className="bg-white text-green-600 px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center border border-green-200 hover:bg-green-50"
                               >
                                 {processingAction === `purchase-${item.id}` ? (
                                   <>
@@ -1468,7 +1474,7 @@ const handlePurchase = (item: any) => {
                               <button 
                                 onClick={() => handleViewDetails(item)}
                                 disabled={processingAction === `details-${item.id}`}
-                                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                                className="bg-white text-blue-600 px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center border border-blue-200 hover:bg-blue-50"
                               >
                                 {processingAction === `details-${item.id}` ? (
                                   <>
@@ -1537,7 +1543,7 @@ const handlePurchase = (item: any) => {
                   )}
                   <button 
                     onClick={() => window.location.href = '/register?role=provider'}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors inline-flex items-center"
+                    className="bg-white text-blue-600 px-6 py-3 rounded-lg transition-colors inline-flex items-center border border-blue-200 hover:bg-blue-50"
                   >
                     {activeTab === 'services' ? 'Become a Provider' : 'Start Selling'}
                     <ArrowRight size={16} className="ml-2" />
@@ -1557,10 +1563,10 @@ const handlePurchase = (item: any) => {
                     <h3 className="font-semibold text-gray-900 mb-2">{item.name}</h3>
                     <div className="flex items-center justify-center gap-1 mb-1">
                       <Star className="w-4 h-4 text-yellow-400 fill-current" />
-                      <span className="text-sm text-gray-600">{item.rating}</span>
+                      <span className="text-sm text-gray-600">{item.rating.toFixed(1)}</span>
                     </div>
                     <p className="text-xs text-gray-500">
-                      {activeTab === 'services' ? item.providers : item.sellers} {activeTab === 'services' ? 'providers' : 'sellers'}
+                      {activeTab === 'services' ? (item.providers || 0) : (item.sellers || 0)} {activeTab === 'services' ? 'providers' : 'sellers'}
                     </p>
                   </div>
                 ))}
@@ -1616,7 +1622,7 @@ const handlePurchase = (item: any) => {
                   )}
                   <button 
                     onClick={() => window.location.href = '/register?role=provider'}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors inline-flex items-center"
+                    className="bg-white text-blue-600 px-6 py-3 rounded-lg transition-colors inline-flex items-center border border-blue-200 hover:bg-blue-50"
                   >
                     {activeTab === 'services' ? 'Become a Provider' : 'Start Selling'}
                     <ArrowRight size={16} className="ml-2" />
@@ -1655,7 +1661,10 @@ const handlePurchase = (item: any) => {
                         {item.title}
                       </h3>
                       <p className="text-blue-600 font-medium mb-2">
-                         {extractNameFromObject(item.provider || item.seller) || 'Verified Provider/Seller'}
+                        {item.type === 'service' 
+                          ? `Service from ${extractNameFromObject(item.provider)}`
+                          : `Product from ${extractNameFromObject(item.seller)}`
+                        }
                       </p>
                       
                       <div className="flex items-center gap-4 mb-3 text-sm text-gray-600">
@@ -1665,7 +1674,7 @@ const handlePurchase = (item: any) => {
                         </div>
                         <div className="flex items-center gap-1">
                           <Star className="w-4 h-4 text-yellow-400 fill-current" />
-                          {item.rating.toFixed(1)} ({item.reviews})
+                          {(item.rating || 0).toFixed(1)} ({item.reviews || 0})
                         </div>
                       </div>
                       
@@ -1694,7 +1703,7 @@ const handlePurchase = (item: any) => {
                             <button 
                               onClick={() => handleBookNow(item)}
                               disabled={processingAction === `booking-${item.id}`}
-                              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                              className="bg-white text-blue-600 px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center border border-blue-200 hover:bg-blue-50"
                             >
                               {processingAction === `booking-${item.id}` ? (
                                 <>
@@ -1711,7 +1720,7 @@ const handlePurchase = (item: any) => {
                               <button 
                                 onClick={() => handlePurchase(item)}
                                 disabled={processingAction === `purchase-${item.id}`}
-                                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                                className="bg-white text-green-600 px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center border border-green-200 hover:bg-green-50"
                               >
                                 {processingAction === `purchase-${item.id}` ? (
                                   <>
@@ -1725,7 +1734,7 @@ const handlePurchase = (item: any) => {
                               <button 
                                 onClick={() => handleViewDetails(item)}
                                 disabled={processingAction === `details-${item.id}`}
-                                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                                className="bg-white text-blue-600 px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center border border-blue-200 hover:bg-blue-50"
                               >
                                 {processingAction === `details-${item.id}` ? (
                                   <>
@@ -1831,6 +1840,5 @@ const handlePurchase = (item: any) => {
     </div>
   );
 };
-
 
 export default ServicesProductsComponent;

@@ -1,30 +1,22 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Notification } from '../types/types';
+import type { ServiceRequest, WebSocketMessage } from '../types/types'; // Import the types
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
-
-type WebSocketMessage = {
-  type: string;
-  data: any;
-};
 
 const MAX_RECONNECT_ATTEMPTS = 5;
 const RECONNECT_INTERVAL = 5000;
 const IS_DEVELOPMENT = import.meta.env.DEV;
-// Consider making this configurable via environment variable
-const DISABLE_WS_IN_DEV = import.meta.env.VITE_WS_DISABLE_IN_DEV === 'true'; // Set to false when you want to test WebSocket in dev
+const DISABLE_WS_IN_DEV = import.meta.env.VITE_WS_DISABLE_IN_DEV === 'true';
 
-// Add this helper at the top
 function getWsUrl(): string {
   let url = import.meta.env.VITE_WS_URL;
 
   if (!url) {
-    // fallback for local dev (same host as frontend)
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     return `${protocol}//${window.location.host}`;
   }
 
-  // Normalize if someone accidentally used http/https
   if (url.startsWith("http://")) {
     url = url.replace("http://", "ws://");
   }
@@ -49,86 +41,102 @@ export default function useWebSocket(userId?: number) {
   const socketRef = useRef<WebSocket | null>(null);
   const isConnectingRef = useRef(false);
 
-const handleMessage = useCallback((event: MessageEvent) => {
-  try {
-    let rawData = event.data;
-    let parsed: WebSocketMessage;
+  const handleMessage = useCallback((event: MessageEvent) => {
+    try {
+      let rawData = event.data;
+      let parsed: WebSocketMessage;
 
-    // Handle case where data is already an object
-    if (typeof rawData === 'object' && !(rawData instanceof Blob)) {
-      if (rawData.type) { // If it looks like our message format
-        parsed = rawData;
-      } else {
-        // Try to stringify and parse to ensure consistency
+      // Handle case where data is already an object
+      if (typeof rawData === 'object' && !(rawData instanceof Blob)) {
+        if (rawData.type) {
+          parsed = rawData as WebSocketMessage;
+        } else {
+          try {
+            rawData = JSON.stringify(rawData);
+            parsed = JSON.parse(rawData);
+          } catch {
+            console.error("Could not process incoming object:", rawData);
+            return;
+          }
+        }
+      } else if (typeof rawData === 'string') {
         try {
-          rawData = JSON.stringify(rawData);
           parsed = JSON.parse(rawData);
-        } catch {
-          console.error("Could not process incoming object:", rawData);
+        } catch (e) {
+          console.error("Failed to parse WebSocket data. Raw:", rawData);
           return;
         }
-      }
-    } else if (typeof rawData === 'string') {
-      // Normal JSON parsing for string data
-      try {
-        parsed = JSON.parse(rawData);
-      } catch (e) {
-        console.error("Failed to parse WebSocket data. Raw:", rawData);
+      } else {
+        console.error("Unsupported WebSocket message type:", typeof rawData);
         return;
       }
-    } else {
-      console.error("Unsupported WebSocket message type:", typeof rawData);
-      return;
-    }
 
-    const message: WebSocketMessage = parsed;
-    setLastMessage(message);
+      const message: WebSocketMessage = parsed;
+      setLastMessage(message);
 
-    switch (message.type) {
-      case "notification":
-      case "new_notification": {
-        const notification = message.data as Notification;
-        setNotifications(prev => [notification, ...prev]);
-        break;
-      }
-
-      case "initial_notifications": {
-        if (Array.isArray(message.data)) {
-          setNotifications(message.data);
+      switch (message.type) {
+        case "notification":
+        case "new_notification": {
+          const notification = message.data as Notification;
+          setNotifications(prev => [notification, ...prev]);
+          break;
         }
-        break;
-      }
 
-      case "new_message": {
-        const { message: chatMessage } = message.data;
-        console.log("New message received:", chatMessage);
-        break;
-      }
+        case "initial_notifications": {
+          if (Array.isArray(message.data)) {
+            setNotifications(message.data);
+          }
+          break;
+        }
 
-      case "interest_accepted": {
-        const { requestId } = message.data;
-        toast.success(`Your interest in request #${requestId} was accepted!`);
-        break;
-      }
+        case "new_message": {
+          const { message: chatMessage } = message.data;
+          console.log("New message received:", chatMessage);
+          break;
+        }
 
-      case "chat_room_created": {
-        console.log("New chat room created:", message.data.chatRoom);
-        break;
-      }
+        case "interest_accepted": {
+          const { requestId } = message.data;
+          toast.success(`Your interest in request #${requestId} was accepted!`);
+          break;
+        }
 
-      case "auth_success": {
-        console.log("Authenticated successfully");
-        break;
-      }
+        case "chat_room_created": {
+          console.log("New chat room created:", message.data.chatRoom);
+          break;
+        }
 
-      default:
-        console.warn("Unhandled message type:", message.type, "with data:", message.data);
+        case "auth_success": {
+          console.log("Authenticated successfully");
+          break;
+        }
+
+        case 'service_request_update': {
+          const request = message.data as ServiceRequest;
+          console.log('Service request updated:', request);
+          // You can add logic here to update your UI state
+          break;
+        }
+
+        case 'service_request_response': {
+          const { action, response } = message.data;
+          toast.info(`Your service request was ${action}ed${response ? ': ' + response : ''}`);
+          break;
+        }
+
+        case 'service_request_message': {
+          const { message: msg } = message.data;
+          toast.info(`New message about your service request: ${msg}`);
+          break;
+        }
+
+        default:
+          console.warn("Unhandled message type:", message.type, "with data:", message.data);
+      }
+    } catch (error) {
+      console.error("WebSocket message handling error:", error);
     }
-  } catch (error) {
-    console.error("WebSocket message handling error:", error);
-  }
-}, []);
-
+  }, []);
 
   const cleanup = useCallback(() => {
     if (reconnectTimerRef.current) {
@@ -211,7 +219,7 @@ const handleMessage = useCallback((event: MessageEvent) => {
           ws.close();
           setConnectionError('Connection timeout');
         }
-      }, 10000); // 10 second timeout
+      }, 10000);
       
       ws.onopen = () => {
         clearTimeout(connectionTimeout);
@@ -240,7 +248,7 @@ const handleMessage = useCallback((event: MessageEvent) => {
         // Set error message based on close code
         switch (event.code) {
           case 1000:
-            setConnectionError(null); // Normal closure
+            setConnectionError(null);
             break;
           case 1006:
             setConnectionError('Connection failed - Server may be unreachable');

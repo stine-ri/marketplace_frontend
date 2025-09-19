@@ -1,80 +1,43 @@
-// src/pages/ProvidersList.tsx
+// src/pages/ProvidersList.tsx - Updated with toast notifications
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext'; // Import the toast hook
 import { ProviderProfile, Service, College } from '../types/types';
 import { AxiosError } from 'axios';
+import { 
+  StarIcon, 
+  MapPinIcon, 
+  PhoneIcon, 
+  UserIcon,
+  BuildingOfficeIcon,
+  PhotoIcon,
+  EyeIcon,
+  PaperAirplaneIcon
+} from '@heroicons/react/24/outline';
+import { parsePriceToNumber, formatPriceRange, formatPrice } from '../utilis/priceFormatter';
+import DirectServiceRequest from '../components/NewFeature/ServiceRequests';
 
 const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com';
 
-// Enhanced price formatting utility functions
-const formatPrice = (price: string | number | undefined | null): string => {
-  // Handle undefined/null cases
-  if (price === undefined || price === null || price === '') {
-    return 'Price not set';
-  }
-
-  // Convert to number if it's a string
-  let numericPrice: number;
-  if (typeof price === 'string') {
-    // Remove any existing currency symbols and commas
-    const cleanPrice = price.replace(/[KSh,\s]/g, '');
-    numericPrice = parseFloat(cleanPrice);
-  } else {
-    numericPrice = price;
-  }
-
-  // Handle NaN cases
-  if (isNaN(numericPrice) || numericPrice <= 0) {
-    return 'Price not set';
-  }
-
-  // Format with KSh prefix and comma separators
-  return `KSh ${numericPrice.toLocaleString('en-KE', { 
-    minimumFractionDigits: 2, 
-    maximumFractionDigits: 2 
-  })}`;
-};
-
-const formatPriceRange = (services: Service[] | undefined): string => {
-  if (!services || services.length === 0) {
-    return 'No services listed';
-  }
-
-  // Get valid prices from services
-  const validPrices = services
-    .map(service => {
-      if (service.price === undefined || service.price === null) return null;
-      const price = typeof service.price === 'string'
-        ? parseFloat((service.price as string).replace(/[KSh,\s]/g, ''))
-        : service.price;
-      return isNaN(price) || price <= 0 ? null : price;
-    })
-    .filter((price): price is number => price !== null);
-  
-  if (validPrices.length === 0) {
-    return 'Prices not set';
-  }
-  
-  const min = Math.min(...validPrices);
-  const max = Math.max(...validPrices);
-  
-  if (min === max) {
-    return formatPrice(min);
-  } else {
-    return `${formatPrice(min)} - ${formatPrice(max)}`;
-  }
-};
-
 export default function ProvidersList() {
   const { user } = useAuth();
+  const { addToast } = useToast(); // Initialize toast function
   const [allProviders, setAllProviders] = useState<ProviderProfile[]>([]);
   const [filteredProviders, setFilteredProviders] = useState<ProviderProfile[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [colleges, setColleges] = useState<College[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  
+  // Add states for service request modal
+  const [showServiceRequest, setShowServiceRequest] = useState(false);
+  const [selectedProvider, setSelectedProvider] = useState<ProviderProfile | null>(null);
+  const [selectedServiceId, setSelectedServiceId] = useState<number | null>(null);
+  const [selectedServiceName, setSelectedServiceName] = useState<string>('');
+
   const [filters, setFilters] = useState({
     serviceId: '',
     collegeId: '',
@@ -91,45 +54,41 @@ export default function ProvidersList() {
     try {
       setLoading(true);
       setError(null);
-      
+
+      console.log("📡 Fetching data from backend...");
+
       const [providersRes, servicesRes, collegesRes] = await Promise.all([
         axios.get(`${baseURL}/api/provider/public/all`),
         axios.get(`${baseURL}/api/services`),
         axios.get(`${baseURL}/api/colleges`)
       ]);
 
-      const processedProviders = (providersRes.data?.data || []).map((provider: any) => ({
-        ...provider,
-        id: provider.id.toString(),
-        services: (provider.services || []).map((service: any) => {
-          let processedPrice = service.price;
-          
-          // Handle different price formats
-          if (service.price !== undefined && service.price !== null && service.price !== '') {
-            if (typeof service.price === 'string') {
-              // Remove currency symbols and parse
-              const cleanPrice = service.price.replace(/[KSh,\s]/g, '');
-              processedPrice = parseFloat(cleanPrice);
-              if (isNaN(processedPrice)) {
-                processedPrice = undefined;
-              }
-            } else if (typeof service.price === 'number') {
-              processedPrice = service.price;
-            }
-          } else {
-            processedPrice = undefined;
-          }
+      console.log("✅ Providers raw response:", providersRes.data);
+      console.log("✅ Services raw response:", servicesRes.data);
+      console.log("✅ Colleges raw response:", collegesRes.data);
 
-          return {
-            ...service,
-            price: processedPrice
-          };
-        }),
-        rating: provider.rating || 0,
-        completedRequests: provider.completedRequests || 0,
-        college: provider.college || null
-      }));
+      const processedProviders = (providersRes.data?.data || []).map((provider: any) => {
+        console.log("➡️ Raw provider:", provider);
 
+        const processed = {
+          ...provider,
+          services: (provider.services || []).map((service: any) => {
+            const serviceData = service.service || service;
+            console.log("   ↳ Raw service:", service);
+            console.log("   ↳ Extracted serviceData:", serviceData);
+
+            return {
+              ...serviceData,
+              price: parsePriceToNumber(serviceData.price)
+            };
+          }),
+        };
+
+        console.log("✅ Processed provider:", processed);
+        return processed;
+      });
+
+      console.log("🎯 Final processedProviders:", processedProviders);
 
       setAllProviders(processedProviders);
       setFilteredProviders(processedProviders);
@@ -137,16 +96,18 @@ export default function ProvidersList() {
       setColleges(collegesRes.data);
 
     } catch (err) {
-      console.error('Fetch error:', err);
-      setError(
-        axios.isAxiosError(err) 
-          ? err.response?.data?.error || 'Failed to load providers'
-          : 'Failed to load providers'
-      );
+      console.error('❌ Fetch error:', err);
+      const errorMessage = axios.isAxiosError(err) 
+        ? err.response?.data?.error || 'Failed to load providers'
+        : 'Failed to load providers';
+      
+      setError(errorMessage);
+      addToast(errorMessage, 'error'); // Show toast notification
       setAllProviders([]);
       setFilteredProviders([]);
     } finally {
       setLoading(false);
+      console.log("✅ Fetch cycle completed");
     }
   };
 
@@ -186,18 +147,24 @@ export default function ProvidersList() {
     if (filters.minPrice) {
       const min = Number(filters.minPrice);
       results = results.filter(provider => 
-        provider.services?.some(service => 
-          service.price !== undefined && service.price !== null && service.price >= min
-        )
+        provider.services?.some(service => {
+          const price = service.price !== null && service.price !== undefined 
+            ? Number(service.price) 
+            : NaN;
+          return !isNaN(price) && price >= min;
+        })
       );
     }
 
     if (filters.maxPrice) {
       const max = Number(filters.maxPrice);
       results = results.filter(provider => 
-        provider.services?.some(service => 
-          service.price !== undefined && service.price !== null && service.price <= max
-        )
+        provider.services?.some(service => {
+          const price = service.price !== null && service.price !== undefined 
+            ? Number(service.price) 
+            : NaN;
+          return !isNaN(price) && price <= max;
+        })
       );
     }
 
@@ -240,13 +207,44 @@ export default function ProvidersList() {
 
   const handleContactProvider = (provider: ProviderProfile) => {
     if (!provider.phoneNumber) {
-      alert('This provider has not shared their contact information');
+      addToast('This provider has not shared their contact information', 'warning');
       return;
     }
     
     if (confirm(`Contact ${provider.firstName} ${provider.lastName} at ${provider.phoneNumber}?`)) {
       window.location.href = `tel:${provider.phoneNumber}`;
     }
+  };
+
+  // Add function to handle service request
+  const handleServiceRequest = (provider: ProviderProfile) => {
+    if (!user) {
+      // Show toast notification instead of alert
+      addToast('Please log in to request services', 'info');
+      return;
+    }
+
+    // Check if provider has services
+    if (!provider.services || provider.services.length === 0) {
+      addToast('This provider has no services available', 'warning');
+      return;
+    }
+
+    // For simplicity, use the first service. You might want to show a service selection modal
+    const firstService = provider.services[0];
+    
+    setSelectedProvider(provider);
+    setSelectedServiceId(firstService.id);
+    setSelectedServiceName(firstService.name);
+    setShowServiceRequest(true);
+  };
+
+  const handleServiceRequestSuccess = () => {
+    setShowServiceRequest(false);
+    setSelectedProvider(null);
+    setSelectedServiceId(null);
+    setSelectedServiceName('');
+    addToast('Service request sent successfully!', 'success');
   };
 
   const handleResetFilters = () => {
@@ -261,6 +259,7 @@ export default function ProvidersList() {
       sortBy: 'rating-desc',
       availability: ''
     });
+    addToast('Filters reset', 'info');
   };
 
   if (loading) {
@@ -288,315 +287,418 @@ export default function ProvidersList() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-        <h1 className="text-2xl sm:text-3xl font-bold">Available Service Providers</h1>
-        {user?.role === 'service_provider' && (
-          <Link 
-            to="/provider/dashboard" 
-            className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-center"
-          >
-            My Dashboard
-          </Link>
-        )}
-      </div>
-      
-      {/* Filters Section */}
-      <div className="bg-white p-4 sm:p-6 rounded-lg shadow-md mb-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Search - Full width on mobile */}
-          <div className="sm:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
-            <input
-              type="text"
-              value={filters.searchQuery}
-              onChange={(e) => setFilters({...filters, searchQuery: e.target.value})}
-              placeholder="Search by name, bio, or services..."
-              className="w-full p-2 border border-gray-300 rounded-lg"
-            />
-          </div>
-          
-          {/* Service Filter */}
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-50">
+      <div className="container mx-auto px-4 py-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Service</label>
-            <select
-              value={filters.serviceId}
-              onChange={(e) => setFilters({...filters, serviceId: e.target.value})}
-              className="w-full p-2 border border-gray-300 rounded-lg"
+            <h1 className="text-3xl sm:text-4xl font-light text-slate-800 mb-2">Service Providers</h1>
+            <p className="text-slate-600">Discover talented professionals in your area</p>
+          </div>
+          {user?.role === 'service_provider' && (
+            <Link 
+              to="/provider/dashboard" 
+              className="w-full sm:w-auto px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 text-center font-medium transition-all shadow-sm border border-blue-600"
             >
-              <option value="">All Services</option>
-              {services.map(service => (
-                <option key={service.id} value={service.id}>
-                  {service.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          
-          {/* College Filter */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">College</label>
-            <select
-              value={filters.collegeId}
-              onChange={(e) => setFilters({...filters, collegeId: e.target.value})}
-              className="w-full p-2 border border-gray-300 rounded-lg"
-            >
-              <option value="">All Colleges</option>
-              {colleges.map(college => (
-                <option key={college.id} value={college.id}>
-                  {college.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          
-          {/* Price Range - Full width on mobile */}
-          <div className="sm:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Price Range (KSh)</label>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <input
-                type="number"
-                value={filters.minPrice}
-                onChange={(e) => setFilters({...filters, minPrice: e.target.value})}
-                placeholder="Min price (KSh)"
-                className="w-full p-2 border border-gray-300 rounded-lg"
-                min="0"
-              />
-              <input
-                type="number"
-                value={filters.maxPrice}
-                onChange={(e) => setFilters({...filters, maxPrice: e.target.value})}
-                placeholder="Max price (KSh)"
-                className="w-full p-2 border border-gray-300 rounded-lg"
-                min="0"
-              />
-            </div>
-          </div>
-          
-          {/* Sort By */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Sort By</label>
-            <select
-              value={filters.sortBy}
-              onChange={(e) => setFilters({...filters, sortBy: e.target.value})}
-              className="w-full p-2 border border-gray-300 rounded-lg"
-            >
-              <option value="rating-desc">Highest Rating</option>
-              <option value="price-asc">Price: Low to High</option>
-              <option value="price-desc">Price: High to Low</option>
-              <option value="requests-desc">Most Completed Requests</option>
-            </select>
-          </div>
-          
-          {/* Location Filter */}
-          <div className="sm:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-            <div className="flex flex-col sm:flex-row">
+              My Dashboard
+            </Link>
+          )}
+        </div>
+        
+        {/* Enhanced Filters Section */}
+        <div className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl shadow-sm border border-slate-100/80 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
+            {/* Search - Full width on mobile */}
+            <div className="sm:col-span-2">
+              <label className="block text-sm font-medium text-slate-700 mb-2">Search</label>
               <input
                 type="text"
-                value={filters.location}
-                onChange={(e) => setFilters({...filters, location: e.target.value})}
-                placeholder="Zip code or address"
-                className="flex-1 p-2 border border-gray-300 rounded-t-lg sm:rounded-tr-none sm:rounded-l-lg"
+                value={filters.searchQuery}
+                onChange={(e) => setFilters({...filters, searchQuery: e.target.value})}
+                placeholder="Search by name, bio, or services..."
+                className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 transition-all bg-white/70 backdrop-blur-sm"
               />
+            </div>
+            
+            {/* Service Filter */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Service</label>
               <select
-                value={filters.radius}
-                onChange={(e) => setFilters({...filters, radius: Number(e.target.value)})}
-                className="p-2 border border-gray-300 rounded-b-lg sm:rounded-bl-none sm:rounded-r-lg"
+                value={filters.serviceId}
+                onChange={(e) => setFilters({...filters, serviceId: e.target.value})}
+                className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 transition-all bg-white/70 backdrop-blur-sm"
               >
-                <option value="5">5 km</option>
-                <option value="10">10 km</option>
-                <option value="25">25 km</option>
-                <option value="50">50 km</option>
+                <option value="">All Services</option>
+                {services.map(service => (
+                  <option key={service.id} value={service.id}>
+                    {service.name}
+                  </option>
+                ))}
               </select>
             </div>
+            
+            {/* College Filter */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">College</label>
+              <select
+                value={filters.collegeId}
+                onChange={(e) => setFilters({...filters, collegeId: e.target.value})}
+                className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 transition-all bg-white/70 backdrop-blur-sm"
+              >
+                <option value="">All Colleges</option>
+                {colleges.map(college => (
+                  <option key={college.id} value={college.id}>
+                    {college.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            {/* Price Range - Full width on mobile */}
+            <div className="sm:col-span-2">
+              <label className="block text-sm font-medium text-slate-700 mb-2">Price Range (KSh)</label>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <input
+                  type="number"
+                  value={filters.minPrice}
+                  onChange={(e) => setFilters({...filters, minPrice: e.target.value})}
+                  placeholder="Min price (KSh)"
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 transition-all bg-white/70 backdrop-blur-sm"
+                  min="0"
+                />
+                <input
+                  type="number"
+                  value={filters.maxPrice}
+                  onChange={(e) => setFilters({...filters, maxPrice: e.target.value})}
+                  placeholder="Max price (KSh)"
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 transition-all bg-white/70 backdrop-blur-sm"
+                  min="0"
+                />
+              </div>
+            </div>
+            
+            {/* Sort By */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Sort By</label>
+              <select
+                value={filters.sortBy}
+                onChange={(e) => setFilters({...filters, sortBy: e.target.value})}
+                className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 transition-all bg-white/70 backdrop-blur-sm"
+              >
+                <option value="rating-desc">Highest Rating</option>
+                <option value="price-asc">Price: Low to High</option>
+                <option value="price-desc">Price: High to Low</option>
+                <option value="requests-desc">Most Completed Requests</option>
+              </select>
+            </div>
+            
+            {/* Location Filter */}
+            <div className="sm:col-span-2">
+              <label className="block text-sm font-medium text-slate-700 mb-2">Location</label>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="text"
+                  value={filters.location}
+                  onChange={(e) => setFilters({...filters, location: e.target.value})}
+                  placeholder="Zip code or address"
+                  className="flex-1 px-4 py-3 border border-slate-200 rounded-xl sm:rounded-r-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 transition-all bg-white/70 backdrop-blur-sm"
+                />
+                <select
+                  value={filters.radius}
+                  onChange={(e) => setFilters({...filters, radius: Number(e.target.value)})}
+                  className="px-4 py-3 border border-slate-200 rounded-xl sm:rounded-l-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 transition-all bg-white/70 backdrop-blur-sm"
+                >
+                  <option value="5">5 km</option>
+                  <option value="10">10 km</option>
+                  <option value="25">25 km</option>
+                  <option value="50">50 km</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          
+          {/* Availability Filter */}
+          <div className="mt-6">
+            <label className="block text-sm font-medium text-slate-700 mb-2">Availability</label>
+            <select
+              value={filters.availability}
+              onChange={(e) => setFilters({...filters, availability: e.target.value})}
+              className="w-full sm:w-64 px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 transition-all bg-white/70 backdrop-blur-sm"
+            >
+              <option value="">Any</option>
+              <option value="weekdays">Weekdays</option>
+              <option value="weekends">Weekends</option>
+              <option value="mornings">Mornings</option>
+              <option value="evenings">Evenings</option>
+            </select>
+          </div>
+          
+          {/* Reset Filters Button */}
+          <div className="mt-6 flex justify-end">
+            <button
+              onClick={handleResetFilters}
+              className="px-6 py-3 text-slate-600 hover:text-slate-800 hover:bg-slate-50 rounded-xl transition-all font-medium border border-slate-200 hover:border-slate-300"
+            >
+              Reset All Filters
+            </button>
           </div>
         </div>
-        
-        {/* Availability Filter */}
-        <div className="mt-4">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Availability</label>
-          <select
-            value={filters.availability}
-            onChange={(e) => setFilters({...filters, availability: e.target.value})}
-            className="w-full p-2 border border-gray-300 rounded-lg"
-          >
-            <option value="">Any</option>
-            <option value="weekdays">Weekdays</option>
-            <option value="weekends">Weekends</option>
-            <option value="mornings">Mornings</option>
-            <option value="evenings">Evenings</option>
-          </select>
-        </div>
-        
-        {/* Reset Filters Button */}
-        <div className="mt-4 flex justify-end">
-          <button
-            onClick={handleResetFilters}
-            className="px-4 py-2 text-gray-600 hover:text-gray-800 text-sm sm:text-base"
-          >
-            Reset All Filters
-          </button>
-        </div>
-      </div>
 
-      {/* Providers Grid */}
-      {filteredProviders.length === 0 ? (
-        <div className="text-center py-8 sm:py-12 bg-white rounded-lg shadow-md">
-          <h3 className="text-lg sm:text-xl font-medium text-gray-900">No providers found</h3>
-          <p className="mt-2 text-gray-600">Try adjusting your search filters</p>
-          <button
-            onClick={handleResetFilters}
-            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm sm:text-base"
-          >
-            Clear Filters
-          </button>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-          {filteredProviders.map(provider => (
-            <div key={provider.id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
-              <div className="p-4 sm:p-6">
-                <div className="flex items-start gap-3">
-                  {/* Profile Image */}
-                  <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden flex-shrink-0">
-                    {provider.profileImageUrl ? (
-                      <img 
-                        src={provider.profileImageUrl} 
-                        alt={`${provider.firstName} ${provider.lastName}`}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-gray-200 flex items-center justify-center">
-                        <span className="text-xl sm:text-2xl font-bold text-gray-500">
-                          {provider.firstName?.charAt(0)}{provider.lastName?.charAt(0)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  
-                  {/* Provider Info */}
-                  <div className="flex-1">
-                    <Link to={`/providers/public/${provider.id}`}>
-                      <h3 className="font-bold text-lg sm:text-xl hover:text-blue-600">
-                        {provider.firstName} {provider.lastName}
-                      </h3>
-                    </Link>
-                    
-                    {provider.college && (
-                      <p className="text-xs sm:text-sm text-gray-600 mt-1">
-                        {provider.college.name}
-                      </p>
-                    )}
-                    
-                    {/* Rating and Requests */}
-                    <div className="mt-2 flex items-center flex-wrap gap-1">
-                      <div className="flex text-yellow-400">
-                        {[...Array(5)].map((_, i) => (
-                          <svg
-                            key={i}
-                            className={`w-4 h-4 sm:w-5 sm:h-5 ${i < (provider.rating || 0) ? 'text-yellow-400' : 'text-gray-300'}`}
-                            fill="currentColor"
-                            viewBox="0 0 20 20"
-                          >
-                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                          </svg>
-                        ))}
-                      </div>
-                      <span className="text-xs sm:text-sm text-gray-600">
-                        ({provider.completedRequests || 0} requests)
-                      </span>
+        {/* Providers Grid */}
+        {filteredProviders.length === 0 ? (
+          <div className="text-center py-16 bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-100/80">
+            <UserIcon className="h-16 w-16 text-slate-300 mx-auto mb-4" />
+            <h3 className="text-xl font-medium text-slate-900 mb-2">No providers found</h3>
+            <p className="text-slate-600 mb-6">Try adjusting your search filters</p>
+            <button
+              onClick={handleResetFilters}
+              className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-medium transition-all shadow-sm"
+            >
+              Clear Filters
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-6">
+            {filteredProviders.map(provider => (
+              <div key={provider.id} className="group bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm hover:shadow-lg transition-all border border-slate-100/80 overflow-hidden">
+                <div className="p-6">
+                  <div className="flex items-start gap-4 mb-6">
+                    {/* Enhanced Profile Image */}
+                    <div className="w-20 h-20 rounded-2xl overflow-hidden flex-shrink-0 shadow-md">
+                      {provider.profileImageUrl ? (
+                        <img 
+                          src={provider.profileImageUrl} 
+                          alt={`${provider.firstName} ${provider.lastName}`}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = '/default-avatar.png';
+                          }}
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-blue-100 to-slate-100 flex items-center justify-center">
+                          <span className="text-xl font-light text-slate-600">
+                            {provider.firstName?.charAt(0)}{provider.lastName?.charAt(0)}
+                          </span>
+                        </div>
+                      )}
                     </div>
                     
-                    {/* Price Range - Enhanced display */}
-                    <div className="mt-2">
-                      <span className="text-sm font-medium text-green-600 bg-green-50 px-2 py-1 rounded">
-                        {formatPriceRange(provider.services)}
-                      </span>
-                    </div>
-                    
-                    {/* Bio */}
-                    {provider.bio && (
-                      <p className="mt-3 text-gray-700 text-xs sm:text-sm line-clamp-2 sm:line-clamp-3">
-                        {provider.bio}
-                      </p>
-                    )}
-                    
-                    {/* Services Offered - Enhanced with better price display */}
-                    {provider.services && provider.services.length > 0 && (
-                      <div className="mt-3 sm:mt-4">
-                        <h4 className="text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Services Offered</h4>
-                        <div className="space-y-1">
-                          {provider.services.slice(0, 3).map(service => (
-                            <div key={service.id} className="flex justify-between items-center">
-                              <span className="text-xs sm:text-sm text-gray-700 flex-1 mr-2">
-                                {service.name}
-                              </span>
-                              <span className="text-xs sm:text-sm font-medium text-green-600 bg-green-50 px-2 py-1 rounded whitespace-nowrap">
-                                {formatPrice(service.price)}
-                              </span>
-                            </div>
-                          ))}
-                          {provider.services.length > 3 && (
-                            <div className="text-xs sm:text-sm text-gray-500 italic">
-                              +{provider.services.length - 3} more services
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Past Works Preview */}
-                    {provider.pastWorks?.length > 0 && (
-                      <div className="mt-4">
-                        <h4 className="text-xs sm:text-sm font-medium text-gray-700 mb-2">Sample Work</h4>
-                        <div className="flex gap-2 overflow-x-auto pb-2">
-                          {provider.pastWorks.slice(0, 2).map((work, index) => (
-                            <div key={index} className="flex-shrink-0 w-16 h-16 relative">
-                              <img
-                                src={work.imageUrl}
-                                alt={`Past work ${index + 1}`}
-                                className="w-full h-full object-cover rounded"
-                                onError={(e) => {
-                                  (e.target as HTMLImageElement).src = '/default-work.png';
-                                }}
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Action Buttons */}
-                    <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row justify-between gap-2">
-                      <Link 
-                        to={`/providers/public/${provider.id}`}
-                        className="px-3 py-1 sm:px-4 sm:py-2 text-blue-600 hover:text-blue-800 font-medium text-sm sm:text-base text-center"
-                      >
-                        View Profile
+                    {/* Provider Info */}
+                    <div className="flex-1 min-w-0">
+                      <Link to={`/providers/public/${provider.id}`} className="group">
+                        <h3 className="font-medium text-lg text-slate-800 group-hover:text-blue-600 transition-colors truncate">
+                          {provider.firstName} {provider.lastName}
+                        </h3>
                       </Link>
                       
-                      {user?.role === 'client' && (
-                        <button
-                          onClick={() => handleContactProvider(provider)}
-                          disabled={!provider.phoneNumber}
-                          className={`px-3 py-1 sm:px-4 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${
-                            provider.phoneNumber 
-                              ? 'bg-green-600 text-white hover:bg-green-700' 
-                              : 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                          }`}
-                        >
-                          {provider.phoneNumber ? 'Contact' : 'No Contact'}
-                        </button>
+                      {provider.college && (
+                        <div className="flex items-center mt-1 text-sm text-slate-600">
+                          <BuildingOfficeIcon className="h-4 w-4 mr-1 flex-shrink-0" />
+                          <span className="truncate">{provider.college.name}</span>
+                        </div>
+                      )}
+                      
+                      {provider.address && (
+                        <div className="flex items-center mt-1 text-sm text-slate-600">
+                          <MapPinIcon className="h-4 w-4 mr-1 flex-shrink-0" />
+                          <span className="truncate">{provider.address}</span>
+                        </div>
                       )}
                     </div>
                   </div>
+
+                  {/* Enhanced Stats */}
+                  <div className="grid grid-cols-2 gap-4 mb-6">
+                    <div className="bg-slate-50/70 rounded-xl p-3 text-center">
+                      <div className="flex items-center justify-center mb-1">
+                        <StarIcon className={`h-4 w-4 mr-1 ${(provider.rating || 0) > 0 ? 'text-amber-400 fill-amber-400' : 'text-slate-300'}`} />
+                        <span className="font-medium text-slate-800">
+                          {provider.rating ? provider.rating.toFixed(1) : 'New'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600">Rating</p>
+                    </div>
+                    
+                    <div className="bg-slate-50/70 rounded-xl p-3 text-center">
+                      <div className="font-medium text-slate-800 mb-1">
+                        {provider.completedRequests || 0}
+                      </div>
+                      <p className="text-xs text-slate-600">Completed</p>
+                    </div>
+                  </div>
+
+                  {/* Enhanced Price Range */}
+                  <div className="mb-6">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-medium text-slate-700 mb-2">
+                        KSh Price Range
+                      </h4>
+                      <span className="text-sm font-medium text-blue-600 bg-blue-50 px-3 py-1 rounded-lg">
+                        {formatPriceRange(provider.services)}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  {/* Enhanced Bio */}
+                  {provider.bio && (
+                    <div className="mb-6">
+                      <p className="text-sm text-slate-700 line-clamp-3 leading-relaxed">
+                        {provider.bio}
+                      </p>
+                    </div>
+                  )}
+                  
+                  {/* Enhanced Services Offered */}
+                  {provider.services && provider.services.length > 0 && (
+                    <div className="mb-6">
+                      <h4 className="text-sm font-medium text-slate-700 mb-3">Services Offered</h4>
+                      <div className="space-y-2">
+                        {provider.services.slice(0, 3).map(service => (
+                          <div key={service.id} className="flex justify-between items-center p-3 bg-slate-50/70 rounded-lg">
+                            <span className="text-sm text-slate-700 flex-1 mr-3 truncate">
+                              {service.name}
+                            </span>
+                            <span className="text-sm font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded whitespace-nowrap">
+                              {service.price !== undefined && service.price !== null 
+                                ? formatPrice(service.price)
+                                : 'Price not set'}
+                            </span>
+                          </div>
+                        ))}
+                        {provider.services.length > 3 && (
+                          <div className="text-sm text-slate-500 italic text-center py-2">
+                            +{provider.services.length - 3} more services
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Enhanced Past Works Preview */}
+                  {provider.pastWorks?.length > 0 && (
+                    <div className="mb-6">
+                      <h4 className="text-sm font-medium text-slate-700 mb-3 flex items-center">
+                        <PhotoIcon className="h-4 w-4 mr-1" />
+                        Portfolio Preview
+                      </h4>
+                      <div className="flex gap-2 overflow-x-auto pb-2">
+                        {provider.pastWorks.slice(0, 4).map((work, index) => (
+                          <div key={index} className="flex-shrink-0 w-20 h-20 relative group cursor-pointer">
+                            <img
+                              src={work.imageUrl}
+                              alt={`Portfolio item ${index + 1}`}
+                              className="w-full h-full object-cover rounded-lg shadow-sm"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = '/default-work.png';
+                              }}
+                              onClick={() => setSelectedImage(work.imageUrl)}
+                            />
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 rounded-lg transition-all flex items-center justify-center">
+                              <EyeIcon className="h-5 w-5 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
+                            </div>
+                          </div>
+                        ))}
+                        {provider.pastWorks.length > 4 && (
+                          <div className="flex-shrink-0 w-20 h-20 bg-slate-100 rounded-lg flex items-center justify-center">
+                            <span className="text-xs text-slate-600 font-medium">
+                              +{provider.pastWorks.length - 4}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Enhanced Action Buttons */}
+                  <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-slate-100">
+                    <Link 
+                      to={`/providers/public/${provider.id}`}
+                      className="flex-1 px-4 py-3 text-blue-600 hover:text-blue-800 font-medium text-sm text-center border border-blue-200 rounded-xl hover:bg-blue-50 hover:border-blue-300 transition-all"
+                    >
+                      View Full Profile
+                    </Link>
+                    
+                    {/* Show Request Service button for authenticated users */}
+                    {user && (
+                      <button
+                        onClick={() => handleServiceRequest(provider)}
+                        disabled={!provider.services || provider.services.length === 0}
+                        className={`flex-1 px-4 py-3 rounded-xl font-medium text-sm transition-all flex items-center justify-center ${
+                          provider.services && provider.services.length > 0
+                            ? 'bg-green-600 text-white hover:bg-green-700 shadow-sm' 
+                            : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                        }`}
+                      >
+                        <PaperAirplaneIcon className="h-4 w-4 mr-2" />
+                        Request Service
+                      </button>
+                    )}
+                    
+                    {/* Show contact button for clients only if phone is available */}
+                    {user?.role === 'client' && provider.phoneNumber && (
+                      <button
+                        onClick={() => handleContactProvider(provider)}
+                        className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 shadow-sm font-medium text-sm transition-all flex items-center justify-center"
+                      >
+                        <PhoneIcon className="h-4 w-4 mr-2" />
+                        Contact Now
+                      </button>
+                    )}
+
+                    {/* Show login prompt for non-authenticated users */}
+                    {!user && (
+                      <div className="flex-1 px-4 py-3 bg-blue-50 text-blue-800 rounded-xl border border-blue-200 text-center text-sm">
+                        <p className="mb-2">Sign in to request services</p>
+                        <Link 
+                          to="/login"
+                          className="inline-flex items-center px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs font-medium"
+                        >
+                          Sign In
+                        </Link>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
+            ))}
+          </div>
+        )}
+
+        {/* Service Request Modal */}
+        {showServiceRequest && selectedProvider && selectedServiceId && (
+          <DirectServiceRequest
+            providerId={selectedProvider.id}
+            serviceId={selectedServiceId}
+            serviceName={selectedServiceName}
+            providerName={`${selectedProvider.firstName} ${selectedProvider.lastName}`}
+            isOpen={showServiceRequest}
+            onClose={() => setShowServiceRequest(false)}
+            onSuccess={handleServiceRequestSuccess}
+          />
+        )}
+
+        {/* Image Preview Modal */}
+        {selectedImage && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="relative max-w-4xl max-h-[90vh] w-full">
+              <button
+                onClick={() => setSelectedImage(null)}
+                className="absolute -top-12 right-0 text-white/80 hover:text-white transition-colors p-2 rounded-full hover:bg-white/10"
+              >
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+              <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-2 border border-white/20">
+                <img
+                  src={selectedImage}
+                  alt="Portfolio item"
+                  className="w-full h-full object-contain rounded-xl shadow-2xl max-h-[80vh]"
+                />
+              </div>
             </div>
-          ))}
-        </div>
-      )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

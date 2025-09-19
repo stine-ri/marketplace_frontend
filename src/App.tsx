@@ -27,19 +27,23 @@ import { NavigationArrows } from './components/NewFeature/NavigationArrows';
 import ForgotPassword from './components/auth/ForgotPassword';
 import 'react-toastify/dist/ReactToastify.css';
 import { Toaster } from 'react-hot-toast';
+import { ToastProvider } from './context/ToastContext';
+
 export function App() {
   return (
-    
     <Router>
-      <AuthProvider>
-        <DataProvider>
-           <WebSocketWrapper />
-        </DataProvider>
-      </AuthProvider>
-      <ToastContainer />
+      <ToastProvider>
+        <AuthProvider>
+          <DataProvider>
+             <WebSocketWrapper />
+          </DataProvider>
+        </AuthProvider>
+        <ToastContainer /> {/* optional if using react-toastify */}
+      </ToastProvider>
     </Router>
   );
 }
+
 
 function WebSocketWrapper() {
   const { user } = useAuth();
@@ -105,7 +109,7 @@ function AppContent() {
         <Route path="/chat/:chatRoomId" element={<ChatWindow />} />
         <Route path="/products/:id" element={<ProductDetail />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
-        
+
         {/* Provider Dashboard Route */}
         <Route
           path="/provider/dashboard"

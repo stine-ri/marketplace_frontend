@@ -245,7 +245,31 @@ export function ClientRequestCard({
             )}
           </div>
         </div>
-
+{/* Request Images Display */}
+{request.images && request.images.length > 0 && (
+  <div className="mt-4 pt-4 border-t border-gray-200">
+    <p className="text-sm font-medium text-gray-700 mb-3">Reference Images:</p>
+    <div className="flex space-x-3 overflow-x-auto pb-2">
+      {request.images.map((imageUrl: string, index: number) => (
+        <div key={index} className="flex-shrink-0">
+          <img
+            src={imageUrl}
+            alt={`Request reference ${index + 1}`}
+            className="h-20 w-20 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity shadow-sm"
+            onClick={() => {
+              // Open image in new tab
+              window.open(imageUrl, '_blank');
+            }}
+            onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+              const target = e.target as HTMLImageElement;
+              target.style.display = 'none'; // Hide broken images
+            }}
+          />
+        </div>
+      ))}
+    </div>
+  </div>
+)}
         <div className="flex flex-col items-end gap-2">
           <span className="text-sm text-gray-500">{formatDate(request.createdAt)}</span>
           <button

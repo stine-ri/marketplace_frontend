@@ -85,6 +85,12 @@ export function Navbar({ children }: NavbarProps) {
               Services
             </Link>
             <Link 
+    to="/providers" 
+    className="text-gray-700 hover:text-blue-600 font-medium transition-colors"
+  >
+    Providers
+  </Link>
+            <Link 
               to="/products" 
               className="text-gray-700 hover:text-blue-600 font-medium transition-colors"
             >
@@ -245,6 +251,13 @@ export function Navbar({ children }: NavbarProps) {
               >
                 Services
               </Link>
+ <Link 
+    to="/providers" 
+    className="py-3 px-2 text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded-md transition-colors font-medium" 
+    onClick={handleMenuClose}
+  >
+    Providers
+  </Link>
               <Link 
                 to="/products" 
                 className="py-3 px-2 text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded-md transition-colors font-medium" 
