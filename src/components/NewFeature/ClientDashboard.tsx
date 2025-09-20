@@ -254,60 +254,94 @@ export function ClientDashboard() {
     }
   };
 
-  const fetchRequests = useCallback(async () => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
+const fetchRequests = useCallback(async () => {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) return;
 
-      if (!refreshing) setLoading(true);
+    if (!refreshing) setLoading(true);
 
-      const response = await api.get('/api/client/requests', {
-        headers: { Authorization: `Bearer ${token}` },
-        params: {
-          include: 'interests'
+    const response = await api.get('/api/client/requests', {
+      headers: { Authorization: `Bearer ${token}` },
+      params: {
+        include: 'interests,images'
+      }
+    });
+
+    if (response.data) {
+      const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com';
+      
+      // Helper function to normalize URLs
+      const normalizeUrl = (url: string | null | undefined): string | null => {
+        if (!url) return null;
+        if (url.startsWith('http://') || url.startsWith('https://')) {
+          return url;
         }
+        if (url.startsWith('/')) {
+          return `${baseURL}${url}`;
+        }
+        return `${baseURL}/${url}`;
+      };
+
+      const normalizedRequests = response.data.map((request: Request) => {
+        // Process images - handle both array of objects and array of strings
+        let processedImages: string[] = [];
+        
+        if (request.images && Array.isArray(request.images)) {
+          processedImages = request.images
+            .map(img => {
+              if (typeof img === 'string') {
+                return normalizeUrl(img);
+              } else if (img && typeof img === 'object' && img.url) {
+                return normalizeUrl(img.url);
+              }
+              return null;
+            })
+            .filter((url): url is string => url !== null);
+        }
+
+        return {
+          ...request,
+          images: processedImages, // Add the processed images array
+          // DON'T process location here - keep it exactly as received
+          interests: (request.interests || []).map(interest => ({
+            ...interest,
+            provider: interest.provider ? {
+              ...interest.provider,
+              profileImageUrl: interest.provider.profileImageUrl 
+                ? normalizeUrl(interest.provider.profileImageUrl)
+                : '/default-profile.png',
+              user: interest.provider.user ? {
+                ...interest.provider.user,
+                avatar: interest.provider.user.avatar 
+                  ? normalizeUrl(interest.provider.user.avatar)
+                  : '/default-avatar.png'
+              } : null
+            } : null
+          }))
+        };
       });
 
-      if (response.data) {
-        const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com';
-        
-        const normalizedRequests = response.data.map((request: Request) => {
-          return {
-            ...request,
-            // DON'T process location here - keep it exactly as received
-            // Let getLocationString handle all parsing when displaying
-            interests: (request.interests || []).map(interest => ({
-              ...interest,
-              provider: interest.provider ? {
-                ...interest.provider,
-                profileImageUrl: interest.provider.profileImageUrl 
-                  ? interest.provider.profileImageUrl.startsWith('http')
-                    ? interest.provider.profileImageUrl
-                    : `${baseURL}${interest.provider.profileImageUrl}`
-                  : '/default-profile.png',
-                user: interest.provider.user ? {
-                  ...interest.provider.user,
-                  avatar: interest.provider.user.avatar 
-                    ? interest.provider.user.avatar.startsWith('http')
-                      ? interest.provider.user.avatar
-                      : `${baseURL}${interest.provider.user.avatar}`
-                    : '/default-avatar.png'
-                } : null
-              } : null
-            }))
-          };
+      // Debug: Log the first request to see if images are included
+      if (normalizedRequests.length > 0) {
+        console.log('First request with images:', {
+          id: normalizedRequests[0].id,
+          title: normalizedRequests[0].productName || normalizedRequests[0].serviceName,
+          imageCount: normalizedRequests[0].images?.length || 0,
+          images: normalizedRequests[0].images
         });
-
-        setRequests(normalizedRequests);
       }
-    } catch (error) {
-      console.error('Fetch error:', error);
-      toast.error('Failed to load requests');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+
+      setRequests(normalizedRequests);
     }
-  }, [refreshing]);
+  } catch (error) {
+    console.error('Fetch error:', error);
+    toast.error('Failed to load requests');
+  } finally {
+    setLoading(false);
+    setRefreshing(false);
+  }
+}, [refreshing]);
 
   // Initial load and refresh
   useEffect(() => {
@@ -427,8 +461,7 @@ useEffect(() => {
 
 //  createNewRequest function in ClientDashboard
 const createNewRequest = async (requestData: FormData | any) => {
-  console.log('=== CREATE REQUEST FUNCTION CALLED ===');
-  console.log('Request data type:', requestData.constructor.name);
+
   
   try {
     const token = localStorage.getItem('token');
@@ -442,31 +475,22 @@ const createNewRequest = async (requestData: FormData | any) => {
 
       
       // Debug FormData contents
-      console.log('FormData entries:');
-      for (let [key, value] of requestData.entries()) {
-        if (value instanceof File) {
-          console.log(`${key}: File "${value.name}" (${value.size} bytes, ${value.type})`);
-        } else {
-          console.log(`${key}: "${value}"`);
-        }
-      }
+      // console.log('FormData entries:');
+      // for (let [key, value] of requestData.entries()) {
+      //   if (value instanceof File) {
+      //     console.log(`${key}: File "${value.name}" (${value.size} bytes, ${value.type})`);
+      //   } else {
+      //     console.log(`${key}: "${value}"`);
+      //   }
+      // }
       
       // Verify images specifically
       const images = requestData.getAll('images');
-      console.log(`Images found in FormData: ${images.length}`);
-      images.forEach((img, index) => {
-        if (img instanceof File) {
-          console.log(`Image ${index}: ${img.name} (${img.size} bytes, ${img.type})`);
-        } else {
-          console.log(`Image ${index}: Not a File object:`, typeof img);
-        }
-      });
+      
       
       if (images.length === 0) {
         console.warn('WARNING: No images found in FormData!');
       }
-      
-      console.log('Making FormData request to:', `${API_BASE_URL}/api/client/requests`);
       
       response = await fetch(`${API_BASE_URL}/api/client/requests`, {
         method: 'POST',
@@ -479,23 +503,62 @@ const createNewRequest = async (requestData: FormData | any) => {
       });
       
     } else {
+   
       
+      // CRITICAL: Validate and clean the JSON payload
+    // CRITICAL: Validate and clean the JSON payload
+const cleanPayload: Record<string, any> = {
+  productName: requestData.productName?.trim() || null,
+  description: requestData.description?.trim() || null,
+  desiredPrice: validateAndParseNumber(requestData.desiredPrice),
+  isService: Boolean(requestData.isService),
+  serviceId: validateAndParseNumber(requestData.serviceId),
+  location: validateAndStringifyLocation(requestData.location),
+  collegeFilterId: validateAndParseNumber(requestData.collegeFilterId)
+};
+
+// Remove null/undefined/empty values to prevent JSON issues
+const finalPayload = Object.fromEntries(
+  Object.entries(cleanPayload).filter(([_, value]) => {
+    if (value === null || value === undefined) return false;
+    if (typeof value === 'string' && value.trim() === '') return false;
+    if (typeof value === 'object' && Object.keys(value).length === 0) return false;
+    return true;
+  })
+);
+
+
+
+// Additional validation to catch potential JSON issues
+const problematicKeys = Object.entries(finalPayload).filter(([key, value]) => {
+  if (typeof value === 'string') {
+    return value.includes('"-"') || value.includes('"NaN"');
+  }
+  return false;
+});
+
+if (problematicKeys.length > 0) {
+
+  throw new Error('Invalid data format: Please check all fields for proper values');
+}
+
+     
+
       
-      const requestPayload = {
-        productName: requestData.productName || null,
-        description: requestData.description || null,
-        desiredPrice: validateAndParseNumber(requestData.desiredPrice),
-        isService: Boolean(requestData.isService),
-        serviceId: requestData.serviceId || null,
-        location: validateAndStringifyLocation(requestData.location),
-        collegeFilterId: validateAndParseNumber(requestData.collegeFilterId)
-      };
-
-      const cleanPayload = Object.fromEntries(
-        Object.entries(requestPayload).filter(([_, v]) => v !== null && v !== undefined)
-      );
-
-
+      // Pre-validate the JSON to catch issues early
+      try {
+        const testJson = JSON.stringify(finalPayload);
+        console.log('JSON validation successful, length:', testJson.length);
+        
+        // Quick sanity check for common issues
+        if (testJson.includes('"-"') || testJson.includes('"NaN"')) {
+          throw new Error('Invalid JSON detected: contains invalid number values');
+        }
+        
+      } catch (jsonTestError) {
+        console.error('JSON pre-validation failed:', jsonTestError);
+        throw new Error('Invalid data format: ' + (jsonTestError instanceof Error ? jsonTestError.message : 'unknown error'));
+      }
 
       response = await fetch(`${API_BASE_URL}/api/client/requests`, {
         method: 'POST',
@@ -504,34 +567,52 @@ const createNewRequest = async (requestData: FormData | any) => {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
-        body: JSON.stringify(cleanPayload)
+        body: JSON.stringify(finalPayload)
       });
     }
 
-
+    // console.log('Response status:', response.status);
+    // console.log('Response headers:', Object.fromEntries(response.headers.entries()));
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Error response body:', errorText);
       
       let errorMessage = 'Failed to create request';
+      
       try {
         const jsonError = JSON.parse(errorText);
         errorMessage = jsonError.error || jsonError.message || errorMessage;
-      } catch {
+        
+        // Add more context for common errors
+        if (jsonError.details) {
+          console.error('Error details:', jsonError.details);
+          if (jsonError.details.includes('JSON') || jsonError.details.includes('minus sign')) {
+            errorMessage = 'Invalid form data - please check all number fields';
+          }
+        }
+      } catch (parseError) {
+        console.error('Could not parse error response as JSON:', parseError);
         errorMessage = `Server error: ${response.status} ${response.statusText}`;
+        
+        // Special handling for common HTTP errors
+        if (response.status === 400) {
+          errorMessage = 'Invalid request data - please check all form fields';
+        } else if (response.status === 401) {
+          errorMessage = 'Authentication failed - please log in again';
+        } else if (response.status === 500) {
+          errorMessage = 'Server error - please try again later';
+        }
       }
       
       throw new Error(errorMessage);
     }
 
     const result = await response.json();
-
+    // console.log('Success response:', result);
     
     if (result.images && result.images.length > 0) {
-      console.log('Image URLs:', result.images);
-    } else {
-      console.warn('No images in response - check backend processing');
+      console.log('Images uploaded:', result.images.length);
     }
     
     toast.success(`Request created successfully${result.images?.length ? ` with ${result.images.length} images` : ''}!`);
@@ -543,44 +624,118 @@ const createNewRequest = async (requestData: FormData | any) => {
 
   } catch (error) {
     console.error('=== REQUEST CREATION ERROR ===', error);
-    toast.error('Failed to create request: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    
+    // Determine error message
+    let userMessage = 'Failed to create request';
+    
+    if (error instanceof Error) {
+      if (error.message.includes('JSON') || error.message.includes('minus sign')) {
+        userMessage = 'Invalid form data - please check all number fields are properly filled';
+      } else if (error.message.includes('Network') || error.name === 'TypeError') {
+        userMessage = 'Connection error - please check your internet connection';
+      } else {
+        userMessage = error.message;
+      }
+    }
+    
+    toast.error(userMessage);
     throw error;
   }
 };
 
 // Helper functions for safer data validation
+// Enhanced number validation
 function validateAndParseNumber(value: any): number | null {
+  console.log('Validating number:', value, typeof value);
+  
   if (value === null || value === undefined || value === '') {
     return null;
   }
   
-  const num = Number(value);
-  if (isNaN(num) || !isFinite(num)) {
-    console.warn(`Invalid number value: ${value}`);
+  // Handle edge cases that could cause JSON issues
+  if (value === '-' || value === 'NaN' || value === 'undefined' || value === 'null') {
+    console.warn('Invalid number value detected:', value);
     return null;
   }
   
+  // Handle string representations
+  if (typeof value === 'string') {
+    // Remove any whitespace or special characters
+    const cleanedValue = value.trim().replace(/[^\d.-]/g, '');
+    
+    // Check if it's just a minus sign
+    if (cleanedValue === '-' || cleanedValue === '.') {
+      console.warn('Invalid number string:', value);
+      return null;
+    }
+    
+    // Parse the cleaned value
+    const num = Number(cleanedValue);
+    if (isNaN(num) || !isFinite(num)) {
+      console.warn(`Could not parse as number: ${value} -> ${num}`);
+      return null;
+    }
+    
+    console.log('String number validation successful:', value, '->', num);
+    return num;
+  }
+  
+  // Handle other types
+  const num = Number(value);
+  if (isNaN(num) || !isFinite(num)) {
+    console.warn(`Could not parse as number: ${value} -> ${num}`);
+    return null;
+  }
+  
+  console.log('Number validation successful:', value, '->', num);
   return num;
 }
 
+// Enhanced location validation
 function validateAndStringifyLocation(location: any): string | null {
   if (!location) return null;
   
   if (typeof location === 'string') {
-    return location;
+    const trimmed = location.trim();
+    if (!trimmed) return null;
+    
+    // Try to parse as JSON first to validate
+    try {
+      if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+        JSON.parse(trimmed);
+        return trimmed; // It's already valid JSON
+      }
+      return JSON.stringify({ address: trimmed });
+    } catch (error) {
+      console.warn('Invalid JSON in location string, converting to simple object:', error);
+      return JSON.stringify({ address: trimmed });
+    }
   }
   
   if (typeof location === 'object') {
     try {
-      return JSON.stringify(location);
+      // Validate that the object can be stringified
+      const testString = JSON.stringify(location);
+      // Quick check for common issues
+      if (testString.includes('"-"') || testString.includes('"NaN"')) {
+        throw new Error('Invalid values in location object');
+      }
+      return testString;
     } catch (error) {
-      console.error('Failed to stringify location:', error);
+      console.error('Failed to stringify location object:', error);
       return null;
     }
   }
   
-  return String(location);
+  // For any other type, convert to string and create a simple object
+  const stringValue = String(location).trim();
+  if (!stringValue) return null;
+  
+  return JSON.stringify({ address: stringValue });
 }
+
+
+
  const filteredRequests = requests.filter(request =>
   activeTab === 'active'
     ? request.status === 'open' || request.status === 'pending'

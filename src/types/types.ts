@@ -80,7 +80,7 @@ export interface Request {
   updated_at:string;
   interests?: Interest[]; 
   bids?: Bid[];
-  images?: string[]; 
+  images?: string[] | Array<{ url: string; publicId?: string }>;
   college?: {
     id: number;
     name: string;

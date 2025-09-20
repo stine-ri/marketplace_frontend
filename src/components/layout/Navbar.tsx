@@ -1,5 +1,5 @@
 import React, { useState, ReactNode, useRef, useEffect } from 'react';
-import { Search, Menu, X, User } from 'lucide-react';
+import { Search, Menu, X, User, LayoutDashboard } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import NotificationBell from '../NewFeature/NotificationBell';
@@ -21,6 +21,53 @@ export function Navbar({ children }: NavbarProps) {
   const handleLogout = () => {
     logout();
     setIsMenuOpen(false);
+  };
+
+  const handleDashboardRedirect = () => {
+    if (user?.role) {
+      switch (user.role.toLowerCase()) {
+        case 'admin':
+          navigate('/admin/dashboard');
+          break;
+        case 'service_provider':
+        case 'provider':
+          navigate('/provider/dashboard');
+          break;
+        case 'product_seller':
+        case 'seller':
+          navigate('/seller/dashboard');
+          break;
+        case 'client':
+        case 'customer':
+          navigate('/client/dashboard');
+          break;
+        default:
+          navigate('/');
+      }
+    } else {
+      navigate('/');
+    }
+    setIsMenuOpen(false);
+  };
+
+  const getDashboardButtonText = () => {
+    if (!user?.role) return 'Dashboard';
+    
+    switch (user.role.toLowerCase()) {
+      case 'admin':
+        return 'Admin Panel';
+      case 'service_provider':
+      case 'provider':
+        return 'Provider Dashboard';
+      case 'product_seller':
+      case 'seller':
+        return 'Seller Dashboard';
+      case 'client':
+      case 'customer':
+        return 'My Dashboard';
+      default:
+        return 'Dashboard';
+    }
   };
 
   const handleSearchToggle = () => {
@@ -85,11 +132,11 @@ export function Navbar({ children }: NavbarProps) {
               Services
             </Link>
             <Link 
-    to="/providers" 
-    className="text-gray-700 hover:text-blue-600 font-medium transition-colors"
-  >
-    Providers
-  </Link>
+              to="/providers" 
+              className="text-gray-700 hover:text-blue-600 font-medium transition-colors"
+            >
+              Providers
+            </Link>
             <Link 
               to="/products" 
               className="text-gray-700 hover:text-blue-600 font-medium transition-colors"
@@ -145,6 +192,25 @@ export function Navbar({ children }: NavbarProps) {
                 </button>
               )}
             </div>
+
+            {/* Dashboard Button - Always visible */}
+            {user ? (
+              <button 
+                onClick={handleDashboardRedirect}
+                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center font-medium focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+              >
+                <LayoutDashboard size={16} className="mr-2" />
+                <span className="hidden xl:inline">{getDashboardButtonText()}</span>
+                <span className="xl:hidden">Dashboard</span>
+              </button>
+            ) : (
+              <div className="px-4 py-2 bg-orange-50 border border-orange-200 rounded-md">
+                <p className="text-orange-700 text-sm font-medium">
+                  <Link to="/login" className="text-blue-600 hover:text-blue-700 font-semibold">Login</Link> or 
+                  <Link to="/register" className="text-blue-600 hover:text-blue-700 font-semibold ml-1">Register</Link> to access dashboard
+                </p>
+              </div>
+            )}
             
             {user ? (
               <div className="flex items-center space-x-3">
@@ -191,6 +257,17 @@ export function Navbar({ children }: NavbarProps) {
             >
               <Search size={20} />
             </button>
+
+            {/* Mobile Dashboard Button */}
+            {user ? (
+              <button 
+                onClick={handleDashboardRedirect}
+                className="p-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                aria-label={getDashboardButtonText()}
+              >
+                <LayoutDashboard size={20} />
+              </button>
+            ) : null}
 
             {/* Notification bell for authenticated users on mobile/tablet */}
             {user && (user as any)?.id && (
@@ -251,13 +328,13 @@ export function Navbar({ children }: NavbarProps) {
               >
                 Services
               </Link>
- <Link 
-    to="/providers" 
-    className="py-3 px-2 text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded-md transition-colors font-medium" 
-    onClick={handleMenuClose}
-  >
-    Providers
-  </Link>
+              <Link 
+                to="/providers" 
+                className="py-3 px-2 text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded-md transition-colors font-medium" 
+                onClick={handleMenuClose}
+              >
+                Providers
+              </Link>
               <Link 
                 to="/products" 
                 className="py-3 px-2 text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded-md transition-colors font-medium" 
@@ -280,6 +357,43 @@ export function Navbar({ children }: NavbarProps) {
                 Help
               </Link>
             </nav>
+
+            {/* Mobile Dashboard Section */}
+            {user ? (
+              <div className="mb-4 pb-4 border-b border-gray-200">
+                <button 
+                  onClick={handleDashboardRedirect}
+                  className="w-full px-4 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors font-medium flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                >
+                  <LayoutDashboard size={18} className="mr-2" />
+                  {getDashboardButtonText()}
+                </button>
+              </div>
+            ) : (
+              <div className="mb-4 pb-4 border-b border-gray-200">
+                <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg text-center">
+                  <p className="text-orange-700 font-medium mb-3">
+                    Access your personalized dashboard
+                  </p>
+                  <div className="space-y-2">
+                    <Link 
+                      to="/login" 
+                      className="w-full px-4 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium text-center block focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                      onClick={handleMenuClose}
+                    >
+                      Login to Dashboard
+                    </Link>
+                    <Link 
+                      to="/register" 
+                      className="w-full px-4 py-3 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors font-medium text-center block focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                      onClick={handleMenuClose}
+                    >
+                      Create Account
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* User Authentication Section */}
             <div className="pt-4 border-t border-gray-200">

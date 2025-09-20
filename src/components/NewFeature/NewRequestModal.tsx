@@ -128,24 +128,87 @@ const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
   };
 
   // UPDATED: Handle submit with images
+// Replace the handleSubmit function in your NewRequestModal.tsx with this version:
+
 const handleSubmit = async (e: React.FormEvent) => {
   e.preventDefault();
   setIsSubmitting(true);
   
   try {
     console.log('=== FORM SUBMISSION DEBUG ===');
+    console.log('Form data before processing:', formData);
     console.log('Images selected:', images.length);
 
-    
+    // CRITICAL: Validate and clean form data BEFORE sending
+   // In your validation function, convert to cents/integers
+const validateNumber = (value: string, fieldName: string): number | null => {
+  if (!value || value.trim() === '' || value === '-') {
+    console.log(`${fieldName} is empty or invalid:`, value);
+    return null;
+  }
+  
+  const num = parseFloat(value.trim());
+  if (isNaN(num) || !isFinite(num)) {
+    console.error(`${fieldName} is not a valid number:`, value);
+    throw new Error(`${fieldName} must be a valid number`);
+  }
+  
+  // For desiredPrice, convert to integer (cents)
+  if (fieldName === 'desiredPrice') {
+    return Math.round(num * 100); // Convert to cents
+  }
+  
+  return Math.round(num); // Convert other numbers to integers
+};
+
+    const validateString = (value: string, fieldName: string): string | null => {
+      if (!value || value.trim() === '') {
+        return null;
+      }
+      return value.trim();
+    };
+
+    // Validate required fields first
+    if (!formData.title?.trim()) {
+      throw new Error('Title is required');
+    }
+    if (!formData.serviceId || formData.serviceId.trim() === '') {
+      throw new Error('Service selection is required');
+    }
+    if (!formData.desiredPrice?.trim()) {
+      throw new Error('Desired price is required');
+    }
+    if (!formData.location?.trim()) {
+      throw new Error('Location is required');
+    }
+
+    // Process and validate data
+    const processedData = {
+      productName: validateString(formData.title, 'title'),
+      description: validateString(formData.description, 'description'),
+      serviceId: validateNumber(formData.serviceId, 'serviceId'),
+      desiredPrice: validateNumber(formData.desiredPrice, 'desiredPrice'),
+      location: validateString(formData.location, 'location'),
+      isService: true
+    };
+
+    console.log('Processed data:', processedData);
+
+    // Additional validation
+    if (processedData.serviceId === null || processedData.serviceId <= 0) {
+      throw new Error('Please select a valid service');
+    }
+    if (processedData.desiredPrice === null || processedData.desiredPrice <= 0) {
+      throw new Error('Price must be a positive number');
+    }
+
     // Validate images before proceeding
     const validImages = images.filter(img => {
-      console.log(`Image validation: ${img.name}`, {
-        size: img.size,
-        type: img.type,
-        lastModified: img.lastModified,
-        valid: img.size > 0 && img.type.startsWith('image/')
-      });
-      return img.size > 0 && img.type.startsWith('image/');
+      const isValid = img.size > 0 && img.type.startsWith('image/');
+      if (!isValid) {
+        console.warn(`Invalid image: ${img.name}`, { size: img.size, type: img.type });
+      }
+      return isValid;
     });
     
     console.log(`Valid images: ${validImages.length}/${images.length}`);
@@ -156,25 +219,25 @@ const handleSubmit = async (e: React.FormEvent) => {
       // Create FormData for image upload
       const formDataWithImages = new FormData();
       
-      // Add form fields first
-      formDataWithImages.append('productName', formData.title);
-      formDataWithImages.append('description', formData.description || '');
-      formDataWithImages.append('desiredPrice', formData.desiredPrice);
-      formDataWithImages.append('location', formData.location);
-      formDataWithImages.append('serviceId', formData.serviceId);
+      // Add form fields - ENSURE clean values
+      formDataWithImages.append('productName', processedData.productName || '');
+      formDataWithImages.append('description', processedData.description || '');
+      formDataWithImages.append('desiredPrice', processedData.desiredPrice!.toString());
+      formDataWithImages.append('location', processedData.location || '');
+      formDataWithImages.append('serviceId', processedData.serviceId!.toString());
       formDataWithImages.append('isService', 'true');
       
-      // Add images - CRITICAL: Make sure this matches backend expectations
+      // Add images
       validImages.forEach((image, index) => {
         console.log(`Adding image ${index}:`, {
           name: image.name,
           size: image.size,
           type: image.type
         });
-        formDataWithImages.append('images', image, image.name); // Explicitly set filename
+        formDataWithImages.append('images', image, image.name);
       });
       
-      // Debug: Log all FormData entries
+      // Debug FormData
       console.log('=== FORMDATA CONTENTS ===');
       for (let [key, value] of formDataWithImages.entries()) {
         if (value instanceof File) {
@@ -184,27 +247,36 @@ const handleSubmit = async (e: React.FormEvent) => {
         }
       }
       
-      // Verify images are actually in FormData
-      const imageEntries = formDataWithImages.getAll('images');
-      console.log('Images in FormData:', imageEntries.length);
-      imageEntries.forEach((img, i) => {
-        if (img instanceof File) {
-          console.log(`  Image ${i}: ${img.name} (${img.size} bytes)`);
-        }
-      });
-      
-      console.log('Calling onSubmit with FormData...');
       await onSubmit(formDataWithImages);
     } else {
       console.log('No valid images, submitting as JSON...');
-      await onSubmit({
-        productName: formData.title,
-        description: formData.description,
-        serviceId: Number(formData.serviceId),
-        desiredPrice: parseFloat(formData.desiredPrice),
-        location: formData.location,
+      
+      // Create clean JSON payload - NO undefined or NaN values
+      const jsonPayload = {
+        productName: processedData.productName,
+        description: processedData.description,
+        serviceId: processedData.serviceId,
+        desiredPrice: processedData.desiredPrice,
+        location: processedData.location,
         isService: true
-      });
+      };
+      
+      // Final check - ensure no invalid values
+      const cleanPayload = Object.fromEntries(
+        Object.entries(jsonPayload).filter(([_, value]) => 
+          value !== null && value !== undefined && value !== '' && !Number.isNaN(value)
+        )
+      );
+      
+      console.log('Clean JSON payload:', cleanPayload);
+      
+      // Validate final payload
+      if (!cleanPayload.productName) throw new Error('Title is missing');
+      if (!cleanPayload.serviceId) throw new Error('Service ID is missing');
+      if (!cleanPayload.desiredPrice) throw new Error('Price is missing');
+      if (!cleanPayload.location) throw new Error('Location is missing');
+      
+      await onSubmit(cleanPayload);
     }
 
     // Reset form on success
@@ -222,10 +294,14 @@ const handleSubmit = async (e: React.FormEvent) => {
     previews.forEach(preview => URL.revokeObjectURL(preview));
     setPreviews([]);
     
-    onClose(); // Close modal on success
+    onClose();
     
   } catch (error) {
     console.error('=== FORM SUBMISSION ERROR ===', error);
+    
+    // Show user-friendly error message
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    toast.error(errorMessage);
   } finally {
     setIsSubmitting(false);
   }

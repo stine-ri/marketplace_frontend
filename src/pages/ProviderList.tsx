@@ -1,9 +1,9 @@
-// src/pages/ProvidersList.tsx - Updated with toast notifications
+// src/pages/ProvidersList.tsx - Updated with eased restrictions for non-authenticated users
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
-import { useToast } from '../context/ToastContext'; // Import the toast hook
+import { useToast } from '../context/ToastContext';
 import { ProviderProfile, Service, College } from '../types/types';
 import { AxiosError } from 'axios';
 import { 
@@ -14,16 +14,18 @@ import {
   BuildingOfficeIcon,
   PhotoIcon,
   EyeIcon,
-  PaperAirplaneIcon
+  PaperAirplaneIcon,
+  LockClosedIcon
 } from '@heroicons/react/24/outline';
 import { parsePriceToNumber, formatPriceRange, formatPrice } from '../utilis/priceFormatter';
 import DirectServiceRequest from '../components/NewFeature/ServiceRequests';
+import { useNavigate } from "react-router-dom";
 
 const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com';
 
 export default function ProvidersList() {
   const { user } = useAuth();
-  const { addToast } = useToast(); // Initialize toast function
+  const { addToast } = useToast();
   const [allProviders, setAllProviders] = useState<ProviderProfile[]>([]);
   const [filteredProviders, setFilteredProviders] = useState<ProviderProfile[]>([]);
   const [services, setServices] = useState<Service[]>([]);
@@ -32,7 +34,6 @@ export default function ProvidersList() {
   const [error, setError] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   
-  // Add states for service request modal
   const [showServiceRequest, setShowServiceRequest] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<ProviderProfile | null>(null);
   const [selectedServiceId, setSelectedServiceId] = useState<number | null>(null);
@@ -49,13 +50,12 @@ export default function ProvidersList() {
     sortBy: 'rating-desc',
     availability: '',
   });
+  const navigate = useNavigate();
 
   const fetchData = async () => {
     try {
       setLoading(true);
       setError(null);
-
-      console.log("📡 Fetching data from backend...");
 
       const [providersRes, servicesRes, collegesRes] = await Promise.all([
         axios.get(`${baseURL}/api/provider/public/all`),
@@ -63,32 +63,19 @@ export default function ProvidersList() {
         axios.get(`${baseURL}/api/colleges`)
       ]);
 
-      console.log("✅ Providers raw response:", providersRes.data);
-      console.log("✅ Services raw response:", servicesRes.data);
-      console.log("✅ Colleges raw response:", collegesRes.data);
-
       const processedProviders = (providersRes.data?.data || []).map((provider: any) => {
-        console.log("➡️ Raw provider:", provider);
-
         const processed = {
           ...provider,
           services: (provider.services || []).map((service: any) => {
             const serviceData = service.service || service;
-            console.log("   ↳ Raw service:", service);
-            console.log("   ↳ Extracted serviceData:", serviceData);
-
             return {
               ...serviceData,
               price: parsePriceToNumber(serviceData.price)
             };
           }),
         };
-
-        console.log("✅ Processed provider:", processed);
         return processed;
       });
-
-      console.log("🎯 Final processedProviders:", processedProviders);
 
       setAllProviders(processedProviders);
       setFilteredProviders(processedProviders);
@@ -102,12 +89,11 @@ export default function ProvidersList() {
         : 'Failed to load providers';
       
       setError(errorMessage);
-      addToast(errorMessage, 'error'); // Show toast notification
+      addToast(errorMessage, 'error');
       setAllProviders([]);
       setFilteredProviders([]);
     } finally {
       setLoading(false);
-      console.log("✅ Fetch cycle completed");
     }
   };
 
@@ -168,7 +154,6 @@ export default function ProvidersList() {
       );
     }
 
-    // Enhanced sorting with better price handling
     switch (filters.sortBy) {
       case 'rating-desc':
         results.sort((a, b) => (b.rating || 0) - (a.rating || 0));
@@ -206,6 +191,12 @@ export default function ProvidersList() {
   }, [filters, allProviders]);
 
   const handleContactProvider = (provider: ProviderProfile) => {
+    if (!user) {
+      addToast('Please sign up to access contact information', 'info');
+      navigate('/register');
+      return;
+    }
+
     if (!provider.phoneNumber) {
       addToast('This provider has not shared their contact information', 'warning');
       return;
@@ -216,21 +207,23 @@ export default function ProvidersList() {
     }
   };
 
-  // Add function to handle service request
   const handleServiceRequest = (provider: ProviderProfile) => {
     if (!user) {
-      // Show toast notification instead of alert
-      addToast('Please log in to request services', 'info');
+      addToast('Please sign up to request services', 'info');
+      navigate('/register');
       return;
     }
 
-    // Check if provider has services
+    if (user.providerId && user.providerId.toString() === provider.id.toString()) {
+      addToast('You cannot request your own services', 'warning');
+      return;
+    }
+
     if (!provider.services || provider.services.length === 0) {
       addToast('This provider has no services available', 'warning');
       return;
     }
 
-    // For simplicity, use the first service. You might want to show a service selection modal
     const firstService = provider.services[0];
     
     setSelectedProvider(provider);
@@ -260,6 +253,13 @@ export default function ProvidersList() {
       availability: ''
     });
     addToast('Filters reset', 'info');
+  };
+
+  // Helper function to get general location (city/area only)
+  const getGeneralLocation = (address: string | undefined | null) => {
+    if (!address) return null;
+    const parts = address.split(',');
+    return parts.length > 1 ? parts[parts.length - 1].trim() : parts[0].trim();
   };
 
   if (loading) {
@@ -293,21 +293,46 @@ export default function ProvidersList() {
           <div>
             <h1 className="text-3xl sm:text-4xl font-light text-slate-800 mb-2">Service Providers</h1>
             <p className="text-slate-600">Discover talented professionals in your area</p>
+            {!user && (
+              <p className="text-sm text-blue-600 mt-2 flex items-center">
+                <UserIcon className="h-4 w-4 mr-1" />
+                Browse freely • Sign up to connect and request services
+              </p>
+            )}
           </div>
-          {user?.role === 'service_provider' && (
-            <Link 
-              to="/provider/dashboard" 
-              className="w-full sm:w-auto px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 text-center font-medium transition-all shadow-sm border border-blue-600"
-            >
-              My Dashboard
-            </Link>
-          )}
+          
+          <div className="flex flex-col sm:flex-row gap-3">
+            {user?.role === 'service_provider' && (
+              <Link 
+                to="/provider/dashboard" 
+                className="w-full sm:w-auto px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 text-center font-medium transition-all shadow-sm border border-blue-600"
+              >
+                My Dashboard
+              </Link>
+            )}
+            
+            {!user && (
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => navigate('/login')}
+                  className="px-4 py-3 text-blue-600 border border-blue-300 rounded-xl hover:bg-blue-50 transition-all font-medium text-sm"
+                >
+                  Sign In
+                </button>
+                <button
+                  onClick={() => navigate('/register')}
+                  className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-medium transition-all shadow-sm text-sm"
+                >
+                  Sign Up Free
+                </button>
+              </div>
+            )}
+          </div>
         </div>
         
         {/* Enhanced Filters Section */}
         <div className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl shadow-sm border border-slate-100/80 mb-8">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
-            {/* Search - Full width on mobile */}
             <div className="sm:col-span-2">
               <label className="block text-sm font-medium text-slate-700 mb-2">Search</label>
               <input
@@ -319,7 +344,6 @@ export default function ProvidersList() {
               />
             </div>
             
-            {/* Service Filter */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">Service</label>
               <select
@@ -336,7 +360,6 @@ export default function ProvidersList() {
               </select>
             </div>
             
-            {/* College Filter */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">College</label>
               <select
@@ -353,7 +376,6 @@ export default function ProvidersList() {
               </select>
             </div>
             
-            {/* Price Range - Full width on mobile */}
             <div className="sm:col-span-2">
               <label className="block text-sm font-medium text-slate-700 mb-2">Price Range (KSh)</label>
               <div className="flex flex-col sm:flex-row gap-3">
@@ -376,7 +398,6 @@ export default function ProvidersList() {
               </div>
             </div>
             
-            {/* Sort By */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">Sort By</label>
               <select
@@ -391,7 +412,6 @@ export default function ProvidersList() {
               </select>
             </div>
             
-            {/* Location Filter */}
             <div className="sm:col-span-2">
               <label className="block text-sm font-medium text-slate-700 mb-2">Location</label>
               <div className="flex flex-col sm:flex-row gap-2">
@@ -416,7 +436,6 @@ export default function ProvidersList() {
             </div>
           </div>
           
-          {/* Availability Filter */}
           <div className="mt-6">
             <label className="block text-sm font-medium text-slate-700 mb-2">Availability</label>
             <select
@@ -432,7 +451,6 @@ export default function ProvidersList() {
             </select>
           </div>
           
-          {/* Reset Filters Button */}
           <div className="mt-6 flex justify-end">
             <button
               onClick={handleResetFilters}
@@ -462,7 +480,6 @@ export default function ProvidersList() {
               <div key={provider.id} className="group bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm hover:shadow-lg transition-all border border-slate-100/80 overflow-hidden">
                 <div className="p-6">
                   <div className="flex items-start gap-4 mb-6">
-                    {/* Enhanced Profile Image */}
                     <div className="w-20 h-20 rounded-2xl overflow-hidden flex-shrink-0 shadow-md">
                       {provider.profileImageUrl ? (
                         <img 
@@ -482,7 +499,6 @@ export default function ProvidersList() {
                       )}
                     </div>
                     
-                    {/* Provider Info */}
                     <div className="flex-1 min-w-0">
                       <Link to={`/providers/public/${provider.id}`} className="group">
                         <h3 className="font-medium text-lg text-slate-800 group-hover:text-blue-600 transition-colors truncate">
@@ -500,22 +516,39 @@ export default function ProvidersList() {
                       {provider.address && (
                         <div className="flex items-center mt-1 text-sm text-slate-600">
                           <MapPinIcon className="h-4 w-4 mr-1 flex-shrink-0" />
-                          <span className="truncate">{provider.address}</span>
+                          <span className="truncate">
+                            {user ? provider.address : getGeneralLocation(provider.address)}
+                          </span>
                         </div>
                       )}
                     </div>
                   </div>
 
-                  {/* Enhanced Stats */}
                   <div className="grid grid-cols-2 gap-4 mb-6">
-                    <div className="bg-slate-50/70 rounded-xl p-3 text-center">
+                    <div 
+                      className={`bg-slate-50/70 rounded-xl p-3 text-center transition-colors ${
+                        user 
+                          ? 'cursor-pointer hover:bg-slate-100/70 hover:shadow-sm' 
+                          : 'cursor-pointer'
+                      }`}
+                      onClick={() => {
+                        if (user) {
+                          navigate(`/providers/public/${provider.id}`);
+                        } else {
+                          addToast('Sign up to rate providers', 'info');
+                          navigate('/register');
+                        }
+                      }}
+                    >
                       <div className="flex items-center justify-center mb-1">
                         <StarIcon className={`h-4 w-4 mr-1 ${(provider.rating || 0) > 0 ? 'text-amber-400 fill-amber-400' : 'text-slate-300'}`} />
                         <span className="font-medium text-slate-800">
                           {provider.rating ? provider.rating.toFixed(1) : 'New'}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-600">Rating</p>
+                      <p className="text-xs text-slate-600">
+                        {user ? 'Click to rate' : 'Sign up to rate'}
+                      </p>
                     </div>
                     
                     <div className="bg-slate-50/70 rounded-xl p-3 text-center">
@@ -526,19 +559,17 @@ export default function ProvidersList() {
                     </div>
                   </div>
 
-                  {/* Enhanced Price Range */}
                   <div className="mb-6">
                     <div className="flex items-center justify-between">
                       <h4 className="text-sm font-medium text-slate-700 mb-2">
-                        KSh Price Range
+                        Price Range
                       </h4>
                       <span className="text-sm font-medium text-blue-600 bg-blue-50 px-3 py-1 rounded-lg">
-                        {formatPriceRange(provider.services)}
+                        {user ? formatPriceRange(provider.services) : 'Contact for pricing'}
                       </span>
                     </div>
                   </div>
                   
-                  {/* Enhanced Bio */}
                   {provider.bio && (
                     <div className="mb-6">
                       <p className="text-sm text-slate-700 line-clamp-3 leading-relaxed">
@@ -547,7 +578,6 @@ export default function ProvidersList() {
                     </div>
                   )}
                   
-                  {/* Enhanced Services Offered */}
                   {provider.services && provider.services.length > 0 && (
                     <div className="mb-6">
                       <h4 className="text-sm font-medium text-slate-700 mb-3">Services Offered</h4>
@@ -558,9 +588,13 @@ export default function ProvidersList() {
                               {service.name}
                             </span>
                             <span className="text-sm font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded whitespace-nowrap">
-                              {service.price !== undefined && service.price !== null 
-                                ? formatPrice(service.price)
-                                : 'Price not set'}
+                              {user ? (
+                                service.price !== undefined && service.price !== null 
+                                  ? formatPrice(service.price)
+                                  : 'Quote'
+                              ) : (
+                                'Contact'
+                              )}
                             </span>
                           </div>
                         ))}
@@ -573,8 +607,7 @@ export default function ProvidersList() {
                     </div>
                   )}
 
-                  {/* Enhanced Past Works Preview */}
-                  {provider.pastWorks?.length > 0 && (
+                  {provider.pastWorks && provider.pastWorks.length > 0 && (
                     <div className="mb-6">
                       <h4 className="text-sm font-medium text-slate-700 mb-3 flex items-center">
                         <PhotoIcon className="h-4 w-4 mr-1" />
@@ -590,7 +623,14 @@ export default function ProvidersList() {
                               onError={(e) => {
                                 (e.target as HTMLImageElement).src = '/default-work.png';
                               }}
-                              onClick={() => setSelectedImage(work.imageUrl)}
+                              onClick={() => {
+                                if (user) {
+                                  setSelectedImage(work.imageUrl);
+                                } else {
+                                  addToast('Sign up to view full portfolio', 'info');
+                                  navigate('/register');
+                                }
+                              }}
                             />
                             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 rounded-lg transition-all flex items-center justify-center">
                               <EyeIcon className="h-5 w-5 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
@@ -608,7 +648,6 @@ export default function ProvidersList() {
                     </div>
                   )}
 
-                  {/* Enhanced Action Buttons */}
                   <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-slate-100">
                     <Link 
                       to={`/providers/public/${provider.id}`}
@@ -618,42 +657,68 @@ export default function ProvidersList() {
                     </Link>
                     
                     {/* Show Request Service button for authenticated users */}
-                    {user && (
+                    {user && user.providerId?.toString() !== provider.id.toString() && (
                       <button
                         onClick={() => handleServiceRequest(provider)}
                         disabled={!provider.services || provider.services.length === 0}
                         className={`flex-1 px-4 py-3 rounded-xl font-medium text-sm transition-all flex items-center justify-center ${
                           provider.services && provider.services.length > 0
-                            ? 'bg-green-600 text-white hover:bg-green-700 shadow-sm' 
+                            ? 'bg-green-600 text-white hover:bg-green-700 shadow-sm hover:shadow-md transform hover:scale-105' 
                             : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                         }`}
                       >
                         <PaperAirplaneIcon className="h-4 w-4 mr-2" />
-                        Request Service
+                        {provider.services && provider.services.length > 0 ? 'Request Service' : 'No Services'}
                       </button>
                     )}
+
+                    {/* Show "Your Profile" indicator for own profile */}
+                    {user && user.providerId?.toString() === provider.id.toString() && (
+                      <div className="flex-1 px-4 py-3 bg-blue-50 text-blue-700 rounded-xl border border-blue-200 text-center text-sm font-medium">
+                        <UserIcon className="h-4 w-4 inline mr-2" />
+                        Your Profile
+                      </div>
+                    )}
                     
-                    {/* Show contact button for clients only if phone is available */}
-                    {user?.role === 'client' && provider.phoneNumber && (
+                    {/* Show contact button for logged users only if phone is available and not own profile */}
+                    {user && provider.phoneNumber && user.providerId?.toString() !== provider.id.toString() && (
                       <button
                         onClick={() => handleContactProvider(provider)}
-                        className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 shadow-sm font-medium text-sm transition-all flex items-center justify-center"
+                        className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 shadow-sm font-medium text-sm transition-all flex items-center justify-center hover:shadow-md"
                       >
                         <PhoneIcon className="h-4 w-4 mr-2" />
                         Contact Now
                       </button>
                     )}
 
-                    {/* Show login prompt for non-authenticated users */}
+                    {/* Show general contact info for logged users when phone not available */}
+                    {user && !provider.phoneNumber && user.providerId?.toString() !== provider.id.toString() && (
+                      <div className="flex-1 px-4 py-3 bg-amber-50 text-amber-800 rounded-xl border border-amber-200 text-center text-sm">
+                        <p>Contact via services</p>
+                      </div>
+                    )}
+
+                    {/* Show sign up prompt for non-authenticated users */}
                     {!user && (
-                      <div className="flex-1 px-4 py-3 bg-blue-50 text-blue-800 rounded-xl border border-blue-200 text-center text-sm">
-                        <p className="mb-2">Sign in to request services</p>
-                        <Link 
-                          to="/login"
-                          className="inline-flex items-center px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs font-medium"
-                        >
-                          Sign In
-                        </Link>
+                      <div className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-50 to-green-50 text-blue-800 rounded-xl border border-blue-200 text-center text-sm">
+                        <div className="flex items-center justify-center mb-2">
+                          <UserIcon className="h-4 w-4 mr-1" />
+                          <span className="font-medium">Connect with {provider.firstName}</span>
+                        </div>
+                        <div className="flex space-x-2">
+                          <Link 
+                            to="/login"
+                            className="flex-1 px-2 py-1 text-blue-600 border border-blue-300 rounded text-xs font-medium hover:bg-blue-50 transition-colors"
+                          >
+                            Sign In
+                          </Link>
+                          <Link 
+                            to="/register"
+                            className="flex-1 px-2 py-1 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700 transition-colors"
+                          >
+                            Sign Up
+                          </Link>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -676,8 +741,8 @@ export default function ProvidersList() {
           />
         )}
 
-        {/* Image Preview Modal */}
-        {selectedImage && (
+        {/* Image Preview Modal - For authenticated users */}
+        {selectedImage && user && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="relative max-w-4xl max-h-[90vh] w-full">
               <button
@@ -696,6 +761,20 @@ export default function ProvidersList() {
                 />
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Floating Sign Up Button for non-authenticated users */}
+        {!user && (
+          <div className="fixed bottom-6 right-6 z-40">
+            <button
+              onClick={() => navigate('/register')}
+              className="bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700 text-white px-6 py-3 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 group text-sm font-medium"
+              title="Sign up to connect with providers"
+            >
+              <UserIcon className="h-5 w-5 inline mr-2 group-hover:scale-110 transition-transform" />
+              Join Free
+            </button>
           </div>
         )}
       </div>
