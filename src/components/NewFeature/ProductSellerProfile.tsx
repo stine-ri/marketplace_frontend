@@ -46,9 +46,9 @@ export function ProductSellerProfileSection({ profileData, loading, onProfileUpd
     profileImageUrl: ''
   });
   const [uploadingImage, setUploadingImage] = useState(false);
-const [colleges, setColleges] = useState<College[]>([]);
+  const [colleges, setColleges] = useState<College[]>([]);
 
- // Fetch colleges from backend
+  // Fetch colleges from backend
   useEffect(() => {
     const fetchColleges = async () => {
       try {
@@ -62,7 +62,7 @@ const [colleges, setColleges] = useState<College[]>([]);
     fetchColleges();
   }, []);
 
-  // Initialize form data when profileData changes - FIX: Changed from useState to useEffect
+  // Initialize form data when profileData changes
   useEffect(() => {
     if (profileData) {
       setFormData({
@@ -75,7 +75,7 @@ const [colleges, setColleges] = useState<College[]>([]);
         profileImageUrl: profileData.profileImageUrl || ''
       });
     }
-  }, [profileData]); // Added dependency array
+  }, [profileData]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -100,10 +100,10 @@ const [colleges, setColleges] = useState<College[]>([]);
     try {
       setUploadingImage(true);
       const token = localStorage.getItem('token');
-      const formData = new FormData();
-      formData.append('image', file);
+      const formDataUpload = new FormData();
+      formDataUpload.append('image', file);
 
-      const response = await api.post('/api/product-seller/upload', formData, {
+      const response = await api.post('/api/product-seller/upload', formDataUpload, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'multipart/form-data'
@@ -124,12 +124,21 @@ const [colleges, setColleges] = useState<College[]>([]);
     e.preventDefault();
     try {
       const token = localStorage.getItem('token');
-      await api.put('/api/product-seller', {
-        ...formData,
+      // Only send editable fields to the backend
+      const updateData = {
         collegeId: formData.collegeId ? parseInt(formData.collegeId) : null,
+        address: formData.address,
+        bio: formData.bio,
+        profileImageUrl: formData.profileImageUrl,
+        // Keep the non-editable fields from original data
+        firstName: profileData?.firstName,
+        lastName: profileData?.lastName,
+        phoneNumber: profileData?.phoneNumber,
         latitude: profileData?.latitude,
         longitude: profileData?.longitude
-      }, {
+      };
+
+      await api.put('/api/product-seller', updateData, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -141,6 +150,22 @@ const [colleges, setColleges] = useState<College[]>([]);
     } catch (error) {
       console.error('Error updating profile:', error);
       toast.error('Failed to update profile');
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    // Reset form data to current profile data
+    if (profileData) {
+      setFormData({
+        firstName: profileData.firstName || '',
+        lastName: profileData.lastName || '',
+        phoneNumber: profileData.phoneNumber || '',
+        collegeId: profileData.collegeId?.toString() || '',
+        address: profileData.address || '',
+        bio: profileData.bio || '',
+        profileImageUrl: profileData.profileImageUrl || ''
+      });
     }
   };
 
@@ -209,11 +234,12 @@ const [colleges, setColleges] = useState<College[]>([]);
               type="text"
               name="firstName"
               value={formData.firstName}
-              onChange={handleInputChange}
-              disabled={!isEditing}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              required
+              disabled={true} // Always disabled - not editable
+              className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-600 cursor-not-allowed"
             />
+            {isEditing && (
+              <p className="text-xs text-gray-500 mt-1">Name cannot be changed</p>
+            )}
           </div>
 
           <div>
@@ -224,11 +250,12 @@ const [colleges, setColleges] = useState<College[]>([]);
               type="text"
               name="lastName"
               value={formData.lastName}
-              onChange={handleInputChange}
-              disabled={!isEditing}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              required
+              disabled={true} // Always disabled - not editable
+              className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-600 cursor-not-allowed"
             />
+            {isEditing && (
+              <p className="text-xs text-gray-500 mt-1">Name cannot be changed</p>
+            )}
           </div>
 
           <div>
@@ -239,11 +266,12 @@ const [colleges, setColleges] = useState<College[]>([]);
               type="tel"
               name="phoneNumber"
               value={formData.phoneNumber}
-              onChange={handleInputChange}
-              disabled={!isEditing}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              required
+              disabled={true} // Always disabled - not editable
+              className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-600 cursor-not-allowed"
             />
+            {isEditing && (
+              <p className="text-xs text-gray-500 mt-1">Phone number cannot be changed</p>
+            )}
           </div>
 
           <div>
@@ -255,14 +283,16 @@ const [colleges, setColleges] = useState<College[]>([]);
               value={formData.collegeId}
               onChange={handleInputChange}
               disabled={!isEditing}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                !isEditing ? 'bg-gray-50 cursor-not-allowed' : ''
+              }`}
             >
               <option value="">Select College</option>
               {colleges.map((college) => (
-              <option key={college.id} value={college.id}>
-                {college.name}
-              </option>
-            ))}
+                <option key={college.id} value={college.id}>
+                  {college.name}
+                </option>
+              ))}
             </select>
           </div>
         </div>
@@ -278,7 +308,9 @@ const [colleges, setColleges] = useState<College[]>([]);
             value={formData.address}
             onChange={handleInputChange}
             disabled={!isEditing}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+              !isEditing ? 'bg-gray-50 cursor-not-allowed' : ''
+            }`}
           />
         </div>
 
@@ -293,9 +325,41 @@ const [colleges, setColleges] = useState<College[]>([]);
             onChange={handleInputChange}
             disabled={!isEditing}
             rows={4}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+              !isEditing ? 'bg-gray-50 cursor-not-allowed' : ''
+            }`}
             placeholder="Tell us about yourself and your products..."
           />
+        </div>
+
+        {/* Profile Stats - Read Only */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Rating
+            </label>
+            <div className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-600">
+              {profileData?.rating ? `${profileData.rating}/5` : 'No ratings yet'}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Completed Sales
+            </label>
+            <div className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-600">
+              {profileData?.completedSales || 0}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Profile Status
+            </label>
+            <div className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-600">
+              {profileData?.isProfileComplete ? '✅ Complete' : '❌ Incomplete'}
+            </div>
+          </div>
         </div>
 
         {isEditing && (
@@ -308,20 +372,7 @@ const [colleges, setColleges] = useState<College[]>([]);
             </button>
             <button
               type="button"
-              onClick={() => {
-                setIsEditing(false);
-                if (profileData) {
-                  setFormData({
-                    firstName: profileData.firstName || '',
-                    lastName: profileData.lastName || '',
-                    phoneNumber: profileData.phoneNumber || '',
-                    collegeId: profileData.collegeId?.toString() || '',
-                    address: profileData.address || '',
-                    bio: profileData.bio || '',
-                    profileImageUrl: profileData.profileImageUrl || ''
-                  });
-                }
-              }}
+              onClick={handleCancelEdit}
               className="px-6 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
             >
               Cancel
