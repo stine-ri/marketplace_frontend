@@ -126,6 +126,26 @@ export interface ProductRequest {
   estimatedCost?: number;
   deliveryMethod?: string;
   preferredContactTime?: string;
+   providerId?: number;
+}
+export interface Provider {
+  id: number;
+  firstName: string;
+  lastName: string;
+  phoneNumber: string;
+  profileImageUrl?: string | null;
+  shopName?: string;
+  location?: string;
+  rating?: number;
+  college?: {
+    id: number;
+    name: string;
+  };
+  services?: Array<{
+    id: number;
+    name: string;
+    price: number;
+  }>;
 }
 
 // Location-based pricing configuration
@@ -149,6 +169,7 @@ interface RequestServiceModalProps {
   getCurrencySymbol: (location?: string) => string;
   calculateEstimatedCost: (request: Partial<ProductRequest>) => number;
   formatPrice: (price: string | number, location?: string) => string;
+  selectedProvider?: Provider | null;
 }
 
 // Then define the component with proper typing
@@ -161,7 +182,8 @@ const RequestServiceModal: React.FC<RequestServiceModalProps> = ({
   handleProductRequest,
   getCurrencySymbol,
   calculateEstimatedCost,
-  formatPrice 
+  formatPrice,
+  selectedProvider
 }) => {
   if (!showRequestModal) return null;
 
@@ -178,6 +200,30 @@ const RequestServiceModal: React.FC<RequestServiceModalProps> = ({
               <X className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
           </div>
+  {/* Show selected provider info */}
+          {selectedProvider && (
+            <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                  {selectedProvider.profileImageUrl ? (
+                    <img 
+                      src={selectedProvider.profileImageUrl} 
+                      alt={selectedProvider.shopName || `${selectedProvider.firstName} ${selectedProvider.lastName}`}
+                      className="w-10 h-10 rounded-full object-cover"
+                    />
+                  ) : (
+                    <Store className="w-5 h-5 text-blue-600" />
+                  )}
+                </div>
+                <div>
+                  <h4 className="font-semibold text-blue-900">
+                    {selectedProvider.shopName || `${selectedProvider.firstName} ${selectedProvider.lastName}`}
+                  </h4>
+                  <p className="text-blue-700 text-sm">Provider selected • Phone autofilled</p>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="space-y-4">
             {/* Product Details */}
@@ -246,7 +292,7 @@ const RequestServiceModal: React.FC<RequestServiceModalProps> = ({
                     }));
                   }}
                   className="w-full px-3 py-2.5 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-base sm:text-sm"
-                  placeholder="Optional"
+                  placeholder="max price you're willing to pay"
                   min="0"
                   step="0.01"
                   autoComplete="off"
@@ -271,9 +317,12 @@ const RequestServiceModal: React.FC<RequestServiceModalProps> = ({
               />
             </div>
 
-            <div>
+             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Phone Number *
+                {selectedProvider && (
+                  <span className="text-green-600 text-xs ml-2">(Autofilled from selected provider)</span>
+                )}
               </label>
               <input
                 type="tel"
@@ -396,7 +445,7 @@ const ProductsComponent = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedShop, setSelectedShop] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'grid' | 'list' | 'shops'>('shops');
+    const [viewMode, setViewMode] = useState<'grid' | 'list' | 'shops' | 'providers'>('shops');
   const [showFilters, setShowFilters] = useState(false);
   const [priceRange, setPriceRange] = useState([0, 10000000]);
   const [sortBy, setSortBy] = useState('popular');
@@ -455,7 +504,9 @@ const ProductsComponent = () => {
       serviceFee: 2500
     }
   ]);
-
+  const [providers, setProviders] = useState<Provider[]>([]);
+  const [providersLoading, setProvidersLoading] = useState(true);
+  const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);
   const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com';
 
   // Get user from AuthContext
@@ -876,9 +927,14 @@ const ProductsComponent = () => {
   };
 
   // Toggle filter section on mobile
-  const toggleFilterSection = (section: string) => {
+
+const toggleFilterSection = (section: string) => {
+  if (window.innerWidth < 1024) {
+    // On mobile, automatically expand the section when clicked
     setActiveFilterSection(activeFilterSection === section ? null : section);
-  };
+  }
+  // On desktop, sections are always expanded
+};
 
   // Close filters when clicking outside
 useEffect(() => {
@@ -899,7 +955,8 @@ useEffect(() => {
     const loadInitialData = async () => {
       await Promise.all([
         fetchCategories(),
-        fetchAllProducts()
+        fetchAllProducts(),
+        fetchProviders()
       ]);
     };
     loadInitialData();
@@ -963,6 +1020,158 @@ useEffect(() => {
       window.location.href = `/register?role=${role}`;
     }
   };
+
+  // Add function to fetch providers
+  const fetchProviders = async () => {
+    try {
+      setProvidersLoading(true);
+      const response = await fetch(`${BASE_URL}/api/provider/public/all`);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch providers: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.success && Array.isArray(data.data)) {
+        setProviders(data.data);
+      } else {
+        console.warn('Providers response is not in expected format:', data);
+        setProviders([]);
+      }
+    } catch (err) {
+      console.error('Error fetching providers:', err);
+      setProviders([]);
+    } finally {
+      setProvidersLoading(false);
+    }
+  };
+// Add function to handle provider selection
+  const handleProviderSelect = (provider: Provider) => {
+    if (!isAuthenticated) {
+      showLoginPrompt('select providers');
+      return;
+    }
+
+    setSelectedProvider(provider);
+    
+    // Autofill the phone number in the request form
+    setCurrentRequest(prev => ({
+      ...prev,
+      contactPhone: provider.phoneNumber,
+      providerId: provider.id
+    }));
+    
+    // Show the request modal
+    setShowRequestModal(true);
+    
+    toast.success(`Selected ${provider.shopName || `${provider.firstName} ${provider.lastName}`}. Phone number autofilled!`);
+  };
+// Add this component inside your ProductsComponent
+const ProvidersList = () => {
+  if (providersLoading) {
+    return (
+      <div className="flex justify-center items-center py-8">
+        <Loader className="w-6 h-6 animate-spin text-blue-600" />
+        <span className="ml-2 text-gray-600">Loading providers...</span>
+      </div>
+    );
+  }
+
+  if (providers.length === 0) {
+    return (
+      <div className="text-center py-8 bg-white rounded-lg border border-gray-200">
+        <Users className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+        <h3 className="text-lg font-semibold text-gray-900 mb-2">No Providers Available</h3>
+        <p className="text-gray-600 mb-4">No service providers are currently available.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+      {providers.map(provider => (
+        <div
+          key={provider.id}
+          className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 sm:p-6 hover:shadow-md transition-shadow cursor-pointer touch-manipulation"
+          onClick={() => handleProviderSelect(provider)}
+        >
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center flex-shrink-0">
+              {provider.profileImageUrl ? (
+                <img 
+                  src={provider.profileImageUrl} 
+                  alt={provider.shopName || `${provider.firstName} ${provider.lastName}`}
+                  className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover"
+                />
+              ) : (
+                <Store className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600" />
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">
+                {provider.shopName || `${provider.firstName} ${provider.lastName}`}
+              </h3>
+              <p className="text-gray-600 text-sm truncate">
+                {provider.college?.name || 'Independent Provider'}
+              </p>
+              {provider.rating && (
+                <div className="flex items-center gap-1 mt-1">
+                  <Star className="w-3 h-3 sm:w-4 sm:h-4 text-yellow-400 fill-current" />
+                  <span className="text-xs sm:text-sm text-gray-600">{provider.rating.toFixed(1)}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <MapPin className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+              <span className="truncate">{provider.location || 'Location not specified'}</span>
+            </div>
+            
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <Phone className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+              <span className="truncate font-mono">{provider.phoneNumber}</span>
+            </div>
+          </div>
+
+          {provider.services && provider.services.length > 0 && (
+            <div className="mt-3">
+              <div className="flex flex-wrap gap-1">
+                {provider.services.slice(0, 3).map(service => (
+                  <span
+                    key={service.id}
+                    className="px-2 py-1 bg-blue-50 text-blue-600 text-xs rounded-full"
+                  >
+                    {service.name}
+                  </span>
+                ))}
+                {provider.services.length > 3 && (
+                  <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
+                    +{provider.services.length - 3} more
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="mt-4 pt-3 border-t border-gray-100">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleProviderSelect(provider);
+              }}
+              className="w-full py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors text-sm touch-manipulation"
+            >
+              Request Product
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
  // New function to calculate estimated cost based on location and contact method
   const calculateEstimatedCost = (request: Partial<ProductRequest>): number => {
     if (!request.location || !request.contactMethod) return 0;
@@ -1136,157 +1345,169 @@ const getCurrentEstimatedCost = () => {
 
   
   // Mobile-friendly filter sidebar component
-  const FilterSidebar = () => (
-    <div className={`lg:w-80 filter-sidebar ${showFilters ? 'block fixed inset-0 z-50 bg-white overflow-y-auto lg:static lg:bg-transparent' : 'hidden lg:block'}`}>
-      <div className="bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-gray-100 lg:sticky lg:top-8">
-        {/* Mobile header */}
-        {showFilters && (
-          <div className="flex items-center justify-between mb-6 lg:hidden">
-            <h2 className="text-xl font-bold text-gray-900">Filters</h2>
-            <button 
-              onClick={() => setShowFilters(false)}
-              className="p-2 rounded-lg hover:bg-gray-100 touch-manipulation"
+// Mobile-friendly filter sidebar component
+const FilterSidebar = () => (
+  <div className={`lg:w-80 filter-sidebar ${showFilters ? 'block fixed inset-0 z-50 bg-white overflow-y-auto lg:static lg:bg-transparent' : 'hidden lg:block'}`}>
+    <div className="bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-gray-100 lg:sticky lg:top-8 h-full lg:h-auto">
+      {/* Mobile header */}
+      {showFilters && (
+        <div className="flex items-center justify-between mb-6 lg:hidden">
+          <h2 className="text-xl font-bold text-gray-900">Filters</h2>
+          <button 
+            onClick={() => setShowFilters(false)}
+            className="p-2 rounded-lg hover:bg-gray-100 touch-manipulation"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+      )}
+
+      {/* Desktop header (hidden on mobile) */}
+      {!showFilters && (
+        <div className="hidden lg:block mb-6">
+          <h2 className="text-xl font-bold text-gray-900">Filters</h2>
+        </div>
+      )}
+
+      {/* View Mode Selector - Always visible */}
+      <div className="mb-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-3">View Mode</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {[
+            { mode: 'shops', icon: Store, label: 'Shops' },
+            { mode: 'grid', icon: Grid, label: 'Grid' },
+            { mode: 'list', icon: List, label: 'List' },
+            { mode: 'providers', icon: Users, label: 'Providers' }
+          ].map(({ mode, icon: Icon, label }) => (
+            <button
+              key={mode}
+              onClick={() => {
+                setViewMode(mode as 'shops' | 'grid' | 'list' | 'providers');
+                // Close filters on mobile when a view mode is selected
+                if (window.innerWidth < 1024) {
+                  setShowFilters(false);
+                }
+              }}
+              className={`p-2.5 sm:p-3 rounded-lg border text-center transition-colors touch-manipulation flex flex-col items-center justify-center ${
+                viewMode === mode 
+                  ? 'bg-blue-50 border-blue-200 text-blue-600' 
+                  : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+              }`}
             >
-              <X className="w-6 h-6" />
+              <Icon className="w-4 h-4 sm:w-5 sm:h-5 mb-1 sm:mb-2" />
+              <span className="text-xs font-medium">{label}</span>
             </button>
-          </div>
-        )}
+          ))}
+        </div>
+      </div>
 
-        {/* View Mode Selector */}
-{/* Enhanced View Mode Selector for Mobile */}
-<div className="mb-6">
-  <h3 className="text-lg font-semibold text-gray-900 mb-3">View Mode</h3>
-  <div className="grid grid-cols-3 gap-2">
-    {[
-      { mode: 'shops', icon: Store, label: 'Shops' },
-      { mode: 'grid', icon: Grid, label: 'Grid' },
-      { mode: 'list', icon: List, label: 'List' }
-    ].map(({ mode, icon: Icon, label }) => (
-      <button
-        key={mode}
-        onClick={() => setViewMode(mode as 'shops' | 'grid' | 'list')}
-        className={`p-2.5 sm:p-3 rounded-lg border text-center transition-colors touch-manipulation flex flex-col items-center justify-center ${
-          viewMode === mode 
-            ? 'bg-blue-50 border-blue-200 text-blue-600' 
-            : 'border-gray-200 text-gray-600 hover:bg-gray-50'
-        }`}
-      >
-        <Icon className="w-4 h-4 sm:w-5 sm:h-5 mb-1 sm:mb-2" />
-        <span className="text-xs font-medium">{label}</span>
-      </button>
-    ))}
-  </div>
-</div>
+      {/* Categories Section */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between w-full text-left mb-4">
+          <h3 className="text-lg font-semibold text-gray-900">Categories</h3>
+          <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform lg:hidden ${
+            activeFilterSection === 'categories' ? 'rotate-180' : ''
+          }`} />
+        </div>
+        
+        <div className="space-y-2 max-h-60 overflow-y-auto">
+          {allCategoriesWithCounts.length > 0 ? (
+            allCategoriesWithCounts.map(category => (
+              <button
+                key={category.id}
+                onClick={() => {
+                  handleCategoryChange(category.id.toString());
+                  // Close filters on mobile when a category is selected
+                  if (window.innerWidth < 1024) {
+                    setShowFilters(false);
+                  }
+                }}
+                className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors touch-manipulation flex justify-between items-center ${
+                  selectedCategory === category.id.toString()
+                    ? 'bg-blue-50 text-blue-600 font-medium'
+                    : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <span className="truncate text-sm">{category.name}</span>
+                <span className="text-xs text-gray-400 ml-2 flex-shrink-0">({category.count})</span>
+              </button>
+            ))
+          ) : (
+            <div className="text-gray-500 text-sm py-2 text-center">
+              {categoriesLoading ? 'Loading categories...' : 'No categories available'}
+            </div>
+          )}
+        </div>
+      </div>
 
-        {/* Categories - Mobile Accordion */}
-        <div className="mb-8">
-          <button
-            onClick={() => toggleFilterSection('categories')}
-            className="flex items-center justify-between w-full text-left mb-4 lg:cursor-default touch-manipulation"
-          >
-            <h3 className="text-lg font-semibold text-gray-900">Categories</h3>
-            <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform lg:hidden ${
-              activeFilterSection === 'categories' ? 'rotate-180' : ''
-            }`} />
-          </button>
-          <div className={`${activeFilterSection === 'categories' || !showFilters ? 'block' : 'hidden lg:block'}`}>
-            <div className="space-y-2">
-              {allCategoriesWithCounts.length > 0 ? (
-                allCategoriesWithCounts.map(category => (
-                  <button
-                    key={category.id}
-                    onClick={() => handleCategoryChange(category.id.toString())}
-                    className={`w-full text-left px-3 py-2.5 sm:py-2 rounded-lg transition-colors touch-manipulation ${
-                      selectedCategory === category.id.toString()
-                        ? 'bg-blue-50 text-blue-600 font-medium'
-                        : 'text-gray-600 hover:bg-gray-50'
-                    }`}
-                  >
-                    <div className="flex justify-between items-center">
-                      <span className="truncate text-sm sm:text-base">{category.name}</span>
-                      <span className="text-xs sm:text-sm text-gray-400 ml-2 flex-shrink-0">({category.count})</span>
-                    </div>
-                  </button>
-                ))
-              ) : (
-                <div className="text-gray-500 text-sm py-2">
-                  {categoriesLoading ? 'Loading categories...' : 'No categories available'}
-                </div>
-              )}
+      {/* Price Range Section */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between w-full text-left mb-4">
+          <h3 className="text-lg font-semibold text-gray-900">Price Range (KES)</h3>
+          <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform lg:hidden ${
+            activeFilterSection === 'price' ? 'rotate-180' : ''
+          }`} />
+        </div>
+        
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-sm text-gray-600 mb-1 block">Min</label>
+              <input
+                type="number"
+                placeholder="0"
+                value={priceRange[0]}
+                onChange={(e) => setPriceRange([parseInt(e.target.value) || 0, priceRange[1]])}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-sm text-gray-600 mb-1 block">Max</label>
+              <input
+                type="number"
+                placeholder="10000000"
+                value={priceRange[1]}
+                onChange={(e) => setPriceRange([priceRange[0], parseInt(e.target.value) || 10000000])}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
+              />
             </div>
           </div>
-        </div>
-
-        {/* Price Range - Mobile Accordion */}
-        <div className="mb-8">
-          <button
-            onClick={() => toggleFilterSection('price')}
-            className="flex items-center justify-between w-full text-left mb-4 lg:cursor-default touch-manipulation"
-          >
-            <h3 className="text-lg font-semibold text-gray-900">Price Range (KES)</h3>
-            <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform lg:hidden ${
-              activeFilterSection === 'price' ? 'rotate-180' : ''
-            }`} />
-          </button>
-          <div className={`${activeFilterSection === 'price' || !showFilters ? 'block' : 'hidden lg:block'}`}>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-sm text-gray-600 mb-1 block">Min</label>
-                  <input
-                    type="number"
-                    placeholder="0"
-                    value={priceRange[0]}
-                    onChange={(e) => setPriceRange([parseInt(e.target.value) || 0, priceRange[1]])}
-                    className="w-full px-3 py-2.5 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-base sm:text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm text-gray-600 mb-1 block">Max</label>
-                  <input
-                    type="number"
-                    placeholder="10000000"
-                    value={priceRange[1]}
-                    onChange={(e) => setPriceRange([priceRange[0], parseInt(e.target.value) || 10000000])}
-                    className="w-full px-3 py-2.5 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-base sm:text-sm"
-                  />
-                </div>
-              </div>
-              <div className="text-sm text-gray-500 text-center">
-                Range: {formatPrice(priceRange[0])} - {formatPrice(priceRange[1])}
-              </div>
-            </div>
+          <div className="text-sm text-gray-500 text-center">
+            Range: {formatPrice(priceRange[0])} - {formatPrice(priceRange[1])}
           </div>
         </div>
+      </div>
 
-        {/* Sort By */}
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Sort By</h3>
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-            className="w-full px-3 py-2.5 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-base sm:text-sm"
-          >
-            <option value="popular">Most Popular</option>
-            <option value="newest">Newest First</option>
-            <option value="price-low">Price: Low to High</option>
-            <option value="price-high">Price: High to Low</option>
-            <option value="rating">Highest Rated</option>
-          </select>
-        </div>
+      {/* Sort By Section */}
+      <div className="mb-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-3">Sort By</h3>
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value)}
+          className="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
+        >
+          <option value="popular">Most Popular</option>
+          <option value="newest">Newest First</option>
+          <option value="price-low">Price: Low to High</option>
+          <option value="price-high">Price: High to Low</option>
+          <option value="rating">Highest Rated</option>
+        </select>
+      </div>
 
-        {/* Mobile Apply Filters Button */}
-        {showFilters && (
+      {/* Mobile Apply Filters Button */}
+      {showFilters && (
+        <div className="lg:hidden mt-6 pt-4 border-t border-gray-200">
           <button
             onClick={() => setShowFilters(false)}
-            className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium mt-6 lg:hidden touch-manipulation"
+            className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors touch-manipulation"
           >
             Apply Filters
           </button>
-        )}
-      </div>
+        </div>
+      )}
     </div>
-  );
+  </div>
+);
 
   // Product card component for reusability
   const ProductCard = ({ product, layout = 'grid' }: { product: FormattedProduct; layout?: 'grid' | 'list' }) => {
@@ -1475,6 +1696,7 @@ const getCurrentEstimatedCost = () => {
   getCurrencySymbol={getCurrencySymbol}
   calculateEstimatedCost={calculateEstimatedCost}
   formatPrice={formatPrice}
+  selectedProvider={selectedProvider} 
 />
       
       {/* Communication Instructions Modal */}
@@ -1494,62 +1716,89 @@ const getCurrentEstimatedCost = () => {
               </div>
             </div>
             
-            {/* Search and View Controls */}
-<div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-  <div className="relative flex-1 min-w-0">
+{/* Search and View Controls */}
+<div className="flex flex-col gap-3">
+  {/* Top Row: Search Bar */}
+  <div className="relative w-full">
     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 sm:w-5 sm:h-5" />
     <input
       type="text"
-      placeholder="Search products, shops..."
+      placeholder="Search products, shops, providers..."
       value={searchQuery}
       onChange={(e) => setSearchQuery(e.target.value)}
-      className="w-full pl-9 sm:pl-10 pr-4 py-2.5 sm:py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-base sm:text-base"
+      className="w-full pl-10 pr-4 py-3 sm:py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-base"
     />
   </div>
-   
-  <div className="flex gap-2 justify-between sm:justify-start">
+  
+  {/* Bottom Row: Buttons */}
+  <div className="flex flex-col xs:flex-row gap-2 w-full">
+    {/* Request Product Button - Full width on mobile, auto on larger */}
     <button
       onClick={() => setShowRequestModal(true)}
-      className="px-3 sm:px-4 py-2.5 sm:py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors text-sm sm:text-base whitespace-nowrap touch-manipulation"
+      className="px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors text-sm whitespace-nowrap touch-manipulation flex items-center justify-center gap-2 xs:flex-1 sm:flex-none min-w-0"
     >
-      Request Product
+      <MessageCircle className="w-4 h-4 flex-shrink-0" />
+      <span className="truncate">Request Product</span>
     </button>
 
-    <div className="flex gap-1 sm:gap-2">
+    {/* View Mode Buttons - Scrollable on mobile */}
+    <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-hide"> {/* Added scroll for mobile */}
       <button
         onClick={() => setViewMode('shops')}
-        className={`p-2 sm:p-3 rounded-lg border text-center touch-manipulation flex items-center gap-1 sm:flex-col ${
-          viewMode === 'shops' ? 'bg-blue-50 border-blue-200 text-blue-600' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+        className={`p-2 rounded-lg border text-center touch-manipulation flex items-center gap-1 flex-shrink-0 min-w-[60px] ${
+          viewMode === 'shops' 
+            ? 'bg-blue-50 border-blue-200 text-blue-600' 
+            : 'border-gray-200 text-gray-600 hover:bg-gray-50'
         }`}
       >
-        <Store className="w-4 h-4 sm:w-5 sm:h-5" />
-        <span className="text-xs block sm:hidden">Shops</span>
+        <Store className="w-4 h-4 flex-shrink-0" />
+        <span className="text-xs whitespace-nowrap">Shops</span>
       </button>
+      
       <button
         onClick={() => setViewMode('grid')}
-        className={`p-2 sm:p-3 rounded-lg border text-center touch-manipulation flex items-center gap-1 sm:flex-col ${
-          viewMode === 'grid' ? 'bg-blue-50 border-blue-200 text-blue-600' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+        className={`p-2 rounded-lg border text-center touch-manipulation flex items-center gap-1 flex-shrink-0 min-w-[60px] ${
+          viewMode === 'grid' 
+            ? 'bg-blue-50 border-blue-200 text-blue-600' 
+            : 'border-gray-200 text-gray-600 hover:bg-gray-50'
         }`}
       >
-        <Grid className="w-4 h-4 sm:w-5 sm:h-5" />
-        <span className="text-xs block sm:hidden">Grid</span>
+        <Grid className="w-4 h-4 flex-shrink-0" />
+        <span className="text-xs whitespace-nowrap">Grid</span>
       </button>
+      
       <button
         onClick={() => setViewMode('list')}
-        className={`p-2 sm:p-3 rounded-lg border text-center touch-manipulation flex items-center gap-1 sm:flex-col ${
-          viewMode === 'list' ? 'bg-blue-50 border-blue-200 text-blue-600' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+        className={`p-2 rounded-lg border text-center touch-manipulation flex items-center gap-1 flex-shrink-0 min-w-[60px] ${
+          viewMode === 'list' 
+            ? 'bg-blue-50 border-blue-200 text-blue-600' 
+            : 'border-gray-200 text-gray-600 hover:bg-gray-50'
         }`}
       >
-        <List className="w-4 h-4 sm:w-5 sm:h-5" />
-        <span className="text-xs block sm:hidden">List</span>
+        <List className="w-4 h-4 flex-shrink-0" />
+        <span className="text-xs whitespace-nowrap">List</span>
       </button>
+      
       <button
-        onClick={() => setShowFilters(!showFilters)}
-        className="p-2 sm:p-3 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 lg:hidden filter-button touch-manipulation flex items-center gap-1"
+        onClick={() => setViewMode('providers')}
+        className={`p-2 rounded-lg border text-center touch-manipulation flex items-center gap-1 flex-shrink-0 min-w-[70px] ${
+          viewMode === 'providers' 
+            ? 'bg-blue-50 border-blue-200 text-blue-600' 
+            : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+        }`}
       >
-        <SlidersHorizontal className="w-4 h-4 sm:w-5 sm:h-5" />
-        <span className="text-xs block sm:hidden">Filter</span>
+        <Users className="w-4 h-4 flex-shrink-0" />
+        <span className="text-xs whitespace-nowrap">Providers</span>
       </button>
+      
+      {/* Filter Button - Only show on mobile */}
+<button
+  onClick={() => setShowFilters(!showFilters)}
+  className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 lg:hidden touch-manipulation flex items-center gap-1 flex-shrink-0 min-w-[60px] bg-white shadow-sm"
+>
+  <SlidersHorizontal className="w-4 h-4 flex-shrink-0" />
+  <span className="text-xs whitespace-nowrap">Filters</span>
+</button>
     </div>
   </div>
 </div>
@@ -1565,141 +1814,156 @@ const getCurrentEstimatedCost = () => {
           <FilterSidebar />
 
           {/* Products/Shops Content */}
-          <div className="flex-1 products-section">
-            <div className="flex items-center justify-between mb-4 sm:mb-6">
-              <p className="text-gray-600 text-sm sm:text-base">
-                {viewMode === 'shops' ? (
-                  <>Showing {shopGroups.length} shops with {formattedProducts.length} products</>
-                ) : (
-                  <>Showing {formattedProducts.length} of {allProducts.length} products</>
-                )}
-                {selectedCategory !== 'all' && (
-                  <span className="ml-2 text-blue-600 font-medium">
-                    in {allCategoriesWithCounts.find(cat => cat.id === selectedCategory)?.name || 'Selected Category'}
-                  </span>
-                )}
-              </p>
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="text-sm text-gray-500 hover:text-gray-700 underline touch-manipulation"
-                >
-                  Clear search
-                </button>
-              )}
-            </div>
+       <div className="flex-1 products-section">
+  <div className="flex items-center justify-between mb-4 sm:mb-6">
+    <p className="text-gray-600 text-sm sm:text-base">
+      {viewMode === 'shops' ? (
+        <>Showing {shopGroups.length} shops with {formattedProducts.length} products</>
+      ) : viewMode === 'providers' ? (
+        <>Showing {providers.length} service providers</>
+      ) : (
+        <>Showing {formattedProducts.length} of {allProducts.length} products</>
+      )}
+      {selectedCategory !== 'all' && viewMode !== 'providers' && (
+        <span className="ml-2 text-blue-600 font-medium">
+          in {allCategoriesWithCounts.find(cat => cat.id === selectedCategory)?.name || 'Selected Category'}
+        </span>
+      )}
+    </p>
+    {searchQuery && viewMode !== 'providers' && (
+      <button
+        onClick={() => setSearchQuery('')}
+        className="text-sm text-gray-500 hover:text-gray-700 underline touch-manipulation"
+      >
+        Clear search
+      </button>
+    )}
+  </div>
 
-            {formattedProducts.length === 0 ? (
-              <div className="bg-white rounded-xl p-6 sm:p-12 text-center shadow-sm border border-gray-100">
-                <div className="mb-4">
-                  <Search className="w-12 h-12 sm:w-16 sm:h-16 text-gray-300 mx-auto mb-4" />
-                  <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2">No products found</h3>
-                  <p className="text-gray-600 mb-6 text-sm sm:text-base">
-                    {selectedCategory !== 'all' 
-                      ? `No products found in the selected category${searchQuery ? ' matching your search' : ''}.`
-                      : searchQuery 
-                        ? `No products match "${searchQuery}". Try different keywords.`
-                        : 'No products available at the moment.'
-                    }
-                  </p>
+  {/* Conditional rendering for different view modes */}
+  {viewMode === 'providers' ? (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
+          Available Service Providers
+        </h2>
+        <p className="text-gray-600 text-sm sm:text-base">
+          {providers.length} providers available
+        </p>
+      </div>
+      <ProvidersList />
+    </div>
+  ) : formattedProducts.length === 0 ? (
+    <div className="bg-white rounded-xl p-6 sm:p-12 text-center shadow-sm border border-gray-100">
+      <div className="mb-4">
+        <Search className="w-12 h-12 sm:w-16 sm:h-16 text-gray-300 mx-auto mb-4" />
+        <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2">No products found</h3>
+        <p className="text-gray-600 mb-6 text-sm sm:text-base">
+          {selectedCategory !== 'all' 
+            ? `No products found in the selected category${searchQuery ? ' matching your search' : ''}.`
+            : searchQuery 
+              ? `No products match "${searchQuery}". Try different keywords.`
+              : 'No products available at the moment.'
+          }
+        </p>
+      </div>
+      <button
+        onClick={() => {
+          setSearchQuery('');
+          setSelectedCategory('all');
+          setPriceRange([0, 10000000]);
+          setShowFilters(false);
+        }}
+        className="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors text-sm sm:text-base touch-manipulation"
+      >
+        Reset Filters
+      </button>
+    </div>
+  ) : viewMode === 'shops' ? (
+    /* Shops View */
+    <div className="space-y-4 sm:space-y-6">
+      {shopGroups.map(shop => (
+        <div key={shop.providerId} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          {/* Shop Header */}
+          <div 
+            className="p-4 sm:p-6 cursor-pointer hover:bg-gray-50 transition-colors touch-manipulation"
+            onClick={() => toggleShopExpansion(shop.providerId)}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center flex-shrink-0">
+                  {shop.profileImageUrl ? (
+                    <img 
+                      src={shop.profileImageUrl} 
+                      alt={shop.shopName}
+                      className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover"
+                    />
+                  ) : (
+                    <Store className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600" />
+                  )}
                 </div>
-                <button
-                  onClick={() => {
-                    setSearchQuery('');
-                    setSelectedCategory('all');
-                    setPriceRange([0, 10000000]);
-                    setShowFilters(false);
-                  }}
-                  className="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors text-sm sm:text-base touch-manipulation"
-                >
-                  Reset Filters
-                </button>
-              </div>
-            ) : viewMode === 'shops' ? (
-              /* Shops View */
-              <div className="space-y-4 sm:space-y-6">
-                {shopGroups.map(shop => (
-                  <div key={shop.providerId} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                    {/* Shop Header */}
-                    <div 
-                      className="p-4 sm:p-6 cursor-pointer hover:bg-gray-50 transition-colors touch-manipulation"
-                      onClick={() => toggleShopExpansion(shop.providerId)}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
-                          <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center flex-shrink-0">
-                            {shop.profileImageUrl ? (
-                              <img 
-                                src={shop.profileImageUrl} 
-                                alt={shop.shopName}
-                                className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover"
-                              />
-                            ) : (
-                              <Store className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600" />
-                            )}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <h3 className="text-base sm:text-lg md:text-xl font-semibold text-gray-900 truncate">{shop.shopName}</h3>
-                            <p className="text-gray-600 text-sm truncate">{shop.providerName}</p>
-                            <div className="flex items-center gap-2 sm:gap-3 mt-1 text-xs sm:text-sm text-gray-500 flex-wrap">
-                              <span className="flex items-center gap-1 truncate">
-                                <MapPin className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
-                                <span className="truncate">{shop.location}</span>
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <Star className="w-3 h-3 sm:w-4 sm:h-4 text-yellow-400 fill-current flex-shrink-0" />
-                                {shop.rating.toFixed(1)}
-                              </span>
-                              <span>{shop.totalProducts} products</span>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0">
-                          <div className="text-right hidden sm:block">
-                            <div className="text-sm text-gray-500">Categories</div>
-                            <div className="text-sm font-medium text-gray-700">
-                              {Array.from(shop.categories).slice(0, 2).join(', ')}
-                              {shop.categories.size > 2 && ` +${shop.categories.size - 2} more`}
-                            </div>
-                          </div>
-                          <ChevronRight 
-                            className={`w-4 h-4 sm:w-5 sm:h-5 text-gray-400 transition-transform flex-shrink-0 ${
-                              expandedShops.has(shop.providerId) ? 'rotate-90' : ''
-                            }`}
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Shop Products (Collapsible) */}
-                    {expandedShops.has(shop.providerId) && (
-                      <div className="border-t border-gray-100 p-3 sm:p-4 md:p-6">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
-                          {shop.products.map(product => (
-                            <ProductCard key={product.id} product={product} layout="grid" />
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-base sm:text-lg md:text-xl font-semibold text-gray-900 truncate">{shop.shopName}</h3>
+                  <p className="text-gray-600 text-sm truncate">{shop.providerName}</p>
+                  <div className="flex items-center gap-2 sm:gap-3 mt-1 text-xs sm:text-sm text-gray-500 flex-wrap">
+                    <span className="flex items-center gap-1 truncate">
+                      <MapPin className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+                      <span className="truncate">{shop.location}</span>
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Star className="w-3 h-3 sm:w-4 sm:h-4 text-yellow-400 fill-current flex-shrink-0" />
+                      {shop.rating.toFixed(1)}
+                    </span>
+                    <span>{shop.totalProducts} products</span>
                   </div>
-                ))}
+                </div>
               </div>
-            ) : viewMode === 'grid' ? (
-              /* Grid View */
+              <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0">
+                <div className="text-right hidden sm:block">
+                  <div className="text-sm text-gray-500">Categories</div>
+                  <div className="text-sm font-medium text-gray-700">
+                    {Array.from(shop.categories).slice(0, 2).join(', ')}
+                    {shop.categories.size > 2 && ` +${shop.categories.size - 2} more`}
+                  </div>
+                </div>
+                <ChevronRight 
+                  className={`w-4 h-4 sm:w-5 sm:h-5 text-gray-400 transition-transform flex-shrink-0 ${
+                    expandedShops.has(shop.providerId) ? 'rotate-90' : ''
+                  }`}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Shop Products (Collapsible) */}
+          {expandedShops.has(shop.providerId) && (
+            <div className="border-t border-gray-100 p-3 sm:p-4 md:p-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
-                {formattedProducts.map(product => (
+                {shop.products.map(product => (
                   <ProductCard key={product.id} product={product} layout="grid" />
                 ))}
               </div>
-            ) : (
-              /* List View */
-              <div className="space-y-3 sm:space-y-4">
-                {formattedProducts.map(product => (
-                  <ProductCard key={product.id} product={product} layout="list" />
-                ))}
-              </div>
-            )}
-          </div>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  ) : viewMode === 'grid' ? (
+    /* Grid View */
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
+      {formattedProducts.map(product => (
+        <ProductCard key={product.id} product={product} layout="grid" />
+      ))}
+    </div>
+  ) : (
+    /* List View */
+    <div className="space-y-3 sm:space-y-4">
+      {formattedProducts.map(product => (
+        <ProductCard key={product.id} product={product} layout="list" />
+      ))}
+    </div>
+  )}
+</div>
         </div>
       </div>
 
