@@ -138,8 +138,7 @@ interface LocationPricing {
   callCostPerMinute: number;
   serviceFee: number;
 }
-// Move this OUTSIDE of ProductsComponent, before the main component definition
-// Add this interface at the top of your file with other interfaces
+
 interface RequestServiceModalProps {
   showRequestModal: boolean;
   setShowRequestModal: (show: boolean) => void;
@@ -399,7 +398,6 @@ const ProductsComponent = () => {
   const [selectedShop, setSelectedShop] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list' | 'shops'>('shops');
   const [showFilters, setShowFilters] = useState(false);
-  const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [priceRange, setPriceRange] = useState([0, 10000000]);
   const [sortBy, setSortBy] = useState('popular');
   const [allProducts, setAllProducts] = useState<Product[]>([]);
@@ -882,21 +880,19 @@ const ProductsComponent = () => {
     setActiveFilterSection(activeFilterSection === section ? null : section);
   };
 
-  // Close mobile menu and filters when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      if (showMobileMenu && !target.closest('.mobile-menu') && !target.closest('.menu-button')) {
-        setShowMobileMenu(false);
-      }
-      if (showFilters && !target.closest('.filter-sidebar') && !target.closest('.filter-button')) {
-        setShowFilters(false);
-      }
-    };
+  // Close filters when clicking outside
+useEffect(() => {
+  const handleClickOutside = (event: MouseEvent) => {
+    const target = event.target as HTMLElement;
+    // Remove mobile menu condition
+    if (showFilters && !target.closest('.filter-sidebar') && !target.closest('.filter-button')) {
+      setShowFilters(false);
+    }
+  };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showMobileMenu, showFilters]);
+  document.addEventListener('mousedown', handleClickOutside);
+  return () => document.removeEventListener('mousedown', handleClickOutside);
+}, [showFilters]); // Remove showMobileMenu from dependencies
 
   // Load initial data
   useEffect(() => {
@@ -1157,44 +1153,30 @@ const getCurrentEstimatedCost = () => {
         )}
 
         {/* View Mode Selector */}
-        <div className="mb-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-3">View Mode</h3>
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              onClick={() => setViewMode('shops')}
-              className={`p-2.5 sm:p-3 rounded-lg border text-center transition-colors touch-manipulation ${
-                viewMode === 'shops' 
-                  ? 'bg-blue-50 border-blue-200 text-blue-600' 
-                  : 'border-gray-200 text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              <Store className="w-4 h-4 sm:w-5 sm:h-5 mx-auto mb-1" />
-              <span className="text-xs">Shops</span>
-            </button>
-            <button
-              onClick={() => setViewMode('grid')}
-              className={`p-2.5 sm:p-3 rounded-lg border text-center transition-colors touch-manipulation ${
-                viewMode === 'grid' 
-                  ? 'bg-blue-50 border-blue-200 text-blue-600' 
-                  : 'border-gray-200 text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              <Grid className="w-4 h-4 sm:w-5 sm:h-5 mx-auto mb-1" />
-              <span className="text-xs">Grid</span>
-            </button>
-            <button
-              onClick={() => setViewMode('list')}
-              className={`p-2.5 sm:p-3 rounded-lg border text-center transition-colors touch-manipulation ${
-                viewMode === 'list' 
-                  ? 'bg-blue-50 border-blue-200 text-blue-600' 
-                  : 'border-gray-200 text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              <List className="w-4 h-4 sm:w-5 sm:h-5 mx-auto mb-1" />
-              <span className="text-xs">List</span>
-            </button>
-          </div>
-        </div>
+{/* Enhanced View Mode Selector for Mobile */}
+<div className="mb-6">
+  <h3 className="text-lg font-semibold text-gray-900 mb-3">View Mode</h3>
+  <div className="grid grid-cols-3 gap-2">
+    {[
+      { mode: 'shops', icon: Store, label: 'Shops' },
+      { mode: 'grid', icon: Grid, label: 'Grid' },
+      { mode: 'list', icon: List, label: 'List' }
+    ].map(({ mode, icon: Icon, label }) => (
+      <button
+        key={mode}
+        onClick={() => setViewMode(mode as 'shops' | 'grid' | 'list')}
+        className={`p-2.5 sm:p-3 rounded-lg border text-center transition-colors touch-manipulation flex flex-col items-center justify-center ${
+          viewMode === mode 
+            ? 'bg-blue-50 border-blue-200 text-blue-600' 
+            : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+        }`}
+      >
+        <Icon className="w-4 h-4 sm:w-5 sm:h-5 mb-1 sm:mb-2" />
+        <span className="text-xs font-medium">{label}</span>
+      </button>
+    ))}
+  </div>
+</div>
 
         {/* Categories - Mobile Accordion */}
         <div className="mb-8">
@@ -1498,10 +1480,6 @@ const getCurrentEstimatedCost = () => {
       {/* Communication Instructions Modal */}
       <CommunicationModal />
 
-      {/* Mobile Menu Overlay */}
-      {showMobileMenu && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden" onClick={() => setShowMobileMenu(false)} />
-      )}
 
       {/* Header */}
       <div className="bg-white shadow-sm">
@@ -1514,106 +1492,72 @@ const getCurrentEstimatedCost = () => {
                 </h1>
                 <p className="text-gray-600 text-sm sm:text-base">Find unique items or request custom products</p>
               </div>
-              
-              {/* Mobile Menu Button */}
-              <button 
-                className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 lg:hidden menu-button touch-manipulation"
-                onClick={() => setShowMobileMenu(!showMobileMenu)}
-              >
-                <Menu className="w-5 h-5 sm:w-6 sm:h-6" />
-              </button>
             </div>
             
             {/* Search and View Controls */}
-            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-              <div className="relative flex-1 min-w-0">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 sm:w-5 sm:h-5" />
-                <input
-                  type="text"
-                  placeholder="Search products, shops..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 sm:pl-10 pr-4 py-2.5 sm:py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-base sm:text-base"
-                />
-              </div>
-               
-              <div className="flex gap-2 justify-between sm:justify-start">
-                <button
-                  onClick={() => setShowRequestModal(true)}
-                  className="px-3 sm:px-4 py-2.5 sm:py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors text-sm sm:text-base whitespace-nowrap touch-manipulation"
-                >
-                  Request Product
-                </button>
+<div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+  <div className="relative flex-1 min-w-0">
+    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 sm:w-5 sm:h-5" />
+    <input
+      type="text"
+      placeholder="Search products, shops..."
+      value={searchQuery}
+      onChange={(e) => setSearchQuery(e.target.value)}
+      className="w-full pl-9 sm:pl-10 pr-4 py-2.5 sm:py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-base sm:text-base"
+    />
+  </div>
+   
+  <div className="flex gap-2 justify-between sm:justify-start">
+    <button
+      onClick={() => setShowRequestModal(true)}
+      className="px-3 sm:px-4 py-2.5 sm:py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors text-sm sm:text-base whitespace-nowrap touch-manipulation"
+    >
+      Request Product
+    </button>
 
-                <div className="flex gap-1 sm:gap-2">
-                  <button
-                    onClick={() => setViewMode('shops')}
-                    className={`p-2 sm:p-3 rounded-lg border text-center touch-manipulation ${
-                      viewMode === 'shops' ? 'bg-blue-50 border-blue-200 text-blue-600' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
-                    }`}
-                  >
-                    <Store className="w-4 h-4 sm:w-5 sm:h-5 mx-auto" />
-                  </button>
-                  <button
-                    onClick={() => setViewMode('grid')}
-                    className={`p-2 sm:p-3 rounded-lg border text-center touch-manipulation ${
-                      viewMode === 'grid' ? 'bg-blue-50 border-blue-200 text-blue-600' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
-                    }`}
-                  >
-                    <Grid className="w-4 h-4 sm:w-5 sm:h-5 mx-auto" />
-                  </button>
-                  <button
-                    onClick={() => setViewMode('list')}
-                    className={`p-2 sm:p-3 rounded-lg border text-center touch-manipulation ${
-                      viewMode === 'list' ? 'bg-blue-50 border-blue-200 text-blue-600' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
-                    }`}
-                  >
-                    <List className="w-4 h-4 sm:w-5 sm:h-5 mx-auto" />
-                  </button>
-                  <button
-                    onClick={() => setShowFilters(!showFilters)}
-                    className="p-2 sm:p-3 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 lg:hidden filter-button touch-manipulation"
-                  >
-                    <SlidersHorizontal className="w-4 h-4 sm:w-5 sm:h-5" />
-                  </button>
-                </div>
-              </div>
-            </div>
+    <div className="flex gap-1 sm:gap-2">
+      <button
+        onClick={() => setViewMode('shops')}
+        className={`p-2 sm:p-3 rounded-lg border text-center touch-manipulation flex items-center gap-1 sm:flex-col ${
+          viewMode === 'shops' ? 'bg-blue-50 border-blue-200 text-blue-600' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+        }`}
+      >
+        <Store className="w-4 h-4 sm:w-5 sm:h-5" />
+        <span className="text-xs block sm:hidden">Shops</span>
+      </button>
+      <button
+        onClick={() => setViewMode('grid')}
+        className={`p-2 sm:p-3 rounded-lg border text-center touch-manipulation flex items-center gap-1 sm:flex-col ${
+          viewMode === 'grid' ? 'bg-blue-50 border-blue-200 text-blue-600' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+        }`}
+      >
+        <Grid className="w-4 h-4 sm:w-5 sm:h-5" />
+        <span className="text-xs block sm:hidden">Grid</span>
+      </button>
+      <button
+        onClick={() => setViewMode('list')}
+        className={`p-2 sm:p-3 rounded-lg border text-center touch-manipulation flex items-center gap-1 sm:flex-col ${
+          viewMode === 'list' ? 'bg-blue-50 border-blue-200 text-blue-600' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+        }`}
+      >
+        <List className="w-4 h-4 sm:w-5 sm:h-5" />
+        <span className="text-xs block sm:hidden">List</span>
+      </button>
+      <button
+        onClick={() => setShowFilters(!showFilters)}
+        className="p-2 sm:p-3 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 lg:hidden filter-button touch-manipulation flex items-center gap-1"
+      >
+        <SlidersHorizontal className="w-4 h-4 sm:w-5 sm:h-5" />
+        <span className="text-xs block sm:hidden">Filter</span>
+      </button>
+    </div>
+  </div>
+</div>
           </div>
         </div>
       </div>
 
-      {/* Mobile Menu */}
-      {showMobileMenu && (
-        <div className="fixed top-0 right-0 h-full w-64 bg-white shadow-xl z-50 lg:hidden mobile-menu transform transition-transform">
-          <div className="p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-gray-900">Menu</h2>
-              <button 
-                onClick={() => setShowMobileMenu(false)}
-                className="p-2 rounded-lg hover:bg-gray-100 touch-manipulation"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-            
-            <div className="space-y-4">
-              <button className="w-full text-left p-3 rounded-lg bg-blue-50 text-blue-600 font-medium touch-manipulation">
-                Home
-              </button>
-              <button className="w-full text-left p-3 rounded-lg hover:bg-gray-50 touch-manipulation">
-                My Account
-              </button>
-              <button className="w-full text-left p-3 rounded-lg hover:bg-gray-50 touch-manipulation">
-                Wishlist
-              </button>
-              <button className="w-full text-left p-3 rounded-lg hover:bg-gray-50 touch-manipulation">
-                Orders
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+    
 
       <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6">
         <div className="flex flex-col lg:flex-row gap-4 sm:gap-6">
