@@ -135,6 +135,7 @@ export interface Provider {
   phoneNumber: string;
   profileImageUrl?: string | null;
   shopName?: string;
+   address?: string;  // This is what your API actually returns
   location?: string;
   rating?: number;
   college?: {
@@ -173,6 +174,57 @@ interface RequestServiceModalProps {
 }
 
 // Then define the component with proper typing
+
+// Updated interface to include missing props
+interface RequestServiceModalProps {
+  showRequestModal: boolean;
+  setShowRequestModal: (show: boolean) => void;
+  currentRequest: Partial<ProductRequest>;
+  setCurrentRequest: React.Dispatch<React.SetStateAction<Partial<ProductRequest>>>;
+  requestProcessing: boolean;
+  handleProductRequest: () => Promise<void>;
+  getCurrencySymbol: (location?: string) => string;
+  calculateEstimatedCost: (request: Partial<ProductRequest>) => number;
+  formatPrice: (price: string | number, location?: string) => string;
+  selectedProvider?: Provider | null;
+  setSelectedProvider: (provider: Provider | null) => void;
+  providers: Provider[];
+  providersLoading: boolean;
+}
+// Helper function to get the best available location for a provider
+const getProviderLocation = (provider: Provider): string => {
+  // Priority order: address -> location -> college name -> default
+  if (provider.address && provider.address.trim() && provider.address !== '0110') {
+    return provider.address;
+  }
+  
+  if (provider.location && provider.location.trim()) {
+    return provider.location;
+  }
+  
+  if (provider.college?.name) {
+    return provider.college.name;
+  }
+  
+  return 'Kenya'; // Final fallback
+};
+
+// Helper function to get a short version of location for display
+const getShortLocation = (provider: Provider): string => {
+  const fullLocation = getProviderLocation(provider);
+  
+  // If it's a long address, extract key parts
+  if (fullLocation.includes(',')) {
+    const parts = fullLocation.split(',');
+    // Try to get the most relevant parts (usually city/area)
+    if (parts.length >= 2) {
+      return `${parts[0].trim()}, ${parts[parts.length - 1].trim()}`;
+    }
+  }
+  
+  return fullLocation;
+};
+
 const RequestServiceModal: React.FC<RequestServiceModalProps> = ({ 
   showRequestModal, 
   setShowRequestModal, 
@@ -183,8 +235,48 @@ const RequestServiceModal: React.FC<RequestServiceModalProps> = ({
   getCurrencySymbol,
   calculateEstimatedCost,
   formatPrice,
-  selectedProvider
+  selectedProvider,
+  setSelectedProvider,
+  providers,
+  providersLoading
 }) => {
+  // Local state for provider search/filter
+  const [providerSearchQuery, setProviderSearchQuery] = useState('');
+  const [showProviderDropdown, setShowProviderDropdown] = useState(false);
+  
+  // Filter providers based on search query - updated to search address field
+  const filteredProviders = providers.filter((provider: Provider) => {
+    const searchLower = providerSearchQuery.toLowerCase();
+    const shopName = (provider.shopName || '').toLowerCase();
+    const fullName = `${provider.firstName} ${provider.lastName}`.toLowerCase();
+    const address = (provider.address || '').toLowerCase();
+    const location = (provider.location || '').toLowerCase();
+    const collegeName = (provider.college?.name || '').toLowerCase();
+    
+    return shopName.includes(searchLower) || 
+           fullName.includes(searchLower) || 
+           address.includes(searchLower) ||
+           location.includes(searchLower) ||
+           collegeName.includes(searchLower);
+  });
+
+  // Handle provider selection from dropdown
+  const handleProviderSelection = (provider: Provider) => {
+    setCurrentRequest(prev => ({
+      ...prev,
+      contactPhone: provider.phoneNumber,
+      providerId: provider.id,
+      location: prev.location || getProviderLocation(provider)
+    }));
+    setProviderSearchQuery(provider.shopName || `${provider.firstName} ${provider.lastName}`);
+    setShowProviderDropdown(false);
+    
+    // Update the selected provider in parent component
+    setSelectedProvider(provider);
+    
+    toast.success(`Selected ${provider.shopName || `${provider.firstName} ${provider.lastName}`}. Phone number autofilled!`);
+  };
+
   if (!showRequestModal) return null;
 
   return (
@@ -194,13 +286,18 @@ const RequestServiceModal: React.FC<RequestServiceModalProps> = ({
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg sm:text-xl font-bold text-gray-900">Request a Product</h3>
             <button 
-              onClick={() => setShowRequestModal(false)}
+              onClick={() => {
+                setShowRequestModal(false);
+                setProviderSearchQuery('');
+                setShowProviderDropdown(false);
+              }}
               className="p-2 rounded-lg hover:bg-gray-100 touch-manipulation"
             >
               <X className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
           </div>
-  {/* Show selected provider info */}
+
+          {/* Show selected provider info */}
           {selectedProvider && (
             <div className="mb-4 p-3 bg-blue-50 rounded-lg">
               <div className="flex items-center gap-3">
@@ -215,17 +312,142 @@ const RequestServiceModal: React.FC<RequestServiceModalProps> = ({
                     <Store className="w-5 h-5 text-blue-600" />
                   )}
                 </div>
-                <div>
-                  <h4 className="font-semibold text-blue-900">
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-semibold text-blue-900 truncate">
                     {selectedProvider.shopName || `${selectedProvider.firstName} ${selectedProvider.lastName}`}
                   </h4>
-                  <p className="text-blue-700 text-sm">Provider selected • Phone autofilled</p>
+                  <p className="text-blue-700 text-sm truncate">
+                    {getShortLocation(selectedProvider)} • Phone autofilled
+                  </p>
                 </div>
+                <button
+                  onClick={() => {
+                    setSelectedProvider(null);
+                    setCurrentRequest(prev => ({
+                      ...prev,
+                      contactPhone: '',
+                      providerId: undefined
+                    }));
+                    setProviderSearchQuery('');
+                  }}
+                  className="p-1 rounded-full hover:bg-blue-100 text-blue-600 flex-shrink-0"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
             </div>
           )}
 
           <div className="space-y-4">
+            {/* Provider Selection Dropdown */}
+            <div className="relative">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Select Provider
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={providerSearchQuery}
+                  onChange={(e) => {
+                    setProviderSearchQuery(e.target.value);
+                    setShowProviderDropdown(true);
+                  }}
+                  onFocus={() => setShowProviderDropdown(true)}
+                  className="w-full px-3 py-2.5 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-base sm:text-sm pr-10"
+                  placeholder="Search for a provider or leave empty for general request"
+                  autoComplete="off"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowProviderDropdown(!showProviderDropdown)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <ChevronDown className={`w-4 h-4 transition-transform ${showProviderDropdown ? 'rotate-180' : ''}`} />
+                </button>
+                
+                {/* Provider Dropdown */}
+                {showProviderDropdown && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-48 overflow-y-auto">
+                    {providersLoading ? (
+                      <div className="p-3 text-center text-gray-500">
+                        <Loader className="w-4 h-4 animate-spin inline-block mr-2" />
+                        Loading providers...
+                      </div>
+                    ) : filteredProviders.length > 0 ? (
+                      <>
+                        {filteredProviders.slice(0, 10).map((provider: Provider) => (
+                          <button
+                            key={provider.id}
+                            type="button"
+                            onClick={() => handleProviderSelection(provider)}
+                            className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b border-gray-100 last:border-b-0 touch-manipulation"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                                {provider.profileImageUrl ? (
+                                  <img 
+                                    src={provider.profileImageUrl} 
+                                    alt={provider.shopName || `${provider.firstName} ${provider.lastName}`}
+                                    className="w-8 h-8 rounded-full object-cover"
+                                  />
+                                ) : (
+                                  <Store className="w-4 h-4 text-blue-600" />
+                                )}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium text-gray-900 truncate">
+                                  {provider.shopName || `${provider.firstName} ${provider.lastName}`}
+                                </p>
+                                <p className="text-xs text-gray-500 truncate">
+                                  {getShortLocation(provider)} • {provider.phoneNumber}
+                                </p>
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                        {filteredProviders.length > 10 && (
+                          <div className="p-2 text-center text-xs text-gray-500 bg-gray-50">
+                            Showing first 10 results. Type to search more specifically.
+                          </div>
+                        )}
+                      </>
+                    ) : providerSearchQuery ? (
+                      <div className="p-3 text-center text-gray-500 text-sm">
+                        No providers found matching "{providerSearchQuery}"
+                      </div>
+                    ) : (
+                      <div className="p-3 text-center text-gray-500 text-sm">
+                        Start typing to search for providers
+                      </div>
+                    )}
+                    
+                    {/* Clear selection option */}
+                    {selectedProvider && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedProvider(null);
+                          setCurrentRequest(prev => ({
+                            ...prev,
+                            contactPhone: '',
+                            providerId: undefined
+                          }));
+                          setProviderSearchQuery('');
+                          setShowProviderDropdown(false);
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-red-50 border-t border-gray-200 text-red-600 text-sm touch-manipulation"
+                      >
+                        <div className="flex items-center gap-2">
+                          <X className="w-4 h-4" />
+                          Clear selection (general request)
+                        </div>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Product Details */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -317,7 +539,7 @@ const RequestServiceModal: React.FC<RequestServiceModalProps> = ({
               />
             </div>
 
-             <div>
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Phone Number *
                 {selectedProvider && (
@@ -438,9 +660,18 @@ const RequestServiceModal: React.FC<RequestServiceModalProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Click outside to close provider dropdown */}
+      {showProviderDropdown && (
+        <div 
+          className="fixed inset-0 z-0" 
+          onClick={() => setShowProviderDropdown(false)}
+        />
+      )}
     </div>
   );
 };
+
 const ProductsComponent = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -1067,7 +1298,8 @@ useEffect(() => {
     
     toast.success(`Selected ${provider.shopName || `${provider.firstName} ${provider.lastName}`}. Phone number autofilled!`);
   };
-// Add this component inside your ProductsComponent
+
+//provider location formatting
 const ProvidersList = () => {
   if (providersLoading) {
     return (
@@ -1125,14 +1357,16 @@ const ProvidersList = () => {
           </div>
 
           <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <MapPin className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
-              <span className="truncate">{provider.location || 'Location not specified'}</span>
+            <div className="flex items-start gap-2 text-sm text-gray-600">
+              <MapPin className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0 mt-0.5" />
+              <span className="break-words text-xs sm:text-sm">
+                {getShortLocation(provider)}
+              </span>
             </div>
             
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <Phone className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
-              <span className="truncate font-mono">{provider.phoneNumber}</span>
+              <span className="truncate font-mono text-xs sm:text-sm">{provider.phoneNumber}</span>
             </div>
           </div>
 
@@ -1686,7 +1920,7 @@ const FilterSidebar = () => (
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-white">
        {/* Request Service Modal */}
-      <RequestServiceModal
+ <RequestServiceModal
   showRequestModal={showRequestModal}
   setShowRequestModal={setShowRequestModal}
   currentRequest={currentRequest}
@@ -1697,6 +1931,9 @@ const FilterSidebar = () => (
   calculateEstimatedCost={calculateEstimatedCost}
   formatPrice={formatPrice}
   selectedProvider={selectedProvider} 
+  setSelectedProvider={setSelectedProvider}
+  providers={providers}
+  providersLoading={providersLoading}
 />
       
       {/* Communication Instructions Modal */}
