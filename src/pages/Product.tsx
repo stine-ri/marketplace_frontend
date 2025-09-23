@@ -1,5 +1,5 @@
-import React, { useState, useEffect,  useCallback, useMemo  } from 'react';
-import { Search, Filter, Grid, List, Star, Heart, ShoppingCart, MapPin, Eye, ChevronDown, SlidersHorizontal, Loader, Store, Users, ChevronRight, Menu, X, Mail, Phone , MessageCircle, ExternalLink } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Search, Filter, Grid, List, Star, Heart, ShoppingCart, MapPin, Eye, ChevronDown, SlidersHorizontal, Loader, Store, Users, ChevronRight, Menu, X, Mail, Phone, MessageCircle, ExternalLink } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 
@@ -95,22 +95,7 @@ interface ShopGroup {
   totalProducts: number;
 }
 
-// Add new interface for product requests
-export interface ProductRequest {
-  id?: number;
-  productName: string;
-  description: string;
-  desiredPrice?: number;
-  quantity: number;
-  categoryId?: number;
-  urgency: 'low' | 'medium' | 'high';
-  contactPhone: string;
-  contactMethod: 'sms' | 'call' | 'whatsapp';
-  location: string;
-  collegeId?: number;
-}
-
-// Enhanced ProductRequest interface with location-based pricing
+// FIXED: Single consolidated ProductRequest interface
 export interface ProductRequest {
   id?: number;
   productName: string;
@@ -126,8 +111,9 @@ export interface ProductRequest {
   estimatedCost?: number;
   deliveryMethod?: string;
   preferredContactTime?: string;
-   providerId?: number;
+  providerId?: number;
 }
+
 export interface Provider {
   id: number;
   firstName: string;
@@ -135,7 +121,7 @@ export interface Provider {
   phoneNumber: string;
   profileImageUrl?: string | null;
   shopName?: string;
-   address?: string;  // This is what your API actually returns
+  address?: string;  // This is what your API actually returns
   location?: string;
   rating?: number;
   college?: {
@@ -159,279 +145,308 @@ interface LocationPricing {
   callCostPerMinute: number;
   serviceFee: number;
 }
-// WhatsApp number validation function
-const validateWhatsAppNumber = (phoneNumber: string): boolean => {
-  // Remove all non-digit characters
+
+// ADD: Phone validation interfaces
+interface CountryInfo {
+  name: string;
+  flag: string;
+  maxLength: number;
+}
+
+interface DetectedCountry {
+  code: string;
+  country: CountryInfo;
+}
+
+// Update your existing interface to include these new fields:
+interface PhoneValidationState {
+  isValid: boolean;
+  message: string;
+  country: DetectedCountry | null;
+  wasAutoFormatted?: boolean;
+  autoFormatMessage?: string;
+}
+
+interface PhoneFormatResult {
+  formattedNumber: string;
+  isValid: boolean;
+  message: string;
+  country: DetectedCountry | null;
+  cleanNumber: string;
+}
+
+// Enhanced country code mapping with country names and flags
+const COUNTRY_CODES: Record<string, CountryInfo> = {
+  '1': { name: 'United States/Canada', flag: '🇺🇸🇨🇦', maxLength: 11 },
+  '7': { name: 'Russia', flag: '🇷🇺', maxLength: 11 },
+  '20': { name: 'Egypt', flag: '🇪🇬', maxLength: 11 },
+  '27': { name: 'South Africa', flag: '🇿🇦', maxLength: 11 },
+  '33': { name: 'France', flag: '🇫🇷', maxLength: 11 },
+  '34': { name: 'Spain', flag: '🇪🇸', maxLength: 11 },
+  '39': { name: 'Italy', flag: '🇮🇹', maxLength: 12 },
+  '44': { name: 'United Kingdom', flag: '🇬🇧', maxLength: 12 },
+  '49': { name: 'Germany', flag: '🇩🇪', maxLength: 13 },
+  '52': { name: 'Mexico', flag: '🇲🇽', maxLength: 12 },
+  '55': { name: 'Brazil', flag: '🇧🇷', maxLength: 13 },
+  '61': { name: 'Australia', flag: '🇦🇺', maxLength: 11 },
+  '62': { name: 'Indonesia', flag: '🇮🇩', maxLength: 13 },
+  '63': { name: 'Philippines', flag: '🇵🇭', maxLength: 12 },
+  '65': { name: 'Singapore', flag: '🇸🇬', maxLength: 10 },
+  '66': { name: 'Thailand', flag: '🇹🇭', maxLength: 11 },
+  '81': { name: 'Japan', flag: '🇯🇵', maxLength: 12 },
+  '82': { name: 'South Korea', flag: '🇰🇷', maxLength: 12 },
+  '84': { name: 'Vietnam', flag: '🇻🇳', maxLength: 11 },
+  '86': { name: 'China', flag: '🇨🇳', maxLength: 13 },
+  '91': { name: 'India', flag: '🇮🇳', maxLength: 12 },
+  '92': { name: 'Pakistan', flag: '🇵🇰', maxLength: 12 },
+  '94': { name: 'Sri Lanka', flag: '🇱🇰', maxLength: 11 },
+  '212': { name: 'Morocco', flag: '🇲🇦', maxLength: 11 },
+  '213': { name: 'Algeria', flag: '🇩🇿', maxLength: 11 },
+  '216': { name: 'Tunisia', flag: '🇹🇳', maxLength: 10 },
+  '218': { name: 'Libya', flag: '🇱🇾', maxLength: 11 },
+  '220': { name: 'Gambia', flag: '🇬🇲', maxLength: 9 },
+  '221': { name: 'Senegal', flag: '🇸🇳', maxLength: 11 },
+  '233': { name: 'Ghana', flag: '🇬🇭', maxLength: 11 },
+  '234': { name: 'Nigeria', flag: '🇳🇬', maxLength: 13 },
+  '254': { name: 'Kenya', flag: '🇰🇪', maxLength: 12 },
+  '255': { name: 'Tanzania', flag: '🇹🇿', maxLength: 12 },
+  '256': { name: 'Uganda', flag: '🇺🇬', maxLength: 12 },
+  '260': { name: 'Zambia', flag: '🇿🇲', maxLength: 11 },
+  '263': { name: 'Zimbabwe', flag: '🇿🇼', maxLength: 11 },
+  '264': { name: 'Namibia', flag: '🇳🇦', maxLength: 10 },
+  '265': { name: 'Malawi', flag: '🇲🇼', maxLength: 11 },
+  '266': { name: 'Lesotho', flag: '🇱🇸', maxLength: 10 },
+  '267': { name: 'Botswana', flag: '🇧🇼', maxLength: 10 },
+  '268': { name: 'Eswatini', flag: '🇸🇿', maxLength: 10 },
+  '880': { name: 'Bangladesh', flag: '🇧🇩', maxLength: 12 },
+  '966': { name: 'Saudi Arabia', flag: '🇸🇦', maxLength: 11 },
+  '971': { name: 'United Arab Emirates', flag: '🇦🇪', maxLength: 11 }
+};
+// Add this after your COUNTRY_CODES constant
+interface CountryPattern {
+  regex: RegExp;
+  transform: (num: string) => string;
+}
+
+interface CountryPatternConfig {
+  countryCode: string;
+  patterns: CountryPattern[];
+  name: string;
+  flag: string;
+}
+
+interface LocalNumberPatterns {
+  [key: string]: CountryPatternConfig;
+}
+
+const LOCAL_NUMBER_PATTERNS: LocalNumberPatterns = {
+  'KE': {
+    countryCode: '254',
+    patterns: [
+      { regex: /^0[17]\d{8}$/, transform: (num: string) => '+254' + num.substring(1) },
+      { regex: /^[17]\d{8}$/, transform: (num: string) => '+254' + num },
+      { regex: /^070\d{7}$/, transform: (num: string) => '+2547' + num.substring(3) },
+    ],
+    name: 'Kenya',
+    flag: '🇰🇪'
+  },
+  'UG': {
+    countryCode: '256',
+    patterns: [
+      { regex: /^0[37]\d{8}$/, transform: (num: string) => '+256' + num.substring(1) },
+      { regex: /^[37]\d{8}$/, transform: (num: string) => '+256' + num },
+    ],
+    name: 'Uganda',
+    flag: '🇺🇬'
+  },
+  'TZ': {
+    countryCode: '255',
+    patterns: [
+      { regex: /^0[67]\d{8}$/, transform: (num: string) => '+255' + num.substring(1) },
+      { regex: /^[67]\d{8}$/, transform: (num: string) => '+255' + num },
+    ],
+    name: 'Tanzania',
+    flag: '🇹🇿'
+  }
+};
+
+// Default country preference (you can make this dynamic later)
+let userCountryPreference: keyof LocalNumberPatterns = 'KE';
+
+// Enhanced function to detect country from phone number
+const detectCountryFromPhoneNumber = (phoneNumber: string): DetectedCountry | null => {
   const cleanNumber = phoneNumber.replace(/\D/g, '');
   
-  // WhatsApp validation rules:
-  // 1. Must be between 8-15 digits
-  // 2. Must not contain letters or special characters except + at start
-  // 3. Must be a valid international format
+  // Check for exact matches first (longer country codes first)
+  const sortedCodes = Object.keys(COUNTRY_CODES).sort((a, b) => b.length - a.length);
   
-  // Basic length check
+  for (const code of sortedCodes) {
+    if (cleanNumber.startsWith(code)) {
+      return {
+        code,
+        country: COUNTRY_CODES[code]
+      };
+    }
+  }
+  
+  return null;
+};
+
+// Enhanced WhatsApp number validation function with country detection
+const validateWhatsAppNumberWithCountry = (phoneNumber: string): Omit<PhoneFormatResult, 'formattedNumber' | 'cleanNumber'> => {
+  const cleanNumber = phoneNumber.replace(/\D/g, '');
+  
   if (cleanNumber.length < 8 || cleanNumber.length > 15) {
-    return false;
+    return {
+      isValid: false,
+      message: 'Phone number must be between 8-15 digits',
+      country: null
+    };
   }
   
-  // Check if it's a valid international format
-  // Should start with country code (without +)
-  const countryCode = cleanNumber.substring(0, 3);
-  const commonCountryCodes = [
-    '1',   // US/Canada
-    '7',   // Russia
-    '20',  // Egypt
-    '27',  // South Africa
-    '30',  // Greece
-    '31',  // Netherlands
-    '32',  // Belgium
-    '33',  // France
-    '34',  // Spain
-    '36',  // Hungary
-    '39',  // Italy
-    '40',  // Romania
-    '41',  // Switzerland
-    '43',  // Austria
-    '44',  // UK
-    '45',  // Denmark
-    '46',  // Sweden
-    '47',  // Norway
-    '48',  // Poland
-    '49',  // Germany
-    '51',  // Peru
-    '52',  // Mexico
-    '53',  // Cuba
-    '54',  // Argentina
-    '55',  // Brazil
-    '56',  // Chile
-    '57',  // Colombia
-    '58',  // Venezuela
-    '60',  // Malaysia
-    '61',  // Australia
-    '62',  // Indonesia
-    '63',  // Philippines
-    '64',  // New Zealand
-    '65',  // Singapore
-    '66',  // Thailand
-    '81',  // Japan
-    '82',  // South Korea
-    '84',  // Vietnam
-    '86',  // China
-    '90',  // Turkey
-    '91',  // India
-    '92',  // Pakistan
-    '93',  // Afghanistan
-    '94',  // Sri Lanka
-    '95',  // Myanmar
-    '98',  // Iran
-    '212', // Morocco
-    '213', // Algeria
-    '216', // Tunisia
-    '218', // Libya
-    '220', // Gambia
-    '221', // Senegal
-    '222', // Mauritania
-    '223', // Mali
-    '224', // Guinea
-    '225', // Ivory Coast
-    '226', // Burkina Faso
-    '227', // Niger
-    '228', // Togo
-    '229', // Benin
-    '230', // Mauritius
-    '231', // Liberia
-    '232', // Sierra Leone
-    '233', // Ghana
-    '234', // Nigeria
-    '235', // Chad
-    '236', // Central African Republic
-    '237', // Cameroon
-    '238', // Cape Verde
-    '239', // Sao Tome and Principe
-    '240', // Equatorial Guinea
-    '241', // Gabon
-    '242', // Republic of the Congo
-    '243', // Democratic Republic of the Congo
-    '244', // Angola
-    '245', // Guinea-Bissau
-    '246', // British Indian Ocean Territory
-    '248', // Seychelles
-    '249', // Sudan
-    '250', // Rwanda
-    '251', // Ethiopia
-    '252', // Somalia
-    '253', // Djibouti
-    '254', // Kenya
-    '255', // Tanzania
-    '256', // Uganda
-    '257', // Burundi
-    '258', // Mozambique
-    '260', // Zambia
-    '261', // Madagascar
-    '262', // Reunion
-    '263', // Zimbabwe
-    '264', // Namibia
-    '265', // Malawi
-    '266', // Lesotho
-    '267', // Botswana
-    '268', // Swaziland
-    '269', // Comoros
-    '290', // Saint Helena
-    '291', // Eritrea
-    '297', // Aruba
-    '298', // Faroe Islands
-    '299', // Greenland
-    '350', // Gibraltar
-    '351', // Portugal
-    '352', // Luxembourg
-    '353', // Ireland
-    '354', // Iceland
-    '355', // Albania
-    '356', // Malta
-    '357', // Cyprus
-    '358', // Finland
-    '359', // Bulgaria
-    '370', // Lithuania
-    '371', // Latvia
-    '372', // Estonia
-    '373', // Moldova
-    '374', // Armenia
-    '375', // Belarus
-    '376', // Andorra
-    '377', // Monaco
-    '378', // San Marino
-    '379', // Vatican City
-    '380', // Ukraine
-    '381', // Serbia
-    '382', // Montenegro
-    '383', // Kosovo
-    '385', // Croatia
-    '386', // Slovenia
-    '387', // Bosnia and Herzegovina
-    '389', // Macedonia
-    '420', // Czech Republic
-    '421', // Slovakia
-    '423', // Liechtenstein
-    '500', // Falkland Islands
-    '501', // Belize
-    '502', // Guatemala
-    '503', // El Salvador
-    '504', // Honduras
-    '505', // Nicaragua
-    '506', // Costa Rica
-    '507', // Panama
-    '508', // Saint Pierre and Miquelon
-    '509', // Haiti
-    '590', // Guadeloupe
-    '591', // Bolivia
-    '592', // Guyana
-    '593', // Ecuador
-    '594', // French Guiana
-    '595', // Paraguay
-    '596', // Martinique
-    '597', // Suriname
-    '598', // Uruguay
-    '599', // Netherlands Antilles
-    '670', // East Timor
-    '672', // Norfolk Island
-    '673', // Brunei
-    '674', // Nauru
-    '675', // Papua New Guinea
-    '676', // Tonga
-    '677', // Solomon Islands
-    '678', // Vanuatu
-    '679', // Fiji
-    '680', // Palau
-    '681', // Wallis and Futuna
-    '682', // Cook Islands
-    '683', // Niue
-    '685', // Samoa
-    '686', // Kiribati
-    '687', // New Caledonia
-    '688', // Tuvalu
-    '689', // French Polynesia
-    '690', // Tokelau
-    '691', // Micronesia
-    '692', // Marshall Islands
-    '850', // North Korea
-    '852', // Hong Kong
-    '853', // Macau
-    '855', // Cambodia
-    '856', // Laos
-    '880', // Bangladesh
-    '886', // Taiwan
-    '960', // Maldives
-    '961', // Lebanon
-    '962', // Jordan
-    '963', // Syria
-    '964', // Iraq
-    '965', // Kuwait
-    '966', // Saudi Arabia
-    '967', // Yemen
-    '968', // Oman
-    '970', // Palestine
-    '971', // United Arab Emirates
-    '972', // Israel
-    '973', // Bahrain
-    '974', // Qatar
-    '975', // Bhutan
-    '976', // Mongolia
-    '977', // Nepal
-    '992', // Tajikistan
-    '993', // Turkmenistan
-    '994', // Azerbaijan
-    '995', // Georgia
-    '996', // Kyrgyzstan
-    '998'  // Uzbekistan
-  ];
+  const countryInfo = detectCountryFromPhoneNumber(cleanNumber);
   
-  // Check if the number starts with a valid country code
-  const hasValidCountryCode = commonCountryCodes.some(code => 
-    cleanNumber.startsWith(code)
-  );
-  
-  if (!hasValidCountryCode) {
-    return false;
+  if (!countryInfo) {
+    return {
+      isValid: false,
+      message: 'Invalid or unsupported country code',
+      country: null
+    };
   }
   
-  // Final validation - should only contain digits and be proper length
-  return /^\d{8,15}$/.test(cleanNumber);
+  const expectedLength = countryInfo.country.maxLength;
+  const actualLength = cleanNumber.length;
+  
+  if (actualLength > expectedLength) {
+    return {
+      isValid: false,
+      message: `Too long for ${countryInfo.country.name} (max ${expectedLength} digits)`,
+      country: countryInfo
+    };
+  }
+  
+  if (actualLength < expectedLength - 2) {
+    return {
+      isValid: false,
+      message: `Too short for ${countryInfo.country.name} (expected ~${expectedLength} digits)`,
+      country: countryInfo
+    };
+  }
+  
+  const isValidFormat = /^\d{8,15}$/.test(cleanNumber);
+  
+  return {
+    isValid: isValidFormat,
+    message: isValidFormat 
+      ? `Valid ${countryInfo.country.name} number` 
+      : 'Invalid phone number format',
+    country: countryInfo
+  };
 };
 
-// Format phone number for display
-const formatPhoneNumber = (phoneNumber: string): string => {
+// Enhanced format phone number for display with country info
+const formatPhoneNumberWithCountry = (phoneNumber: string): string => {
   const cleanNumber = phoneNumber.replace(/\D/g, '');
+  const countryInfo = detectCountryFromPhoneNumber(cleanNumber);
   
-  if (cleanNumber.length <= 3) {
-    return cleanNumber;
-  } else if (cleanNumber.length <= 6) {
-    return `+${cleanNumber.slice(0, 3)} ${cleanNumber.slice(3)}`;
-  } else if (cleanNumber.length <= 9) {
-    return `+${cleanNumber.slice(0, 3)} ${cleanNumber.slice(3, 6)} ${cleanNumber.slice(6)}`;
-  } else {
-    return `+${cleanNumber.slice(0, 3)} ${cleanNumber.slice(3, 6)} ${cleanNumber.slice(6, 9)} ${cleanNumber.slice(9)}`;
+  if (!countryInfo) {
+    // Fallback formatting for unknown countries
+    if (cleanNumber.length <= 3) {
+      return cleanNumber;
+    } else if (cleanNumber.length <= 6) {
+      return `+${cleanNumber.slice(0, 3)} ${cleanNumber.slice(3)}`;
+    } else if (cleanNumber.length <= 9) {
+      return `+${cleanNumber.slice(0, 3)} ${cleanNumber.slice(3, 6)} ${cleanNumber.slice(6)}`;
+    } else {
+      return `+${cleanNumber.slice(0, 3)} ${cleanNumber.slice(3, 6)} ${cleanNumber.slice(6, 9)} ${cleanNumber.slice(9)}`;
+    }
   }
+  
+  const { code } = countryInfo;
+  const nationalNumber = cleanNumber.slice(code.length);
+  
+  // Apply basic formatting for better readability
+  let formattedNational = nationalNumber;
+  
+  if (nationalNumber.length >= 6) {
+    const groups = [];
+    let remaining = nationalNumber;
+    
+    if (remaining.length >= 3) {
+      groups.push(remaining.slice(0, 3));
+      remaining = remaining.slice(3);
+    }
+    if (remaining.length >= 3) {
+      groups.push(remaining.slice(0, 3));
+      remaining = remaining.slice(3);
+    }
+    if (remaining.length > 0) {
+      groups.push(remaining);
+    }
+    
+    formattedNational = groups.join(' ');
+  }
+  
+  return `+${code} ${formattedNational}`;
 };
 
-// Enhanced phone number input handler with validation
-const handlePhoneNumberChange = (phoneNumber: string) => {
+// Enhanced phone number input handler with country detection
+const handlePhoneNumberChangeWithCountry = (phoneNumber: string): PhoneFormatResult => {
   // Remove all non-digit characters except +
   let cleanNumber = phoneNumber.replace(/[^\d+]/g, '');
   
-  // Ensure it starts with + if international format
-  if (cleanNumber.startsWith('+')) {
-    // Remove extra + signs
-    cleanNumber = '+' + cleanNumber.replace(/^\++/g, '');
+  // Handle different input scenarios
+  if (!cleanNumber) {
+    return {
+      formattedNumber: '',
+      isValid: false,
+      message: '',
+      country: null,
+      cleanNumber: ''
+    };
   }
   
-  // Validate the number
-  const isValid = validateWhatsAppNumber(cleanNumber);
+  // Ensure proper + prefix for international format
+  if (!cleanNumber.startsWith('+')) {
+    // If user enters numbers without +, add it
+    cleanNumber = '+' + cleanNumber;
+  } else {
+    // Remove duplicate + signs
+    cleanNumber = '+' + cleanNumber.slice(1).replace(/\+/g, '');
+  }
+  
+  // Get digits only for validation
+  const digitsOnly = cleanNumber.replace(/\D/g, '');
+  
+  if (digitsOnly.length < 8) {
+    return {
+      formattedNumber: cleanNumber,
+      isValid: false,
+      message: 'Phone number too short',
+      country: null,
+      cleanNumber: digitsOnly
+    };
+  }
+  
+  // Validate with country detection
+  const validation = validateWhatsAppNumberWithCountry(cleanNumber);
+  const formattedDisplay = formatPhoneNumberWithCountry(cleanNumber);
   
   return {
-    formattedNumber: formatPhoneNumber(cleanNumber),
-    isValid,
-    cleanNumber: cleanNumber.replace(/\D/g, '') // Remove + for storage
+    formattedNumber: formattedDisplay,
+    isValid: validation.isValid,
+    message: validation.message,
+    country: validation.country,
+    cleanNumber: digitsOnly
   };
+};
+
+export {
+  COUNTRY_CODES,
+  detectCountryFromPhoneNumber,
+  validateWhatsAppNumberWithCountry,
+  formatPhoneNumberWithCountry,
+  handlePhoneNumberChangeWithCountry
 };
 interface RequestServiceModalProps {
   showRequestModal: boolean;
@@ -532,26 +547,123 @@ const RequestServiceModal: React.FC<RequestServiceModalProps> = ({
            location.includes(searchLower) ||
            collegeName.includes(searchLower);
   });
-const [phoneValidation, setPhoneValidation] = useState({
+const [phoneValidation, setPhoneValidation] = useState<PhoneValidationState>({
   isValid: false,
-  message: ''
+  message: '',
+  country: null,
+  wasAutoFormatted: false
 });
-  // Handle provider selection from dropdown
-  const handleProviderSelection = (provider: Provider) => {
-    setCurrentRequest(prev => ({
-      ...prev,
-      contactPhone: provider.phoneNumber,
-      providerId: provider.id,
-      location: prev.location || getProviderLocation(provider)
-    }));
-    setProviderSearchQuery(provider.shopName || `${provider.firstName} ${provider.lastName}`);
-    setShowProviderDropdown(false);
-    
-    // Update the selected provider in parent component
-    setSelectedProvider(provider);
-    
-    toast.success(`Selected ${provider.shopName || `${provider.firstName} ${provider.lastName}`}. Phone number autofilled!`);
+
+// Enhanced function to normalize phone numbers (especially for Kenya)
+
+const smartNormalizePhoneNumber = (phoneNumber: string, userLocation?: string): {
+  normalizedNumber: string;
+  wasAutoFormatted: boolean;
+  detectedCountry: string | null;
+  } => {
+  let cleaned = phoneNumber.replace(/[^\d+]/g, '');
+  
+  // Update preference based on location if provided
+  if (userLocation) {
+    const locationLower = userLocation.toLowerCase();
+    if (locationLower.includes('kenya') || locationLower.includes('nairobi')) {
+      userCountryPreference = 'KE';
+    } else if (locationLower.includes('uganda') || locationLower.includes('kampala')) {
+      userCountryPreference = 'UG';
+    } else if (locationLower.includes('tanzania') || locationLower.includes('dar es salaam')) {
+      userCountryPreference = 'TZ';
+    }
+  }
+  
+  // If already has country code, return as is
+  if (cleaned.startsWith('+') && cleaned.length > 10) {
+    return {
+      normalizedNumber: cleaned,
+      wasAutoFormatted: false,
+      detectedCountry: null
+    };
+  }
+  
+  // Remove + if present but seems local
+  if (cleaned.startsWith('+') && cleaned.length <= 10) {
+    cleaned = cleaned.substring(1);
+  }
+  
+  // Try to match patterns, starting with user's preferred country
+  const countriesToCheck = [userCountryPreference, ...Object.keys(LOCAL_NUMBER_PATTERNS).filter(c => c !== userCountryPreference)];
+  
+  for (const countryCode of countriesToCheck) {
+    const country = LOCAL_NUMBER_PATTERNS[countryCode];
+    for (const pattern of country.patterns) {
+      if (pattern.regex.test(cleaned)) {
+        return {
+          normalizedNumber: pattern.transform(cleaned),
+          wasAutoFormatted: true,
+          detectedCountry: countryCode as string
+        };
+      }
+    }
+  }
+  
+  // If no pattern matches but looks like it needs country code
+  if (cleaned.length >= 8 && cleaned.length <= 10 && !cleaned.startsWith('0')) {
+    const preferredCountry = LOCAL_NUMBER_PATTERNS[userCountryPreference];
+    return {
+      normalizedNumber: '+' + preferredCountry.countryCode + cleaned,
+      wasAutoFormatted: true,
+      detectedCountry: userCountryPreference as string
+    };
+  }
+  
+  // Default case
+  if (cleaned && !cleaned.startsWith('+')) {
+    cleaned = '+' + cleaned;
+  }
+  
+  return {
+    normalizedNumber: cleaned,
+    wasAutoFormatted: false,
+    detectedCountry: null
   };
+};
+
+  // Handle provider selection from dropdown
+const handleProviderSelection = (provider: Provider) => {
+  // Use smart normalization with user's location context
+  const smartResult = smartNormalizePhoneNumber(provider.phoneNumber, currentRequest.location);
+  const phoneResult = handlePhoneNumberChangeWithCountry(smartResult.normalizedNumber);
+  
+  setCurrentRequest(prev => ({
+    ...prev,
+    contactPhone: phoneResult.formattedNumber,
+    providerId: provider.id,
+  }));
+  
+  setProviderSearchQuery(provider.shopName || `${provider.firstName} ${provider.lastName}`);
+  setShowProviderDropdown(false);
+  setSelectedProvider(provider);
+  
+  // Update validation with auto-format info
+setPhoneValidation({
+  isValid: phoneResult.isValid,
+  message: phoneResult.message,
+  country: phoneResult.country,
+  wasAutoFormatted: smartResult.wasAutoFormatted,
+  autoFormatMessage: smartResult.wasAutoFormatted && smartResult.detectedCountry 
+    ? `Auto-added ${LOCAL_NUMBER_PATTERNS[smartResult.detectedCountry].name} country code`
+    : undefined
+});
+  
+  const providerName = provider.shopName || `${provider.firstName} ${provider.lastName}`;
+  
+  if (smartResult.wasAutoFormatted) {
+    toast.success(`Selected ${providerName}. Phone number auto-formatted with country code!`);
+  } else if (phoneResult.isValid) {
+    toast.success(`Selected ${providerName}. Phone number verified!`);
+  } else {
+    toast.warning(`Selected ${providerName}. Please verify phone number.`);
+  }
+};
 
   if (!showRequestModal) return null;
 
@@ -799,83 +911,117 @@ const [phoneValidation, setPhoneValidation] = useState({
             </div>
 
             {/* Contact Information */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Your Location *
-              </label>
-              <input
-                type="text"
-                value={currentRequest.location || ''}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                  setCurrentRequest(prev => ({ ...prev, location: e.target.value }));
-                }}
-                className="w-full px-3 py-2.5 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-base sm:text-sm"
-                placeholder="e.g., Nairobi, Kenya"
-                autoComplete="off"
-              />
-            </div>
+    <div>
+  <label className="block text-sm font-medium text-gray-700 mb-1">
+    Your Location * 
+    <span className="text-gray-500 text-xs ml-1">(Where you are located)</span>
+  </label>
+  <input
+    type="text"
+    value={currentRequest.location || ''}
+    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+      setCurrentRequest(prev => ({ ...prev, location: e.target.value }));
+    }}
+    className="w-full px-3 py-2.5 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-base sm:text-sm"
+    placeholder="e.g., Nairobi, Kenya"
+    autoComplete="off"
+  />
+  <div className="text-xs text-gray-500 mt-1">
+    Enter your current location for accurate service estimates
+  </div>
+</div>
 
-       <div>
+<div>
   <label className="block text-sm font-medium text-gray-700 mb-1">
     Phone Number *
     {selectedProvider && (
-      <span className="text-green-600 text-xs ml-2">(Autofilled from selected provider)</span>
-    )}
-    {currentRequest.contactPhone && phoneValidation.message && (
-      <span className={`text-xs ml-2 ${phoneValidation.isValid ? 'text-green-600' : 'text-red-600'}`}>
-        {phoneValidation.message}
+      <span className="text-green-600 text-xs ml-2">
+        (From {selectedProvider.shopName || `${selectedProvider.firstName} ${selectedProvider.lastName}`})
       </span>
     )}
   </label>
+  
   <input
     type="tel"
     value={currentRequest.contactPhone || ''}
-    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-      const phoneValue = e.target.value;
-      const validation = handlePhoneNumberChange(phoneValue);
-      
-      setCurrentRequest(prev => ({ 
-        ...prev, 
-        contactPhone: validation.formattedNumber 
-      }));
-      
-      // Update validation state
-      if (phoneValue.trim() === '') {
-        setPhoneValidation({ isValid: false, message: '' });
-      } else if (validation.isValid) {
-        setPhoneValidation({ 
-          isValid: true, 
-          message: '✓ Valid WhatsApp number' 
-        });
-      } else {
-        setPhoneValidation({ 
-          isValid: false, 
-          message: '⚠ Please enter a valid international phone number' 
-        });
-      }
-    }}
-    onBlur={() => {
-      if (currentRequest.contactPhone && !phoneValidation.isValid) {
-        setPhoneValidation({ 
-          isValid: false, 
-          message: '⚠ This number may not work with WhatsApp' 
-        });
-      }
-    }}
+onChange={(e) => {
+  const phoneValue = e.target.value;
+  
+  // Apply smart normalization with user's location
+  const smartResult = smartNormalizePhoneNumber(phoneValue, currentRequest.location);
+  const validation = handlePhoneNumberChangeWithCountry(smartResult.normalizedNumber);
+  
+  setCurrentRequest(prev => ({ 
+    ...prev, 
+    contactPhone: validation.formattedNumber 
+  }));
+  
+  // Update validation with auto-format info
+ setPhoneValidation({ 
+  isValid: validation.isValid,
+  message: validation.message,
+  country: validation.country,
+  wasAutoFormatted: smartResult.wasAutoFormatted,
+  autoFormatMessage: smartResult.wasAutoFormatted && smartResult.detectedCountry 
+    ? `Auto-added ${LOCAL_NUMBER_PATTERNS[smartResult.detectedCountry].name} country code`
+    : undefined
+});
+}}
     className={`w-full px-3 py-2.5 sm:py-2 border rounded-lg focus:ring-2 focus:border-transparent outline-none text-base sm:text-sm ${
       currentRequest.contactPhone 
         ? phoneValidation.isValid 
           ? 'border-green-300 focus:ring-green-500' 
-          : 'border-red-300 focus:ring-red-500'
+          : 'border-yellow-300 focus:ring-yellow-500' // Yellow for correction needed
         : 'border-gray-200 focus:ring-blue-500'
     }`}
     placeholder="+254 712 345 678"
     autoComplete="tel"
   />
-  <div className="mt-1 text-xs text-gray-500">
-    Format: +[country code][number] (e.g., +254712345678 for Kenya)
+  
+<div className="mt-1 space-y-1">
+  {phoneValidation.wasAutoFormatted && phoneValidation.autoFormatMessage && (
+    <div className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-md inline-flex items-center gap-1">
+      <span>✨</span>
+      <span>{phoneValidation.autoFormatMessage}</span>
+    </div>
+  )}
+  
+  {/* Existing validation message */}
+  {currentRequest.contactPhone && phoneValidation.message && (
+    <div className={`text-xs flex items-center gap-1 ${
+      phoneValidation.isValid ? 'text-green-600' : 'text-amber-600'
+    }`}>
+      {phoneValidation.country && (
+        <span className="text-base leading-none">
+          {phoneValidation.country.country.flag}
+        </span>
+      )}
+      <span>{phoneValidation.message}</span>
+    </div>
+  )}
+  
+  {/* Country confirmation */}
+  {phoneValidation.country && phoneValidation.isValid && (
+    <div className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-md inline-flex items-center gap-1">
+      <span className="text-base leading-none">
+        {phoneValidation.country.country.flag}
+      </span>
+      <span>
+        Ready for WhatsApp in {phoneValidation.country.country.name}
+      </span>
+      {selectedProvider && <span className="ml-1">✓ Auto-filled</span>}
+    </div>
+  )}
+  
+  <div className="text-xs text-gray-500">
+    Just type the number - country code will be added automatically
+    {phoneValidation.wasAutoFormatted && (
+      <span className="text-blue-600 ml-1">• Auto-detected format</span>
+    )}
   </div>
 </div>
+</div>
+
 
             {/* Communication Method */}
             <div>
@@ -981,7 +1127,7 @@ const [phoneValidation, setPhoneValidation] = useState({
       {currentRequest.contactMethod === 'call' && <Phone className="w-4 h-4" />}
       <span>
         Send Request via {currentRequest.contactMethod?.toUpperCase()}
-        {!phoneValidation.isValid && currentRequest.contactPhone && ' (Check number)'}
+        {phoneValidation.country && ` to ${phoneValidation.country.country.name}`}
       </span>
     </div>
   )}
@@ -1765,26 +1911,38 @@ const ProvidersList = () => {
 
 // Enhanced communication functions that redirect to respective apps
 const initiateContact = (request: ProductRequest) => {
-  const message = encodeURIComponent(`Product Request: ${request.productName}\n\nDescription: ${request.description}\nQuantity: ${request.quantity}\nDesired Price: ${request.desiredPrice ? getCurrencySymbol(request.location) + ' ' + request.desiredPrice : 'Not specified'}\nUrgency: ${request.urgency}\nLocation: ${request.location}\n\nPlease respond with availability and pricing.`);
+  const message = encodeURIComponent(
+    `🛍️ Product Request\n\n` +
+    `Product: ${request.productName}\n` +
+    `Description: ${request.description}\n` +
+    `Quantity: ${request.quantity}\n` +
+    `${request.desiredPrice ? `Max Price: ${getCurrencySymbol(request.location)} ${request.desiredPrice}\n` : ''}` +
+    `Urgency: ${request.urgency.toUpperCase()}\n` +
+    `My Location: ${request.location}\n\n` +
+    `Please respond with availability and pricing. Thank you! 🙏`
+  );
   
-  // Proper WhatsApp number formatting
-  const cleanPhone = request.contactPhone.replace(/\D/g, ''); // Remove all non-digits
+  // Use the cleanNumber (digits only) for WhatsApp URL
+  const phoneResult = handlePhoneNumberChangeWithCountry(request.contactPhone);
+  const cleanPhone = phoneResult.cleanNumber;
   
   switch (request.contactMethod) {
     case 'sms':
       if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
-        window.location.href = `sms:${cleanPhone}?body=${message}`;
+        // Use the formatted number for SMS
+        window.location.href = `sms:${request.contactPhone}?body=${message}`;
       } else {
         setShowCommunicationModal(true);
       }
       break;
     case 'whatsapp':
-      // WhatsApp requires international format without + for the URL
+      // WhatsApp requires clean digits with country code (no + or spaces)
       const whatsappUrl = `https://wa.me/${cleanPhone}?text=${message}`;
       window.open(whatsappUrl, '_blank');
       break;
     case 'call':
-      window.location.href = `tel:${cleanPhone}`;
+      // Use formatted number for calling
+      window.location.href = `tel:${request.contactPhone}`;
       break;
   }
 };
