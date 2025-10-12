@@ -27,6 +27,7 @@ import { NavigationArrows } from './components/NewFeature/NavigationArrows';
 import ForgotPassword from './components/auth/ForgotPassword';
 import ServiceIndividual from './components/NewFeature/ServicesIndividual';
 import ProductIndividual from './components/NewFeature/ProductIndividual';
+import ServicesListComponent from './components/NewFeature/ServiceBroadcastRequest';
 import 'react-toastify/dist/ReactToastify.css';
 import { Toaster } from 'react-hot-toast';
 import { ToastProvider } from './context/ToastContext';
@@ -130,7 +131,7 @@ function AppContent() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/services/:id" element={<ServiceIndividualWrapper />} />
           <Route path="/products/:id" element={<ProductIndividualWrapper />} />
-
+   <Route path="/servicesList" element={<ServicesListComponent />} />
 {/* <Route path="/marketplace/services/:id" element={<ServiceDetails />} />
 <Route path="/marketplace/products/:id" element={<ProductDetails />} /> */}
 
