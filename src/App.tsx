@@ -25,6 +25,8 @@ import { ProductDetail } from './components/NewFeature/ProductDetail';
 import { ProductSellerDashboard } from './components/NewFeature/ProductSellerDashboard';
 import { NavigationArrows } from './components/NewFeature/NavigationArrows'; 
 import ForgotPassword from './components/auth/ForgotPassword';
+import ServiceIndividual from './components/NewFeature/ServicesIndividual';
+import ProductIndividual from './components/NewFeature/ProductIndividual';
 import 'react-toastify/dist/ReactToastify.css';
 import { Toaster } from 'react-hot-toast';
 import { ToastProvider } from './context/ToastContext';
@@ -92,6 +94,18 @@ function WebSocketWrapper() {
 }
 
 
+import { useParams } from 'react-router-dom';
+
+function ServiceIndividualWrapper() {
+  const { id } = useParams<{ id: string }>();
+  return <ServiceIndividual serviceId={id!} />;
+}
+
+function ProductIndividualWrapper() {
+  const { id } = useParams<{ id: string }>();
+  return <ProductIndividual productId={id!} />;
+}
+
 function AppContent() {
   return (
     <main className="flex-grow">
@@ -102,13 +116,23 @@ function AppContent() {
        <Route path="/providers" element={<ProvidersList />} />
         <Route path="/providers/public/:id" element={<ProviderPublicProfile />} />
         <Route path="/services" element={<ServicesProductsComponent />} />
-        <Route path="/products" element={<Product/>} />
+        <Route
+          path="/services/:id"
+          element={
+            <ServiceIndividualWrapper />
+          }
+        />
         <Route path="/help" element={<Help/>} />
         <Route path="/become-seller" element={<Seller/>} />
-        <Route path="/chat" element={<ChatList />} />
+          <Route path="/products/:id" element={<ProductIndividualWrapper />} />
         <Route path="/chat/:chatRoomId" element={<ChatWindow />} />
         <Route path="/products/:id" element={<ProductDetail />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/services/:id" element={<ServiceIndividualWrapper />} />
+          <Route path="/products/:id" element={<ProductIndividualWrapper />} />
+
+{/* <Route path="/marketplace/services/:id" element={<ServiceDetails />} />
+<Route path="/marketplace/products/:id" element={<ProductDetails />} /> */}
 
         {/* Provider Dashboard Route */}
         <Route

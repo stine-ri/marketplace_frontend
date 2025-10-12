@@ -1,9 +1,9 @@
 import React, { useState, ReactNode, useRef, useEffect } from 'react';
-import { Search, Menu, X, User, LayoutDashboard } from 'lucide-react';
+import { Search, Menu, X, User, LayoutDashboard, ChevronDown } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import NotificationBell from '../NewFeature/NotificationBell';
-
+import logo from '../../assets/Blue White Modern Minimalist Name Logo_20251005_200653_0000.png';
 interface NavbarProps {
   children?: ReactNode;
 }
@@ -12,7 +12,9 @@ export function Navbar({ children }: NavbarProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isAuthDropdownOpen, setIsAuthDropdownOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const authDropdownRef = useRef<HTMLDivElement>(null);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -73,7 +75,6 @@ export function Navbar({ children }: NavbarProps) {
   const handleSearchToggle = () => {
     setIsSearchOpen(!isSearchOpen);
     if (!isSearchOpen) {
-      // Focus the input after the state update
       setTimeout(() => {
         searchInputRef.current?.focus();
       }, 100);
@@ -83,7 +84,6 @@ export function Navbar({ children }: NavbarProps) {
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      // Navigate to search results page with query
       navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
       setIsSearchOpen(false);
       setSearchQuery('');
@@ -93,6 +93,12 @@ export function Navbar({ children }: NavbarProps) {
   const handleSearchClose = () => {
     setIsSearchOpen(false);
     setSearchQuery('');
+  };
+
+  const handleAuthNavigation = (path: string) => {
+    navigate(path);
+    setIsAuthDropdownOpen(false);
+    setIsMenuOpen(false);
   };
 
   // Close search when clicking outside
@@ -109,19 +115,35 @@ export function Navbar({ children }: NavbarProps) {
     }
   }, [isSearchOpen]);
 
+  // Close auth dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (authDropdownRef.current && !authDropdownRef.current.contains(event.target as Node)) {
+        setIsAuthDropdownOpen(false);
+      }
+    };
+
+    if (isAuthDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [isAuthDropdownOpen]);
+
   return (
     <header className="bg-white shadow-sm sticky top-0 z-50">
       <div className="container mx-auto px-4 py-3 sm:py-4">
         <div className="flex items-center justify-between">
+       
           {/* Logo */}
-          <div className="flex items-center flex-shrink-0">
-            <Link 
-              to="/" 
-              className="text-xl sm:text-2xl font-bold text-blue-600 hover:text-blue-700 transition-colors"
-            >
-              Quisells
-            </Link>
-          </div>
+<div className="flex items-center flex-shrink-0">
+  <Link to="/" className="flex items-center">
+    <img 
+      src={logo} 
+      alt="Quisells Logo" 
+      className="h-16 sm:h-20 w-auto hover:opacity-80 transition-opacity" // Much larger size
+    />
+  </Link>
+</div>
 
           {/* Desktop Navigation */}
           <nav className="hidden lg:flex items-center space-x-6 xl:space-x-8">
@@ -193,8 +215,8 @@ export function Navbar({ children }: NavbarProps) {
               )}
             </div>
 
-            {/* Dashboard Button - Always visible */}
-            {user ? (
+            {/* Dashboard Button - Only visible when logged in */}
+            {user && (
               <button 
                 onClick={handleDashboardRedirect}
                 className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center font-medium focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
@@ -203,13 +225,6 @@ export function Navbar({ children }: NavbarProps) {
                 <span className="hidden xl:inline">{getDashboardButtonText()}</span>
                 <span className="xl:hidden">Dashboard</span>
               </button>
-            ) : (
-              <div className="px-4 py-2 bg-orange-50 border border-orange-200 rounded-md">
-                <p className="text-orange-700 text-sm font-medium">
-                  <Link to="/login" className="text-blue-600 hover:text-blue-700 font-semibold">Login</Link> or 
-                  <Link to="/register" className="text-blue-600 hover:text-blue-700 font-semibold ml-1">Register</Link> to access dashboard
-                </p>
-              </div>
             )}
             
             {user ? (
@@ -229,20 +244,32 @@ export function Navbar({ children }: NavbarProps) {
                 </div>
               </div>
             ) : (
-              <div className="flex items-center space-x-2">
-                <Link 
-                  to="/login" 
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              <div className="relative" ref={authDropdownRef}>
+                <button 
+                  onClick={() => setIsAuthDropdownOpen(!isAuthDropdownOpen)}
+                  className="px-4 py-2 border-2 border-blue-600 text-blue-600 rounded-md hover:bg-blue-50 transition-colors flex items-center font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                 >
                   <User size={16} className="mr-2" />
-                  Sign In
-                </Link>
-                <Link 
-                  to="/register" 
-                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
-                >
-                  Register
-                </Link>
+                  Login or Register
+                  <ChevronDown size={16} className="ml-2" />
+                </button>
+                
+                {isAuthDropdownOpen && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg py-1 z-50">
+                    <button
+                      onClick={() => handleAuthNavigation('/login')}
+                      className="w-full text-left px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                    >
+                      Login
+                    </button>
+                    <button
+                      onClick={() => handleAuthNavigation('/register')}
+                      className="w-full text-left px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                    >
+                      Register
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -258,8 +285,8 @@ export function Navbar({ children }: NavbarProps) {
               <Search size={20} />
             </button>
 
-            {/* Mobile Dashboard Button */}
-            {user ? (
+            {/* Mobile Dashboard Button - Only visible when logged in */}
+            {user && (
               <button 
                 onClick={handleDashboardRedirect}
                 className="p-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
@@ -267,7 +294,7 @@ export function Navbar({ children }: NavbarProps) {
               >
                 <LayoutDashboard size={20} />
               </button>
-            ) : null}
+            )}
 
             {/* Notification bell for authenticated users on mobile/tablet */}
             {user && (user as any)?.id && (
@@ -358,8 +385,8 @@ export function Navbar({ children }: NavbarProps) {
               </Link>
             </nav>
 
-            {/* Mobile Dashboard Section */}
-            {user ? (
+            {/* Mobile Dashboard Section - Only visible when logged in */}
+            {user && (
               <div className="mb-4 pb-4 border-b border-gray-200">
                 <button 
                   onClick={handleDashboardRedirect}
@@ -368,30 +395,6 @@ export function Navbar({ children }: NavbarProps) {
                   <LayoutDashboard size={18} className="mr-2" />
                   {getDashboardButtonText()}
                 </button>
-              </div>
-            ) : (
-              <div className="mb-4 pb-4 border-b border-gray-200">
-                <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg text-center">
-                  <p className="text-orange-700 font-medium mb-3">
-                    Access your personalized dashboard
-                  </p>
-                  <div className="space-y-2">
-                    <Link 
-                      to="/login" 
-                      className="w-full px-4 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium text-center block focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                      onClick={handleMenuClose}
-                    >
-                      Login to Dashboard
-                    </Link>
-                    <Link 
-                      to="/register" 
-                      className="w-full px-4 py-3 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors font-medium text-center block focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
-                      onClick={handleMenuClose}
-                    >
-                      Create Account
-                    </Link>
-                  </div>
-                </div>
               </div>
             )}
 
@@ -418,20 +421,20 @@ export function Navbar({ children }: NavbarProps) {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <Link 
-                    to="/login" 
-                    className="w-full px-4 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium text-center block focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                    onClick={handleMenuClose}
-                  >
-                    Sign In
-                  </Link>
-                  <Link 
-                    to="/register" 
-                    className="w-full px-4 py-3 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors font-medium text-center block focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
-                    onClick={handleMenuClose}
-                  >
-                    Register
-                  </Link>
+                  <div className="border-2 border-blue-600 rounded-md p-2">
+                    <button
+                      onClick={() => handleAuthNavigation('/login')}
+                      className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium mb-2"
+                    >
+                      Login
+                    </button>
+                    <button
+                      onClick={() => handleAuthNavigation('/register')}
+                      className="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors font-medium"
+                    >
+                      Register
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

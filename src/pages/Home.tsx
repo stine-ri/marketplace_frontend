@@ -1,6 +1,6 @@
 
 import { HeroSection } from '../components/home/HeroSection';
-import { FeaturedSection } from '../components/home/FeaturedSection';
+import FeaturedSection from '../components/home/FeaturedSection';
 import { CategorySection } from '../components/home/CategorySection';
 import TestimonialsSection  from '../components/home/TestimonialsSection';
 import { CtaSection } from '../components/home/CtaSection';
