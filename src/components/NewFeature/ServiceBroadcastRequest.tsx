@@ -43,11 +43,16 @@ export default function ServicesListComponent() {
     preferredDate: '',
     contactMethod: 'whatsapp' as 'whatsapp' | 'call' | 'sms'
   });
-  const [submittingRequest, setSubmittingRequest] = useState(false);
-  const [notificationSent, setNotificationSent] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+const [submittingRequest, setSubmittingRequest] = useState(false);
+const [notificationSent, setNotificationSent] = useState(false);
+const [openingTabs, setOpeningTabs] = useState(false);          // NEW LINE
+const [tabsOpened, setTabsOpened] = useState(0);                // NEW LINE
+const [totalTabs, setTotalTabs] = useState(0);                  // NEW LINE
+const [searchQuery, setSearchQuery] = useState('');
   const [filterRating, setFilterRating] = useState(0);
   const [sortBy, setSortBy] = useState('popular');
+
+
 
   // Helper function to get auth headers
   const getAuthHeaders = () => {
@@ -172,34 +177,50 @@ export default function ServicesListComponent() {
       console.log('WhatsApp URLs response:', data);
       console.log('Full WhatsApp message to be sent:', data.message);
 
-      // Open WhatsApp URLs in new tabs with a small delay between each
-      if (data.urls && data.urls.length > 0) {
-        console.log(`Opening ${data.urls.length} WhatsApp tab(s)...`);
-        
-        data.urls.forEach((urlInfo: any, index: number) => {
-          if (urlInfo.url && urlInfo.isValid) {
-            console.log(`Opening WhatsApp for provider ${index + 1}:`, {
-              phone: urlInfo.phoneNumber,
-              url: urlInfo.url.substring(0, 100) + '...' // Log first 100 chars
-            });
-            
-            // Use a small delay between opening tabs to avoid popup blocker
-            setTimeout(() => {
-              const newWindow = window.open(urlInfo.url, '_blank', 'noopener,noreferrer');
-              if (!newWindow) {
-                console.warn(`Failed to open WhatsApp tab for ${urlInfo.phoneNumber}. Check popup blocker.`);
-                alert(`Please allow popups to send WhatsApp messages. Provider phone: ${urlInfo.phoneNumber}`);
-              } else {
-                console.log(`Successfully opened WhatsApp for ${urlInfo.phoneNumber}`);
-              }
-            }, index * 500); // 500ms delay between each tab
-          } else {
-            console.warn(`Invalid WhatsApp URL for provider:`, urlInfo);
-          }
+    // Open WhatsApp URLs in new tabs with improved timing
+if (data.urls && data.urls.length > 0) {
+  console.log(`Opening ${data.urls.length} WhatsApp tab(s)...`);
+  setOpeningTabs(true);
+  setTotalTabs(data.urls.length);
+  setTabsOpened(0);
+  
+  const openWhatsAppTabs = async () => {
+    for (let i = 0; i < data.urls.length; i++) {
+      const urlInfo = data.urls[i];
+      
+      if (urlInfo.url && urlInfo.isValid) {
+        console.log(`Opening WhatsApp for provider ${i + 1}/${data.urls.length}:`, {
+          phone: urlInfo.phoneNumber,
+          url: urlInfo.url.substring(0, 100) + '...'
         });
+        
+        const newWindow = window.open(urlInfo.url, '_blank', 'noopener,noreferrer');
+        
+        if (!newWindow) {
+          console.warn(`Failed to open WhatsApp tab for ${urlInfo.phoneNumber}. Check popup blocker.`);
+        } else {
+          console.log(`✅ Successfully opened WhatsApp for ${urlInfo.phoneNumber}`);
+        }
+        
+        setTabsOpened(i + 1);
+        
+        // Wait 800ms between each tab to avoid popup blocker
+        if (i < data.urls.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 800));
+        }
       } else {
-        console.warn('No valid WhatsApp URLs generated');
+        console.warn(`Invalid WhatsApp URL for provider:`, urlInfo);
       }
+    }
+    
+    console.log(`✅ Finished opening ${data.urls.length} WhatsApp tabs`);
+    setOpeningTabs(false);
+  };
+  
+  openWhatsAppTabs();
+} else {
+  console.warn('No valid WhatsApp URLs generated');
+}
 
       return {
         success: true,
@@ -323,18 +344,22 @@ export default function ServicesListComponent() {
       });
 
       // Reset after 3 seconds
-      setTimeout(() => {
-        setShowRequestModal(false);
-        setNotificationSent(false);
-        setRequestDetails({
-          description: '',
-          budget: '',
-          location: '',
-          preferredDate: '',
-          contactMethod: 'whatsapp'
-        });
-        setSelectedService(null);
-      }, 3000);
+    // Reset after 3 seconds
+setTimeout(() => {
+  setShowRequestModal(false);
+  setNotificationSent(false);
+  setOpeningTabs(false);     
+  setTabsOpened(0);          
+  setTotalTabs(0);          
+  setRequestDetails({
+    description: '',
+    budget: '',
+    location: '',
+    preferredDate: '',
+    contactMethod: 'whatsapp'
+  });
+  setSelectedService(null);
+}, 3000);
 
     } catch (error) {
       console.error('Error submitting request:', error);
@@ -367,18 +392,21 @@ export default function ServicesListComponent() {
       return 0;
     });
 
-  const closeModal = () => {
-    setShowRequestModal(false);
-    setNotificationSent(false);
-    setRequestDetails({
-      description: '',
-      budget: '',
-      location: '',
-      preferredDate: '',
-      contactMethod: 'whatsapp'
-    });
-    setSelectedService(null);
-  };
+const closeModal = () => {
+  setShowRequestModal(false);
+  setNotificationSent(false);
+  setOpeningTabs(false);    
+  setTabsOpened(0);          
+  setTotalTabs(0);           
+  setRequestDetails({
+    description: '',
+    budget: '',
+    location: '',
+    preferredDate: '',
+    contactMethod: 'whatsapp'
+  });
+  setSelectedService(null);
+};
 
   if (loading) {
     return (
@@ -703,25 +731,38 @@ export default function ServicesListComponent() {
                       </p>
                     </div>
                   </div>
-                ) : submittingRequest ? (
-                  <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Loader className="h-5 w-5 text-yellow-600 animate-spin" />
-                      <h4 className="font-medium text-yellow-900">Processing Your Request...</h4>
-                    </div>
-                    <p className="text-sm text-yellow-800">
-                      {requestDetails.contactMethod === 'whatsapp' 
-                        ? `Creating ${selectedService.providerCount} service request(s) and opening WhatsApp tabs...`
-                        : `Creating ${selectedService.providerCount} service request(s) and notifying providers...`
-                      }
-                    </p>
-                    {requestDetails.contactMethod === 'whatsapp' && (
-                      <p className="text-xs text-yellow-700 mt-2">
-                        Please allow popups if prompted
-                      </p>
-                    )}
-                  </div>
-                ) : (
+               ) : submittingRequest ? (
+  <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+    <div className="flex items-center gap-2 mb-2">
+      <Loader className="h-5 w-5 text-yellow-600 animate-spin" />
+      <h4 className="font-medium text-yellow-900">Processing Your Request...</h4>
+    </div>
+    <p className="text-sm text-yellow-800">
+      {requestDetails.contactMethod === 'whatsapp' 
+        ? `Creating ${selectedService.providerCount} service request(s) and preparing WhatsApp notifications...`
+        : `Creating ${selectedService.providerCount} service request(s) and notifying providers...`
+      }
+    </p>
+    {openingTabs && (
+      <div className="mt-2 p-2 bg-yellow-100 rounded">
+        <p className="text-sm text-yellow-900 font-medium">
+          Opening WhatsApp tabs: {tabsOpened} of {totalTabs}
+        </p>
+        <div className="w-full bg-yellow-200 rounded-full h-2 mt-2">
+          <div 
+            className="bg-yellow-600 h-2 rounded-full transition-all duration-300"
+            style={{ width: `${(tabsOpened / totalTabs) * 100}%` }}
+          />
+        </div>
+      </div>
+    )}
+    {requestDetails.contactMethod === 'whatsapp' && !openingTabs && (
+      <p className="text-xs text-yellow-700 mt-2">
+        Please allow popups if prompted
+      </p>
+    )}
+  </div>
+) : (
                   <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
                     <div className="flex items-center gap-2 mb-2">
                       <Bell className="h-5 w-5 text-blue-600" />
@@ -735,10 +776,10 @@ export default function ServicesListComponent() {
                       📋 A separate service request will be created for each provider to ensure proper tracking.
                     </p>
                     {requestDetails.contactMethod === 'whatsapp' && (
-                      <p className="text-sm text-blue-700">
-                        💡 <strong>Note:</strong> Multiple WhatsApp tabs will open - one for each provider. Please allow popups in your browser.
-                      </p>
-                    )}
+  <p className="text-sm text-blue-700">
+    💡 <strong>Note:</strong> Multiple WhatsApp tabs will open sequentially (one every 0.8 seconds). Please allow popups in your browser and wait for all tabs to open.
+  </p>
+)}
                   </div>
                 )}
 

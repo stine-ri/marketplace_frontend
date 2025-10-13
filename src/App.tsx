@@ -132,6 +132,7 @@ function AppContent() {
         <Route path="/services/:id" element={<ServiceIndividualWrapper />} />
           <Route path="/products/:id" element={<ProductIndividualWrapper />} />
    <Route path="/servicesList" element={<ServicesListComponent />} />
+    <Route path="/products" element={<Product />} />
 {/* <Route path="/marketplace/services/:id" element={<ServiceDetails />} />
 <Route path="/marketplace/products/:id" element={<ProductDetails />} /> */}
 
