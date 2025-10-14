@@ -16,18 +16,27 @@ import { ProductManagementSection } from '../NewFeature/ProductManagementSection
 import { useNavigate } from 'react-router-dom';
 import EnhancedProviderProfile from '../NewFeature/ProviderProfile';
 
+
+
 interface ClientRequest extends Request {
   deadline?: string;
   client?: {
     id: number;
     name: string;
     email: string;
+    phone?: string; // ADD THIS LINE
   };
   bids?: Bid[];
   interests?: Interest[];
   allowBids?: boolean;
   allowInterests?: boolean;
   serviceName: string; 
+  // Add the service list properties
+  fromServiceList?: boolean;
+  requestSource?: 'service_list' | 'regular';
+  originalRequestType?: 'service_list' | 'regular';
+  requestType?: 'service_list' | 'regular';
+  _uniqueKey?: string; 
 }
 
 interface ExtendedBid extends Bid {
@@ -286,32 +295,85 @@ const LoadingSpinner = ({ message = "Loading..." }: { message?: string }) => (
 );
 
 function formatLocation(location: any): string {
-  if (!location) return 'Location not provided';
+  console.log('Formatting location:', location, 'Type:', typeof location);
   
-  // Handle the new location object format
+  if (!location) {
+    console.log('Location is null/undefined');
+    return 'Location not provided';
+  }
+  
+  // Handle object format from backend
   if (typeof location === 'object' && location !== null) {
-    if (location.address && location.address !== 'Not specified') {
+    // Check for address first
+    if (location.address && 
+        typeof location.address === 'string' &&
+        location.address !== 'Not specified' && 
+        location.address !== 'Location processing error' &&
+        location.address.trim() !== '' &&
+        location.address !== '{}') {
+      console.log('Using location.address:', location.address);
       return location.address;
     }
     
+    // Try coordinates
     if (location.lat != null && location.lng != null) {
+      console.log('Using coordinates:', location.lat, location.lng);
       return `${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}`;
     }
   }
   
-  // Handle string format (backward compatibility)
+  // Handle string format
   if (typeof location === 'string') {
+    const trimmed = location.trim();
+    console.log('Processing string location:', trimmed);
+    
+    // Check for invalid strings
+    if (trimmed === '' || 
+        trimmed === 'Not specified' || 
+        trimmed === 'Location processing error' ||
+        trimmed === '{}' ||
+        trimmed === 'null' ||
+        trimmed === 'undefined') {
+      console.log('Invalid string location detected');
+      return 'Location not provided';
+    }
+    
+    // Try to parse as JSON
     try {
-      const parsed = JSON.parse(location);
-      return formatLocation(parsed);
+      const parsed = JSON.parse(trimmed);
+      console.log('Successfully parsed location string:', parsed);
+      return formatLocation(parsed); // Recursive call with parsed object
     } catch {
-      return location !== '{}' && location !== 'Not specified' 
-        ? location 
-        : 'Location not provided';
+      // If it's not JSON, treat it as a plain address string
+      console.log('Treating as plain address string:', trimmed);
+      return trimmed;
     }
   }
   
+  console.log('Fallback: Location not provided');
   return 'Location not provided';
+}
+
+// Alternative: Add a helper to display location more elegantly
+function getLocationDisplay(location: any): {
+  display: string;
+  hasCoordinates: boolean;
+  coordinates?: { lat: number; lng: number };
+} {
+  const formatted = formatLocation(location);
+  
+  if (typeof location === 'object' && location?.lat != null && location?.lng != null) {
+    return {
+      display: formatted,
+      hasCoordinates: true,
+      coordinates: { lat: location.lat, lng: location.lng }
+    };
+  }
+  
+  return {
+    display: formatted,
+    hasCoordinates: false
+  };
 }
 
 // Kenya-specific date formatting
@@ -506,68 +568,119 @@ export function ProviderDashboard() {
   }, []);
 
   // Fetch available requests with error handling
-  const fetchAvailableRequests = useCallback(async () => {
-    try {
-      setRequestsError(null);
-      const token = localStorage.getItem('token');
-      if (!token) {
-        toast.error("Please log in again");
-        return;
-      }
+// Replace your fetchAvailableRequests function with this fixed version:
 
-      const params: any = {};
+const fetchAvailableRequests = useCallback(async () => {
+  try {
+    setRequestsError(null);
+    const token = localStorage.getItem('token');
+    if (!token) {
+      toast.error("Please log in again");
+      return;
+    }
+
+    const params: any = {};
+    
+    if (useLocationFilter && userLocation) {
+      params.lat = userLocation.lat;
+      params.lng = userLocation.lng;
+      params.radius = searchRadius;
+    }
+
+    const response = await api.get('/api/provider/requests', {
+      headers: { 
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      params
+    });
+
+    console.log('🔍 Fetched requests:', response.data.length);
+    
+    // Process requests and ensure unique IDs
+    const requestsWithDefaults = response.data.map((request: any, index: number) => {
+      // FIX: Handle location properly - check both 'location' and 'raw_location'
+      let location = request.location || request.raw_location;
       
-      if (useLocationFilter && userLocation) {
-        params.lat = userLocation.lat;
-        params.lng = userLocation.lng;
-        params.radius = searchRadius;
-      }
-
-      const response = await api.get('/api/provider/requests', {
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        params
-      });
-
-      const requestsWithDefaults = response.data.map((request: any) => {
-        let location = request.location;
-        if (typeof location === 'string') {
-          try {
-            location = JSON.parse(location);
-          } catch {
-            console.warn('Failed to parse location string:', location);
+      console.log(`Request ${request.id} raw location:`, location);
+      
+      // Parse location if it's a string
+      if (typeof location === 'string' && location.trim() !== '') {
+        try {
+          // Try to parse as JSON first
+          location = JSON.parse(location);
+          console.log(`Request ${request.id} parsed location:`, location);
+        } catch {
+          // If parsing fails, check if it's already a valid address string
+          if (location !== 'Not specified' && 
+              location !== 'Location processing error' &&
+              location !== '{}') {
+            // Keep the string as is - it's probably a valid address
+            console.log(`Request ${request.id} keeping location as string:`, location);
+          } else {
             location = null;
           }
         }
-        
-        return {
-          ...request,
-          location,
-          serviceName: request.serviceName || request.service?.name || 'Service Request',
-          allowBids: request.allowBids !== false,
-          allowInterests: request.allowInterests !== false
-        };
-      });
-
-      setAvailableRequests(requestsWithDefaults || []);
-    } catch (error) {
-      console.error('Error fetching requests:', error);
-      const errorMessage = error instanceof AxiosError 
-        ? error.response?.data?.message || "Failed to load requests"
-        : "Failed to load available requests";
-      
-      setRequestsError(errorMessage);
-      setAvailableRequests([]);
-      
-      if (error instanceof AxiosError && error.response?.status === 500 && useLocationFilter) {
-        toast.error("Server error - trying without location filter");
-        setUseLocationFilter(false);
-        setUserLocation(null);
       }
+      
+      // Determine request type
+      const isServiceListRequest = request.from_service_list || request.requestSource === 'service_list';
+      
+      // Create a unique key combining ID and source type to prevent conflicts
+      const uniqueKey = isServiceListRequest 
+        ? `service-${request.id}` 
+        : `regular-${request.id}`;
+      
+      return {
+        ...request,
+        _uniqueKey: uniqueKey,
+        location, // This is now properly processed
+        serviceName: request.serviceName || request.service_name || request.service?.name || 'Service Request',
+        allowBids: request.allowBids !== false && request.allow_bids !== false,
+        allowInterests: request.allowInterests !== false && request.allow_interests !== false,
+        fromServiceList: isServiceListRequest,
+        requestType: isServiceListRequest ? 'service_list' : 'regular',
+        client: request.client || (request.user_full_name ? {
+          id: request.user_id,
+          name: request.user_full_name,
+          email: request.user_email,
+          phone: request.user_phone
+        } : null)
+      };
+    });
+
+    // Remove duplicates
+    const seen = new Set();
+    const uniqueRequests = requestsWithDefaults.filter((req: any) => {
+      if (seen.has(req.id)) {
+        console.warn(`Removing duplicate request with ID ${req.id}`);
+        return false;
+      }
+      seen.add(req.id);
+      return true;
+    });
+    
+    console.log('✅ Final request count:', uniqueRequests.length);
+    setAvailableRequests(uniqueRequests);
+    
+  } catch (error) {
+    console.error('Error fetching requests:', error);
+    const errorMessage = error instanceof AxiosError 
+      ? error.response?.data?.message || "Failed to load requests"
+      : "Failed to load available requests";
+    
+    setRequestsError(errorMessage);
+    setAvailableRequests([]);
+    
+    if (error instanceof AxiosError && error.response?.status === 500 && useLocationFilter) {
+      toast.error("Server error - trying without location filter");
+      setUseLocationFilter(false);
+      setUserLocation(null);
     }
-  }, [userLocation, searchRadius, useLocationFilter]);
+  }
+}, [userLocation, searchRadius, useLocationFilter]);
+
+
 
   const enableLocationFilter = useCallback(async () => {
     try {
@@ -746,41 +859,170 @@ const sendChatMessage = useCallback(async () => {
   }, [fetchAvailableRequests, fetchMyBids, fetchMyInterests]);
 
   // WebSocket message handling
-  useEffect(() => {
-    if (!lastMessage) return;
 
-    try {
-      let data;
+useEffect(() => {
+  if (!lastMessage) return;
+
+  try {
+    let data;
+    
+    // Handle different message formats
+    if (typeof lastMessage === 'object' && lastMessage.data) {
+      // MessageEvent object with data property
       if (typeof lastMessage.data === 'string') {
-        data = JSON.parse(lastMessage.data);
+        try {
+          data = JSON.parse(lastMessage.data);
+        } catch (parseError) {
+          console.warn('Failed to parse WebSocket message as JSON:', lastMessage.data);
+          return;
+        }
       } else {
         data = lastMessage.data;
       }
-
-      if (data.type === 'new_request') {
-        setAvailableRequests(prev => [data.request, ...prev]);
-      } else if (data.type === 'bid_accepted' || data.type === 'bid_rejected') {
-        setMyBids(prev => prev.map(bid => 
-          bid.id === data.bidId ? { ...bid, status: data.status } : bid
-        ));
-      } else if (data.type === 'bid_status_updated') {
-        setMyBids(prev => prev.map(bid => 
-          bid.id === data.bidId ? { 
-            ...bid, 
-            status: data.status,
-            canEdit: data.status === 'pending' && !bid.request?.status?.includes('closed'),
-            canWithdraw: ['pending', 'accepted'].includes(data.status) && !bid.request?.status?.includes('closed')
-          } : bid
-        ));
-      } else if (data.type === 'new_message') {
-        if (currentChatRoom && currentChatRoom.id === data.roomId) {
-          setChatMessages(prev => [...prev, data.message]);
-        }
+    } else if (typeof lastMessage === 'string') {
+      // Raw string message
+      try {
+        data = JSON.parse(lastMessage);
+      } catch (parseError) {
+        console.warn('Failed to parse raw WebSocket message as JSON:', lastMessage);
+        return;
       }
-    } catch (error) {
-      console.error('WebSocket error:', error);
+    } else {
+      // Direct object or other format
+      data = lastMessage;
     }
-  }, [lastMessage, currentChatRoom]);
+
+    // Handle connection established message
+    if (data.type === 'connection_established') {
+      console.log('✅ WebSocket connection established');
+      return;
+    }
+
+    // Check if data has type property before processing
+    if (!data || typeof data !== 'object') {
+      console.warn('⚠️ WebSocket message invalid format:', data);
+      return;
+    }
+
+    // Handle user data message (the one causing the warning)
+    if (data.userId && data.role && !data.type) {
+      console.log('👤 User data received from WebSocket:', data);
+      // You can use this user data if needed, but it doesn't require UI updates
+      return;
+    }
+
+    // Check if data has type property for message processing
+    if (!data.type) {
+      console.warn('⚠️ WebSocket message missing type:', data);
+      return;
+    }
+
+    console.log('📨 Processing WebSocket message:', data);
+
+    // Handle different message types
+    switch (data.type) {
+      case 'new_request':
+        if (data.request) {
+          setAvailableRequests(prev => {
+            // Check for duplicates before adding
+            const exists = prev.some(req => req.id === data.request.id);
+            if (exists) {
+              console.log('🔄 Skipping duplicate request:', data.request.id);
+              return prev;
+            }
+            return [data.request, ...prev];
+          });
+        }
+        break;
+        
+      case 'bid_accepted':
+      case 'bid_rejected':
+        if (data.bidId && data.status) {
+          setMyBids(prev => prev.map(bid => 
+            bid.id === data.bidId ? { ...bid, status: data.status } : bid
+          ));
+          
+          // Show toast notification
+          if (data.type === 'bid_accepted') {
+            toast.success('🎉 Your bid was accepted!');
+          } else {
+            toast.info('Your bid was declined');
+          }
+        }
+        break;
+        
+      case 'bid_status_updated':
+        if (data.bidId && data.status) {
+          setMyBids(prev => prev.map(bid => 
+            bid.id === data.bidId ? { 
+              ...bid, 
+              status: data.status,
+              canEdit: data.status === 'pending' && !bid.request?.status?.includes('closed'),
+              canWithdraw: ['pending', 'accepted'].includes(data.status) && !bid.request?.status?.includes('closed')
+            } : bid
+          ));
+        }
+        break;
+        
+      case 'new_message':
+        if (data.roomId && data.message) {
+          // If we're in the current chat room, add the message
+          if (currentChatRoom && currentChatRoom.id === data.roomId) {
+            setChatMessages(prev => {
+              // Check for duplicate messages
+              const exists = prev.some(msg => msg.id === data.message.id);
+              return exists ? prev : [...prev, data.message];
+            });
+          }
+          
+          // Show notification for new messages in other rooms
+          if (!currentChatRoom || currentChatRoom.id !== data.roomId) {
+            toast.info('💬 New message received');
+          }
+        }
+        break;
+        
+      case 'interest_created':
+      case 'interest_updated':
+        if (data.interest) {
+          // Use setTimeout to avoid potential race conditions
+          setTimeout(() => {
+            fetchMyInterests();
+            fetchAvailableRequests();
+          }, 100);
+        }
+        break;
+
+      case 'request_status_updated':
+        if (data.requestId && data.status) {
+          setAvailableRequests(prev => prev.map(req =>
+            req.id === data.requestId ? { ...req, status: data.status } : req
+          ));
+        }
+        break;
+
+      case 'request_cancelled':
+        if (data.requestId) {
+          setAvailableRequests(prev => prev.filter(req => req.id !== data.requestId));
+          toast.info('A request you were interested in was cancelled');
+        }
+        break;
+
+      case 'initial_notifications':
+        console.log('📋 Initial notifications loaded:', data.data?.length || 0);
+        break;
+
+      case 'auth_success':
+        console.log('🔐 WebSocket authentication successful');
+        break;
+        
+      default:
+        console.log('ℹ️ Unhandled WebSocket message type:', data.type, data);
+    }
+  } catch (error) {
+    console.error('💥 WebSocket error:', error, 'Message:', lastMessage);
+  }
+}, [lastMessage, currentChatRoom, fetchMyInterests, fetchAvailableRequests]);
   
 const handleExpressInterest = async (requestId: number) => {
   try {
@@ -1212,71 +1454,72 @@ const handleExpressInterest = async (requestId: number) => {
     );
   };
 
-  const renderRequestActions = (request: ClientRequest) => {
-    if (!providerId) {
-      console.warn('No providerId available');
-      return null;
-    }
+const renderRequestActions = (request: ClientRequest) => {
+  if (!providerId) {
+    console.warn('No providerId available');
+    return null;
+  }
 
-    const hasBid = hasAlreadyBid(request.id);
-    
-    const hasInterest = 
-      request.interests?.some(i => 
-        Number(i.providerId) === Number(providerId)
-      ) ||
-      myInterests.some(i => 
-        i.requestId === request.id && Number(i.providerId) === Number(providerId)
-      ) ||
-      false;
-    
-    const allowBids = request.allowBids !== false;
-    const allowInterests = request.allowInterests !== false;
-    
-    return (
-      <div className="flex flex-col gap-2 min-w-[120px]">
-        {allowBids && (
-          <button
-            onClick={() => handleBidOnRequest(request)}
-            disabled={hasBid}
-            className={`flex items-center justify-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-              hasBid
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
-                : 'bg-indigo-600 text-white hover:bg-indigo-700'
-            }`}
-          >
-            <CurrencyDollarIcon className="h-4 w-4 mr-1" />
-            {hasBid ? 'Bid Placed' : 'Place Bid'}
-          </button>
-        )}
-        
-        {allowInterests && (
-          <button
-            onClick={() => handleExpressInterest(request.id)}
-            disabled={hasInterest}
-            className={`flex items-center justify-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-              hasInterest
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
-                : 'bg-green-600 text-white hover:bg-green-700'
-            }`}
-          >
-            <HandThumbUpIcon className="h-4 w-4 mr-1" />
-            {hasInterest ? 'Interest Shown' : 'Express Interest'}
-          </button>
-        )}
-        
+  const hasBid = hasAlreadyBid(request.id);
+  
+  const hasInterest = 
+    request.interests?.some(i => 
+      Number(i.providerId) === Number(providerId)
+    ) ||
+    myInterests.some(i => 
+      i.requestId === request.id && Number(i.providerId) === Number(providerId)
+    ) ||
+    false;
+  
+  const allowBids = request.allowBids !== false;
+  const allowInterests = request.allowInterests !== false;
+  
+  return (
+    <div className="flex flex-col gap-2 min-w-[120px]">
+      {allowBids && (
         <button
-          onClick={() => {
-            setSelectedRequest(request);
-            setShowDetailsModal(true);
-          }}
-          className="flex items-center justify-center px-3 py-2 bg-gray-100 text-gray-700 rounded-md text-sm font-medium hover:bg-gray-200 transition-colors"
+          onClick={() => handleBidOnRequest(request)}
+          disabled={hasBid}
+          className={`flex items-center justify-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+            hasBid
+              ? 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
+              : 'bg-indigo-600 text-white hover:bg-indigo-700'
+          }`}
         >
-          <EyeIcon className="h-4 w-4 mr-1" />
-          View Details
+          <CurrencyDollarIcon className="h-4 w-4 mr-1" />
+          {hasBid ? 'Bid Placed' : 'Place Bid'}
         </button>
-      </div>
-    );
-  };
+      )}
+      
+      {allowInterests && (
+        <button
+          onClick={() => handleExpressInterest(request.id)}
+          disabled={hasInterest}
+          className={`flex items-center justify-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+            hasInterest
+              ? 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
+              : 'bg-green-600 text-white hover:bg-green-700'
+          }`}
+        >
+          <HandThumbUpIcon className="h-4 w-4 mr-1" />
+          {hasInterest ? 'Interest Shown' : 'Express Interest'}
+        </button>
+      )}
+      
+      <button
+        onClick={() => {
+          setSelectedRequest(request);
+          setShowDetailsModal(true);
+        }}
+        className="flex items-center justify-center px-3 py-2 bg-gray-100 text-gray-700 rounded-md text-sm font-medium hover:bg-gray-200 transition-colors"
+      >
+        <EyeIcon className="h-4 w-4 mr-1" />
+        View Details
+      </button>
+    </div>
+  );
+};
+
 
   const getDisplayName = (party: User | ProviderProfile | undefined): string => {
   if (!party) return 'Unknown User';
@@ -1704,75 +1947,98 @@ const handleExpressInterest = async (requestId: number) => {
                       </div>
                     ) : (
                       <div className="space-y-4">
-                        {availableRequests.map((request) => (
-                          <div key={request.id} className="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow">
-                            <div className="flex flex-col sm:flex-row justify-between gap-4">
-                              <div className="flex-1">
-                                <div className="flex items-start justify-between mb-2">
-                                  <h3 className="text-lg font-semibold text-gray-800">
-                                    {request.serviceName || 'Service Request'}
-                                  </h3>
-                                  {isRequestRelevant(request) && (
-                                    <span className="ml-2 px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
-                                      Relevant
-                                    </span>
-                                  )}
-                                </div>
+      {availableRequests.map((request) => (
+  <div 
+    key={request._uniqueKey || `request-${request.id}-${request.createdAt}`} 
+    className={`bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow ${
+      request.fromServiceList ? 'border-l-4 border-l-green-500' : ''
+    }`}
+  >
+    <div className="flex flex-col sm:flex-row justify-between gap-4">
+      <div className="flex-1">
+        <div className="flex items-start justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <h3 className="text-lg font-semibold text-gray-800">
+              {request.serviceName || 'Service Request'}
+            </h3>
+            {request.fromServiceList && (
+              <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                From Service List
+              </span>
+            )}
+            {isRequestRelevant(request) && (
+              <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                Relevant
+              </span>
+            )}
+          </div>
+        </div>
 
-                                <p className="text-gray-600 mb-3 line-clamp-2">{request.description}</p>
+        <p className="text-gray-600 mb-3 line-clamp-2">{request.description}</p>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-                                  <div className="flex items-center">
-                                    <CurrencyDollarIcon className="h-4 w-4 mr-1 text-gray-500 flex-shrink-0" />
-                                    <span>
-                                      Budget: KSh {request.budget?.toLocaleString() || request.desired_price?.toLocaleString() || 'Negotiable'}
-                                    </span>
-                                  </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+          <div className="flex items-center">
+            <CurrencyDollarIcon className="h-4 w-4 mr-1 text-gray-500 flex-shrink-0" />
+            <span>
+              Budget: KSh {request.budget?.toLocaleString() || request.desired_price?.toLocaleString() || 'Negotiable'}
+            </span>
+          </div>
 
-                                  <div className="flex items-center">
-                                    <MapPinIcon className="h-4 w-4 mr-1 text-gray-500 flex-shrink-0" />
-                                    <span className="truncate">Location: {formatLocation(request.location)}</span>
-                                  </div>
+          <div className="flex items-center">
+            <MapPinIcon className="h-4 w-4 mr-1 text-gray-500 flex-shrink-0" />
+            <span className="truncate">Location: {formatLocation(request.location)}</span>
+          </div>
 
-                                  <div className="flex items-center">
-                                    <CalendarIcon className="h-4 w-4 mr-1 text-gray-500 flex-shrink-0" />
-                                    <span title={formatDate(request.createdAt)}>
-                                      {formatRelativeTime(request.createdAt)}
-                                    </span>
-                                  </div>
+          <div className="flex items-center">
+            <CalendarIcon className="h-4 w-4 mr-1 text-gray-500 flex-shrink-0" />
+            <span title={formatDate(request.createdAt)}>
+              {formatRelativeTime(request.createdAt)}
+            </span>
+          </div>
 
-                                  {request.deadline && (
-                                    <div className="flex items-center">
-                                      <ClockIcon className="h-4 w-4 mr-1 text-gray-500 flex-shrink-0" />
-                                      <span title={formatDate(request.deadline)} className="truncate">
-                                        Deadline: {formatRelativeTime(request.deadline)}
-                                        {new Date(request.deadline) < new Date() && (
-                                          <span className="ml-1 text-red-600 text-xs">(Expired)</span>
-                                        )}
-                                      </span>
-                                    </div>
-                                  )}
-                                </div>
+          {request.deadline && (
+            <div className="flex items-center">
+              <ClockIcon className="h-4 w-4 mr-1 text-gray-500 flex-shrink-0" />
+              <span title={formatDate(request.deadline)} className="truncate">
+                {request.fromServiceList ? 'Preferred: ' : 'Deadline: '}
+                {formatRelativeTime(request.deadline)}
+                {new Date(request.deadline) < new Date() && (
+                  <span className="ml-1 text-red-600 text-xs">(Expired)</span>
+                )}
+              </span>
+            </div>
+          )}
+        </div>
 
-                                <div className="mt-3 flex items-center space-x-4 text-sm text-gray-500">
-                                  {request.bids && request.bids.length > 0 && (
-                                    <span className="text-blue-600">
-                                      {request.bids.length} {request.bids.length === 1 ? 'bid' : 'bids'}
-                                    </span>
-                                  )}
-                                  {request.interests && request.interests.length > 0 && (
-                                    <span className="text-green-600">
-                                      {request.interests.length} interested
-                                    </span>
-                                  )}
-                                  <span className="capitalize">{request.status || 'Open'}</span>
-                                </div>
-                              </div>
+        {request.client && (
+          <div className="mt-2 text-sm text-gray-500">
+            Client: {request.client.name}
+            {request.client.phone && ` • ${request.client.phone}`}
+          </div>
+        )}
 
-                              {renderRequestActions(request)}
-                            </div>
-                          </div>
-                        ))}
+        <div className="mt-3 flex items-center space-x-4 text-sm text-gray-500">
+          {request.bids && request.bids.length > 0 && (
+            <span className="text-blue-600">
+              {request.bids.length} {request.bids.length === 1 ? 'bid' : 'bids'}
+            </span>
+          )}
+          {request.interests && request.interests.length > 0 && (
+            <span className="text-green-600">
+              {request.interests.length} interested
+            </span>
+          )}
+          <span className="capitalize">{request.status || 'Open'}</span>
+          {request.fromServiceList && (
+            <span className="text-green-600 font-medium">Direct Request</span>
+          )}
+        </div>
+      </div>
+
+      {renderRequestActions(request)}
+    </div>
+  </div>
+))}
                       </div>
                     )}
                   </div>

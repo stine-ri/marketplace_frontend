@@ -126,7 +126,33 @@ function AppContent() {
         <Route path="/help" element={<Help/>} />
         <Route path="/become-seller" element={<Seller/>} />
           <Route path="/products/:id" element={<ProductIndividualWrapper />} />
-        <Route path="/chat/:chatRoomId" element={<ChatWindow />} />
+        
+        {/* Add this route for the chat list */}
+        <Route 
+          path="/chat" 
+          element={
+            <ProtectedRoute>
+              <div className="flex h-screen">
+                <ChatList />
+                <div className="flex-1 flex items-center justify-center bg-gray-50">
+                  <div className="text-center text-gray-500">
+                    <div className="text-4xl mb-2">💬</div>
+                    <p>Select a chat to start messaging</p>
+                  </div>
+                </div>
+              </div>
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route path="/chat/:chatRoomId" element={
+          <ProtectedRoute>
+            <div className="flex h-screen">
+              <ChatList />
+              <ChatWindow />
+            </div>
+          </ProtectedRoute>
+        } />
         <Route path="/products/:id" element={<ProductDetail />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/services/:id" element={<ServiceIndividualWrapper />} />

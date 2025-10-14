@@ -62,8 +62,8 @@ export interface Request {
   description?: string;
   desiredPrice: number;
   title: string;
-  budget: number; // ✅ Add this
-  category: string; // ✅ Add this
+  budget: number; 
+  category: string; 
   location: string | Location;
   latitude?: number;
   longitude?: number;
@@ -85,12 +85,34 @@ export interface Request {
     id: number;
     name: string;
   };
+   // Add these new properties for service list requests
+  fromServiceList?: boolean;
+  requestSource?: 'service_list' | 'regular';
+  originalRequestType?: 'service_list' | 'regular';
+  requestType?: 'service_list' | 'regular';
+  // Add client info for service list requests
+  client?: {
+    id: number;
+    name: string;
+    email: string;
+    phone?: string;
+  };
 }
 
 // Only used where backend sends snake_case fields
 export interface ClientRequest extends Request {
   desired_price: number; // override for use in components that consume backend directly
-   
+   // Ensure these properties are inherited from Request
+  fromServiceList?: boolean;
+  requestSource?: 'service_list' | 'regular';
+  originalRequestType?: 'service_list' | 'regular';
+  requestType?: 'service_list' | 'regular';
+  client?: {
+    id: number;
+    name: string;
+    email: string;
+    phone?: string;
+  };
 }
 export interface Bid {
   id: number;

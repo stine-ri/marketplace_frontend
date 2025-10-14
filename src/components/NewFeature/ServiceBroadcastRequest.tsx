@@ -41,18 +41,14 @@ export default function ServicesListComponent() {
     budget: '',
     location: '',
     preferredDate: '',
-    contactMethod: 'whatsapp' as 'whatsapp' | 'call' | 'sms'
+    contactMethod: 'sms' as 'call' | 'sms'
   });
-const [submittingRequest, setSubmittingRequest] = useState(false);
-const [notificationSent, setNotificationSent] = useState(false);
-const [openingTabs, setOpeningTabs] = useState(false);          // NEW LINE
-const [tabsOpened, setTabsOpened] = useState(0);                // NEW LINE
-const [totalTabs, setTotalTabs] = useState(0);                  // NEW LINE
-const [searchQuery, setSearchQuery] = useState('');
+  const [submittingRequest, setSubmittingRequest] = useState(false);
+  const [notificationSent, setNotificationSent] = useState(false);
+  const [notificationResult, setNotificationResult] = useState<any>(null); // NEW: Store the result
+  const [searchQuery, setSearchQuery] = useState('');
   const [filterRating, setFilterRating] = useState(0);
   const [sortBy, setSortBy] = useState('popular');
-
-
 
   // Helper function to get auth headers
   const getAuthHeaders = () => {
@@ -124,132 +120,28 @@ const [searchQuery, setSearchQuery] = useState('');
     }
     setSelectedService(service);
     setShowRequestModal(true);
+    setNotificationResult(null); // Reset previous results
   };
 
-  // Enhanced WhatsApp notification with authentication
-  const sendWhatsAppNotificationsToAllProviders = async (service: ServiceWithProviders, requestDetails: any) => {
+  // SMS notification to all providers using QuickSMS
+  const sendSMSNotificationsToAllProviders = async (service: ServiceWithProviders, requestDetails: any) => {
     try {
       if (!service.providers || service.providers.length === 0) {
         throw new Error('No providers available for this service');
       }
 
-      // Get client info from auth context - use the 'id' field which is the primary user_id
-      const clientName = user?.full_name || 'Client';
-      const clientPhone = user?.contact_phone || 'Not provided';
-      const clientUserId = user?.id; // This is the user_id from the users table
-
-      console.log('Client info from auth:', { 
-        clientName, 
-        clientPhone, 
-        clientUserId,
-        fullUser: user 
-      });
-
-      const requestPayload = {
-        serviceId: service.id,
-        clientInfo: {
-          name: clientName,
-          phone: clientPhone,
-          userId: clientUserId
-        },
-        requestDetails: requestDetails
-      };
-
-      console.log('Sending WhatsApp request with payload:', requestPayload);
-
-      const response = await fetch(`${API_BASE_URL}/api/services/whatsapp-urls`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(requestPayload)
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Failed to generate WhatsApp URLs: ${response.status} - ${errorText}`);
-      }
-
-      const data = await response.json();
-
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to generate WhatsApp URLs');
-      }
-
-      console.log('WhatsApp URLs response:', data);
-      console.log('Full WhatsApp message to be sent:', data.message);
-
-    // Open WhatsApp URLs in new tabs with improved timing
-if (data.urls && data.urls.length > 0) {
-  console.log(`Opening ${data.urls.length} WhatsApp tab(s)...`);
-  setOpeningTabs(true);
-  setTotalTabs(data.urls.length);
-  setTabsOpened(0);
-  
-  const openWhatsAppTabs = async () => {
-    for (let i = 0; i < data.urls.length; i++) {
-      const urlInfo = data.urls[i];
-      
-      if (urlInfo.url && urlInfo.isValid) {
-        console.log(`Opening WhatsApp for provider ${i + 1}/${data.urls.length}:`, {
-          phone: urlInfo.phoneNumber,
-          url: urlInfo.url.substring(0, 100) + '...'
-        });
-        
-        const newWindow = window.open(urlInfo.url, '_blank', 'noopener,noreferrer');
-        
-        if (!newWindow) {
-          console.warn(`Failed to open WhatsApp tab for ${urlInfo.phoneNumber}. Check popup blocker.`);
-        } else {
-          console.log(`✅ Successfully opened WhatsApp for ${urlInfo.phoneNumber}`);
-        }
-        
-        setTabsOpened(i + 1);
-        
-        // Wait 800ms between each tab to avoid popup blocker
-        if (i < data.urls.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 800));
-        }
-      } else {
-        console.warn(`Invalid WhatsApp URL for provider:`, urlInfo);
-      }
-    }
-    
-    console.log(`✅ Finished opening ${data.urls.length} WhatsApp tabs`);
-    setOpeningTabs(false);
-  };
-  
-  openWhatsAppTabs();
-} else {
-  console.warn('No valid WhatsApp URLs generated');
-}
-
-      return {
-        success: true,
-        totalProviders: data.totalProviders,
-        validProviders: data.validProviders,
-        urls: data.urls
-      };
-
-    } catch (error) {
-      console.error('Error sending WhatsApp notifications:', error);
-      throw error;
-    }
-  };
-
-  // Enhanced batch notification through backend with authentication
-  const sendBatchNotificationThroughBackend = async (service: ServiceWithProviders, requestDetails: any) => {
-    try {
       // Get client info from auth context
       const clientName = user?.full_name || 'Client';
       const clientPhone = user?.contact_phone || 'Not provided';
-      const clientUserId = user?.id; // This is the user_id from the users table
+      const clientUserId = user?.id;
 
-      console.log('Batch notification - Client info from auth:', { 
+      console.log('Client info for SMS:', { 
         clientName, 
         clientPhone, 
-        clientUserId 
+        clientUserId
       });
 
-      const notificationData = {
+      const requestPayload = {
         serviceId: service.id,
         serviceName: service.name,
         clientInfo: {
@@ -266,25 +158,31 @@ if (data.urls && data.urls.length > 0) {
         }
       };
 
-      console.log('Sending batch notification with data:', notificationData);
+      console.log('Sending SMS request with payload:', requestPayload);
 
-      const response = await fetch(`${API_BASE_URL}/api/services/notify/batch-enhanced`, {
+      // Use the SMS batch notification endpoint
+      const response = await fetch(`${API_BASE_URL}/api/services/notify/batch-sms`, {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify(notificationData)
+        body: JSON.stringify(requestPayload)
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Failed to send batch notification: ${response.status} - ${errorText}`);
+        throw new Error(`Failed to send SMS: ${response.status} - ${errorText}`);
       }
 
-      const result = await response.json();
-      console.log('Enhanced batch notification result:', result);
-      return result;
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to send SMS notifications');
+      }
+
+      console.log('SMS notification result:', data);
+      return data;
 
     } catch (error) {
-      console.error('Error sending batch notification:', error);
+      console.error('Error sending SMS notifications:', error);
       throw error;
     }
   };
@@ -301,7 +199,6 @@ if (data.urls && data.urls.length > 0) {
       return;
     }
 
-    // Verify user has required info
     if (!user.full_name || !user.contact_phone) {
       alert('Please complete your profile with your name and phone number before requesting services');
       return;
@@ -316,54 +213,74 @@ if (data.urls && data.urls.length > 0) {
     setSubmittingRequest(true);
 
     try {
-      let notificationResult;
+      const result = await sendSMSNotificationsToAllProviders(selectedService, requestDetails);
 
-      // The batch-enhanced endpoint now creates the service request
-      // So we don't need a separate createServiceRequest call
-      if (requestDetails.contactMethod === 'whatsapp') {
-        // For WhatsApp, we still want to open the tabs
-        console.log('Opening WhatsApp tabs for providers...');
-        notificationResult = await sendWhatsAppNotificationsToAllProviders(selectedService, requestDetails);
-        console.log('WhatsApp URLs generated:', notificationResult);
-        
-        // But also save to database via backend
-        const backendResult = await sendBatchNotificationThroughBackend(selectedService, requestDetails);
-        console.log('Backend notification sent:', backendResult);
-      } else {
-        // For other methods, just use backend
-        notificationResult = await sendBatchNotificationThroughBackend(selectedService, requestDetails);
-      }
-
+      // Store the result for display
+      setNotificationResult(result);
       setNotificationSent(true);
       setSubmittingRequest(false);
 
+      console.log('Full SMS notification result:', result);
+
+      // Calculate SMS delivery stats
+      const smsResults = result?.smsResults || [];
+      const successfulSMS = smsResults.filter((result: any) => result.success).length;
+      const failedSMS = smsResults.filter((result: any) => !result.success).length;
+      const totalProviders = result?.totalProviders || selectedService.providerCount;
+      
+      console.log('SMS Delivery Summary:', {
+        successful: successfulSMS,
+        failed: failedSMS,
+        total: totalProviders,
+        percentage: totalProviders > 0 ? Math.round((successfulSMS / totalProviders) * 100) : 0
+      });
+
+      // Log detailed results
+      if (successfulSMS > 0) {
+        console.log('🎉 SMS notifications delivered successfully!');
+        const successfulProviders = smsResults
+          .filter((r: any) => r.success)
+          .map((r: any) => r.providerName || r.phoneNumber);
+        console.log('✅ Successful deliveries to:', successfulProviders);
+      }
+
+      if (failedSMS > 0) {
+        console.warn('⚠️ Some SMS failed to send:', {
+          failedCount: failedSMS,
+          failedDetails: smsResults
+            .filter((result: any) => !result.success)
+            .map((result: any) => ({
+              provider: result.providerName || result.phoneNumber,
+              error: result.error
+            }))
+        });
+      }
+
       console.log('Service request completed:', {
         service: selectedService.name,
-        providersNotified: notificationResult?.totalProviders || selectedService.providerCount,
-        contactMethod: requestDetails.contactMethod
+        providersNotified: successfulSMS,
+        providersFailed: failedSMS,
+        totalProviders: totalProviders
       });
 
       // Reset after 3 seconds
-    // Reset after 3 seconds
-setTimeout(() => {
-  setShowRequestModal(false);
-  setNotificationSent(false);
-  setOpeningTabs(false);     
-  setTabsOpened(0);          
-  setTotalTabs(0);          
-  setRequestDetails({
-    description: '',
-    budget: '',
-    location: '',
-    preferredDate: '',
-    contactMethod: 'whatsapp'
-  });
-  setSelectedService(null);
-}, 3000);
+      setTimeout(() => {
+        setShowRequestModal(false);
+        setNotificationSent(false);
+        setNotificationResult(null);
+        setRequestDetails({
+          description: '',
+          budget: '',
+          location: '',
+          preferredDate: '',
+          contactMethod: 'sms'
+        });
+        setSelectedService(null);
+      }, 3000);
 
     } catch (error) {
       console.error('Error submitting request:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to send notifications';
+      const errorMessage = error instanceof Error ? error.message : 'Failed to send SMS notifications';
       alert(`Error: ${errorMessage}`);
       setSubmittingRequest(false);
     }
@@ -392,21 +309,19 @@ setTimeout(() => {
       return 0;
     });
 
-const closeModal = () => {
-  setShowRequestModal(false);
-  setNotificationSent(false);
-  setOpeningTabs(false);    
-  setTabsOpened(0);          
-  setTotalTabs(0);           
-  setRequestDetails({
-    description: '',
-    budget: '',
-    location: '',
-    preferredDate: '',
-    contactMethod: 'whatsapp'
-  });
-  setSelectedService(null);
-};
+  const closeModal = () => {
+    setShowRequestModal(false);
+    setNotificationSent(false);
+    setNotificationResult(null);
+    setRequestDetails({
+      description: '',
+      budget: '',
+      location: '',
+      preferredDate: '',
+      contactMethod: 'sms'
+    });
+    setSelectedService(null);
+  };
 
   if (loading) {
     return (
@@ -681,13 +596,12 @@ const closeModal = () => {
 
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Preferred Contact Method
+                    Contact Method
                   </label>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 gap-3">
                     {[
-                      { value: 'whatsapp', label: 'WhatsApp', icon: '💬' },
-                      { value: 'call', label: 'Call', icon: '📞' },
-                      { value: 'sms', label: 'SMS', icon: '📧' }
+                      { value: 'sms', label: 'SMS', icon: '📧' },
+                      { value: 'call', label: 'Call', icon: '📞' }
                     ].map(method => (
                       <button
                         key={method.value}
@@ -712,15 +626,33 @@ const closeModal = () => {
                       <CheckCircle className="h-5 w-5 text-green-600" />
                       <h4 className="font-medium text-green-900">Request Sent Successfully!</h4>
                     </div>
-                    <p className="text-sm text-green-800 mb-2">
-                      ✅ Your request has been sent to <strong>{selectedService.providerCount} provider(s)</strong>
-                      {requestDetails.contactMethod === 'whatsapp' && ' via WhatsApp'}
+                    
+                    {/* UPDATED: Show actual SMS delivery status */}
+                    {notificationResult?.successfulSMS > 0 ? (
+                      <>
+                        <p className="text-sm text-green-800 mb-2">
+                          ✅ SMS notifications sent to <strong>{notificationResult.successfulSMS}/{notificationResult.totalProviders} provider(s)</strong>
+                        </p>
+                        <p className="text-sm text-green-700 mb-2">
+                          📱 Providers have been notified and will contact you soon
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm text-yellow-800 mb-2">
+                          ⚠️ <strong>Service request created but SMS delivery failed</strong>
+                        </p>
+                        <p className="text-sm text-yellow-700 mb-2">
+                          Your request has been saved but we couldn't send SMS notifications. Providers will still see your request in their dashboard.
+                        </p>
+                      </>
+                    )}
+                    
+                    <p className="text-sm text-green-700 mb-2">
+                      📝 Service requests created for each provider
                     </p>
                     <p className="text-sm text-green-700 mb-2">
-                      📝 A separate service request has been created for each provider
-                    </p>
-                    <p className="text-sm text-green-700 mb-2">
-                      📱 Providers will contact you at: <strong>{user?.contact_phone}</strong>
+                      📞 Providers will contact you at: <strong>{user?.contact_phone}</strong>
                     </p>
                     <div className="mt-3 pt-3 border-t border-green-200">
                       <p className="text-xs text-green-600">
@@ -731,55 +663,31 @@ const closeModal = () => {
                       </p>
                     </div>
                   </div>
-               ) : submittingRequest ? (
-  <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-    <div className="flex items-center gap-2 mb-2">
-      <Loader className="h-5 w-5 text-yellow-600 animate-spin" />
-      <h4 className="font-medium text-yellow-900">Processing Your Request...</h4>
-    </div>
-    <p className="text-sm text-yellow-800">
-      {requestDetails.contactMethod === 'whatsapp' 
-        ? `Creating ${selectedService.providerCount} service request(s) and preparing WhatsApp notifications...`
-        : `Creating ${selectedService.providerCount} service request(s) and notifying providers...`
-      }
-    </p>
-    {openingTabs && (
-      <div className="mt-2 p-2 bg-yellow-100 rounded">
-        <p className="text-sm text-yellow-900 font-medium">
-          Opening WhatsApp tabs: {tabsOpened} of {totalTabs}
-        </p>
-        <div className="w-full bg-yellow-200 rounded-full h-2 mt-2">
-          <div 
-            className="bg-yellow-600 h-2 rounded-full transition-all duration-300"
-            style={{ width: `${(tabsOpened / totalTabs) * 100}%` }}
-          />
-        </div>
-      </div>
-    )}
-    {requestDetails.contactMethod === 'whatsapp' && !openingTabs && (
-      <p className="text-xs text-yellow-700 mt-2">
-        Please allow popups if prompted
-      </p>
-    )}
-  </div>
-) : (
+                ) : submittingRequest ? (
+                  <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Loader className="h-5 w-5 text-yellow-600 animate-spin" />
+                      <h4 className="font-medium text-yellow-900">Sending SMS Notifications...</h4>
+                    </div>
+                    <p className="text-sm text-yellow-800">
+                      Creating {selectedService.providerCount} service request(s) and sending SMS to providers via QuickSMS...
+                    </p>
+                  </div>
+                ) : (
                   <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
                     <div className="flex items-center gap-2 mb-2">
                       <Bell className="h-5 w-5 text-blue-600" />
-                      <h4 className="font-medium text-blue-900">All Providers Will Be Notified</h4>
+                      <h4 className="font-medium text-blue-900">All Providers Will Be Notified via SMS</h4>
                     </div>
                     <p className="text-sm text-blue-800 mb-2">
-                      {selectedService.providerCount} provider(s) offering "{selectedService.name}" will receive your request 
-                      {requestDetails.contactMethod === 'whatsapp' && ' via WhatsApp'}.
+                      {selectedService.providerCount} provider(s) offering "{selectedService.name}" will receive your request via SMS.
                     </p>
                     <p className="text-sm text-blue-700 mb-2">
                       📋 A separate service request will be created for each provider to ensure proper tracking.
                     </p>
-                    {requestDetails.contactMethod === 'whatsapp' && (
-  <p className="text-sm text-blue-700">
-    💡 <strong>Note:</strong> Multiple WhatsApp tabs will open sequentially (one every 0.8 seconds). Please allow popups in your browser and wait for all tabs to open.
-  </p>
-)}
+                    <p className="text-sm text-blue-700">
+                      💡 <strong>Note:</strong> SMS will be sent automatically using QuickSMS - no browser tabs will open.
+                    </p>
                   </div>
                 )}
 
@@ -791,17 +699,15 @@ const closeModal = () => {
                   {submittingRequest ? (
                     <>
                       <Loader className="h-4 w-4 animate-spin" />
-                      Processing Request...
+                      Sending SMS Notifications...
                     </>
                   ) : notificationSent ? (
                     <>
                       <CheckCircle className="h-4 w-4" />
                       Request Sent!
                     </>
-                  ) : requestDetails.contactMethod === 'whatsapp' ? (
-                    `Notify ${selectedService.providerCount} Providers via WhatsApp`
                   ) : (
-                    `Send Request to ${selectedService.providerCount} Providers`
+                    `Send Request to ${selectedService.providerCount} Providers via SMS`
                   )}
                 </button>
               </div>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Notification } from '../types/types';
-import type { ServiceRequest, WebSocketMessage } from '../types/types'; // Import the types
+import type { ServiceRequest, WebSocketMessage } from '../types/types';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 
@@ -44,94 +44,115 @@ export default function useWebSocket(userId?: number) {
   const handleMessage = useCallback((event: MessageEvent) => {
     try {
       let rawData = event.data;
-      let parsed: WebSocketMessage;
+      let parsedData: any;
 
-      // Handle case where data is already an object
-      if (typeof rawData === 'object' && !(rawData instanceof Blob)) {
-        if (rawData.type) {
-          parsed = rawData as WebSocketMessage;
-        } else {
-          try {
-            rawData = JSON.stringify(rawData);
-            parsed = JSON.parse(rawData);
-          } catch {
-            console.error("Could not process incoming object:", rawData);
-            return;
-          }
-        }
-      } else if (typeof rawData === 'string') {
+      // Handle different message formats
+      if (typeof rawData === 'string') {
         try {
-          parsed = JSON.parse(rawData);
+          parsedData = JSON.parse(rawData);
         } catch (e) {
-          console.error("Failed to parse WebSocket data. Raw:", rawData);
+          console.error("Failed to parse WebSocket message as JSON:", rawData);
           return;
         }
+      } else if (typeof rawData === 'object') {
+        // If it's already an object, use it directly
+        parsedData = rawData;
       } else {
         console.error("Unsupported WebSocket message type:", typeof rawData);
         return;
       }
 
-      const message: WebSocketMessage = parsed;
-      setLastMessage(message);
+      console.log('📨 Raw WebSocket message received:', parsedData);
 
-      switch (message.type) {
-        case "notification":
-        case "new_notification": {
-          const notification = message.data as Notification;
-          setNotifications(prev => [notification, ...prev]);
-          break;
-        }
+      // Handle connection established message
+      if (parsedData.type === 'connection_established') {
+        console.log('✅ WebSocket connection established');
+        setLastMessage({ type: 'connection_established', data: parsedData });
+        return;
+      }
 
-        case "initial_notifications": {
-          if (Array.isArray(message.data)) {
-            setNotifications(message.data);
+      // Handle WebSocketMessage format (with data property)
+      if (parsedData.type && parsedData.data !== undefined) {
+        const message: WebSocketMessage = parsedData;
+        
+        switch (message.type) {
+          case "notification":
+          case "new_notification": {
+            const notification = message.data as Notification;
+            setNotifications(prev => [notification, ...prev]);
+            setLastMessage({ type: 'notification', data: notification });
+            break;
           }
-          break;
-        }
 
-        case "new_message": {
-          const { message: chatMessage } = message.data;
-          console.log("New message received:", chatMessage);
-          break;
-        }
+          case "initial_notifications": {
+            if (Array.isArray(message.data)) {
+              setNotifications(message.data);
+            }
+            break;
+          }
 
-        case "interest_accepted": {
-          const { requestId } = message.data;
-          toast.success(`Your interest in request #${requestId} was accepted!`);
-          break;
-        }
+          case "new_message": {
+            const { message: chatMessage } = message.data;
+            console.log("New message received:", chatMessage);
+            setLastMessage({ type: 'new_message', data: message.data });
+            break;
+          }
 
-        case "chat_room_created": {
-          console.log("New chat room created:", message.data.chatRoom);
-          break;
-        }
+          case "interest_accepted": {
+            const { requestId } = message.data;
+            toast.success(`Your interest in request #${requestId} was accepted!`);
+            setLastMessage({ type: 'interest_accepted', data: message.data });
+            break;
+          }
 
-        case "auth_success": {
-          console.log("Authenticated successfully");
-          break;
-        }
+          case "chat_room_created": {
+            console.log("New chat room created:", message.data.chatRoom);
+            setLastMessage({ type: 'chat_room_created', data: message.data });
+            break;
+          }
 
-        case 'service_request_update': {
-          const request = message.data as ServiceRequest;
-          console.log('Service request updated:', request);
-          // You can add logic here to update your UI state
-          break;
-        }
+          case "auth_success": {
+            console.log("Authenticated successfully");
+            setLastMessage({ type: 'auth_success', data: message.data });
+            break;
+          }
 
-        case 'service_request_response': {
-          const { action, response } = message.data;
-          toast.info(`Your service request was ${action}ed${response ? ': ' + response : ''}`);
-          break;
-        }
+          case 'service_request_update': {
+            const request = message.data as ServiceRequest;
+            console.log('Service request updated:', request);
+            setLastMessage({ type: 'service_request_update', data: request });
+            break;
+          }
 
-        case 'service_request_message': {
-          const { message: msg } = message.data;
-          toast.info(`New message about your service request: ${msg}`);
-          break;
-        }
+          case 'service_request_response': {
+            const { action, response } = message.data;
+            toast.info(`Your service request was ${action}ed${response ? ': ' + response : ''}`);
+            setLastMessage({ type: 'service_request_response', data: message.data });
+            break;
+          }
 
-        default:
-          console.warn("Unhandled message type:", message.type, "with data:", message.data);
+          case 'service_request_message': {
+            const { message: msg } = message.data;
+            toast.info(`New message about your service request: ${msg}`);
+            setLastMessage({ type: 'service_request_message', data: message.data });
+            break;
+          }
+
+          default:
+            console.warn("Unhandled WebSocketMessage type:", message.type, "with data:", message.data);
+            // Still set lastMessage for unhandled types
+            setLastMessage(parsedData);
+        }
+      } else {
+        // Handle direct message format (type directly on object)
+        // This is what ProviderDashboard expects
+        console.log('📨 Direct message format detected:', parsedData);
+        setLastMessage(parsedData);
+        
+        // Also handle notifications for direct format
+        if (parsedData.type === 'notification' || parsedData.type === 'new_notification') {
+          setNotifications(prev => [parsedData, ...prev]);
+        }
       }
     } catch (error) {
       console.error("WebSocket message handling error:", error);

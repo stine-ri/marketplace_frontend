@@ -157,7 +157,7 @@ export function Navbar({ children }: NavbarProps) {
               to="/servicesList" 
               className="text-gray-700 hover:text-blue-600 font-medium transition-colors"
             >
-              Providers
+              Find Services
             </Link>
             <Link 
               to="/products" 
