@@ -3,7 +3,7 @@ import { Search, Menu, X, User, LayoutDashboard, ChevronDown } from 'lucide-reac
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import NotificationBell from '../NewFeature/NotificationBell';
-import logo from '../../assets/Blue White Modern Minimalist Name Logo_20251005_200653_0000.png';
+import logo from '../../assets/quisells.png';
 interface NavbarProps {
   children?: ReactNode;
 }
@@ -134,17 +134,17 @@ export function Navbar({ children }: NavbarProps) {
       <div className="container mx-auto px-4 py-3 sm:py-4">
         <div className="flex items-center justify-between">
        
-          {/* Logo */}
-<div className="flex items-center flex-shrink-0">
+{/* Logo */}
+<div className="flex items-center flex-shrink-0 relative z-10">
   <Link to="/" className="flex items-center">
     <img 
       src={logo} 
       alt="Quisells Logo" 
-      className="h-16 sm:h-20 w-auto hover:opacity-80 transition-opacity" // Much larger size
+      className="h-20 sm:h-24 md:h-28 lg:h-32 w-auto hover:opacity-80 transition-opacity"
+      style={{ objectFit: 'contain', maxWidth: '400px' }}
     />
   </Link>
 </div>
-
           {/* Desktop Navigation */}
           <nav className="hidden lg:flex items-center space-x-6 xl:space-x-8">
             <Link 

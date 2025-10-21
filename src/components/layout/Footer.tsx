@@ -1,5 +1,5 @@
-import React from 'react';
-import { Facebook, Twitter, Instagram, Linkedin, Mail, Phone, MapPin } from 'lucide-react';
+import { Facebook, Instagram, Mail,MapPin } from 'lucide-react';
+import { FaTiktok } from "react-icons/fa";
 export const Footer = () => {
   return <footer className="bg-gray-800 text-white">
       <div className="container mx-auto px-4 py-10">
@@ -12,17 +12,14 @@ export const Footer = () => {
               need or sell what you offer.
             </p>
             <div className="flex space-x-4">
-              <a href="#" className="text-gray-300 hover:text-white">
+              <a href="https://shorturl.at/3jIdt" className="text-gray-300 hover:text-white">
                 <Facebook size={20} />
               </a>
-              <a href="#" className="text-gray-300 hover:text-white">
-                <Twitter size={20} />
+              <a href="https://www.tiktok.com/@quisells?is_from_webapp=1&sender_device=pc" className="text-gray-300 hover:text-white">
+                <FaTiktok size={20} />
               </a>
-              <a href="#" className="text-gray-300 hover:text-white">
+              <a href="https://www.instagram.com/quisells?igsh=MW5od285MGdjbWQ1bA==" className="text-gray-300 hover:text-white">
                 <Instagram size={20} />
-              </a>
-              <a href="#" className="text-gray-300 hover:text-white">
-                <Linkedin size={20} />
               </a>
             </div>
           </div>
