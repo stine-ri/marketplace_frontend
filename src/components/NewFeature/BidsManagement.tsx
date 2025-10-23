@@ -75,15 +75,17 @@ export default function BidManagement() {
   });
 
   // Helper functions
-  const getProviderName = (bid: Bid) => {
-    if (!bid.provider) return 'Unknown Provider';
-    return `${bid.provider.firstName || ''} ${bid.provider.lastName || ''}`.trim() || 'Unknown Provider';
-  };
+// Update these helper functions in your React component
+const getProviderName = (bid: Bid) => {
+  if (!bid.provider) return 'Unknown Provider';
+  return `${bid.provider.firstName || ''} ${bid.provider.lastName || ''}`.trim() || 'Unknown Provider';
+};
 
-  const getClientName = (bid: Bid) => {
-    if (!bid.request?.user) return 'Unknown Client';
-    return bid.request.user.full_name || bid.request.user.name || 'Unknown Client';
-  };
+const getClientName = (bid: Bid) => {
+  if (!bid.request?.user) return 'Unknown Client';
+  return bid.request.user.full_name || 'Unknown Client';
+};
+
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('en-KE', {
