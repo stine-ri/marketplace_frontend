@@ -411,12 +411,102 @@ export default function BidManagement() {
             </div>
           ) : (
             <>
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  {/* Table headers and rows remain the same */}
-                  {/* ... */}
-                </table>
+<div className="overflow-x-auto">
+  <table className="min-w-full divide-y divide-gray-200">
+    <thead className="bg-gray-50">
+      <tr>
+        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+          Bid ID
+        </th>
+        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+          Provider
+        </th>
+        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+          Client
+        </th>
+        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+          Service/Request
+        </th>
+        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+          Price
+        </th>
+        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+          Status
+        </th>
+        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+          Date
+        </th>
+        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+          Actions
+        </th>
+      </tr>
+    </thead>
+    <tbody className="bg-white divide-y divide-gray-200">
+      {filteredBids.map((bid) => (
+        <tr key={bid.id} className="hover:bg-gray-50 transition">
+          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+            #{bid.id}
+          </td>
+          <td className="px-6 py-4 whitespace-nowrap">
+            <div className="flex items-center">
+              <FiUser className="mr-2 text-gray-400" />
+              <div>
+                <div className="text-sm font-medium text-gray-900">
+                  {getProviderName(bid)}
+                </div>
+                <div className="text-sm text-gray-500">
+                  {bid.provider?.user?.email || 'N/A'}
+                </div>
               </div>
+            </div>
+          </td>
+          <td className="px-6 py-4 whitespace-nowrap">
+            <div className="text-sm text-gray-900">{getClientName(bid)}</div>
+            <div className="text-sm text-gray-500">
+              {bid.request?.user?.email || 'N/A'}
+            </div>
+          </td>
+          <td className="px-6 py-4">
+            <div className="text-sm text-gray-900">
+              {bid.request?.title || 'N/A'}
+            </div>
+            <div className="text-sm text-gray-500">
+              {bid.request?.service?.name || 'N/A'}
+            </div>
+          </td>
+          <td className="px-6 py-4 whitespace-nowrap">
+            <div className="text-sm font-semibold text-green-600">
+              {formatPrice(bid.price)}
+            </div>
+          </td>
+          <td className="px-6 py-4 whitespace-nowrap">
+            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeColor(bid.status)}`}>
+              {bid.status === 'pending' && <FiClock className="mr-1" size={12} />}
+              {bid.status === 'accepted' && <FiCheckCircle className="mr-1" size={12} />}
+              {bid.status === 'rejected' && <FiXCircle className="mr-1" size={12} />}
+              {bid.status.charAt(0).toUpperCase() + bid.status.slice(1)}
+            </span>
+          </td>
+          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+            <div className="flex items-center">
+              <FiCalendar className="mr-1" size={12} />
+              {formatDate(bid.createdAt)}
+            </div>
+          </td>
+          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+            <button
+              onClick={() => openDetailsModal(bid)}
+              className="text-blue-600 hover:text-blue-900 flex items-center"
+            >
+              <FiEye className="mr-1" size={16} />
+              View
+            </button>
+          </td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</div>
               
               {/* Pagination controls */}
               <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-t border-gray-200">

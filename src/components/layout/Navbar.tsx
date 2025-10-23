@@ -360,7 +360,7 @@ export function Navbar({ children }: NavbarProps) {
                 className="py-3 px-2 text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded-md transition-colors font-medium" 
                 onClick={handleMenuClose}
               >
-                Providers
+                Find Services
               </Link>
               <Link 
                 to="/products" 

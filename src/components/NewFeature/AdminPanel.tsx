@@ -9,6 +9,7 @@ import RequestManagement from '../NewFeature/RequestManagement';
 import ProductManagement from './ProductManagement';
 import InterestsManagement from './InterestManagement';
 import SupportManagement from './SupportManagement';
+import WhatsAppMessaging from './AdminMessaging';
 import { showToast } from '../../utilis/toast';
 import { toast } from 'react-hot-toast';
 import AdminSettings from './AdminSettings';
@@ -35,7 +36,7 @@ import {
 
 const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com';
 
-type AdminSection = 'services' | 'colleges' | 'users' | 'bids' | 'requests' | 'products' |'categories' | 'interests' | 'support' | 'settings';
+type AdminSection = 'services' | 'colleges' | 'users' | 'bids' | 'requests' | 'products' |'categories' | 'interests' | 'support' | 'settings'|'messaging';
 
 // Admin Notification System
 interface AdminNotification {
@@ -515,6 +516,7 @@ export default function AdminPanel() {
     { id: 'users', label: 'User Management', icon: FiUsers },
     { id: 'requests', label: 'Request Management', icon: FiMessageSquare },
     { id: 'bids', label: 'Bid Management', icon: FiDollarSign },
+     { id: 'messaging', label: 'WhatsApp Messaging', icon: FiMessageCircle }, 
     { id: 'interests', label: 'Interests Management', icon: FiUsers },
     { id: 'support', label: 'Support Tickets', icon: FiMessageCircle },
     { id: 'settings', label: 'Settings', icon: FiSettings }
@@ -697,6 +699,8 @@ export default function AdminPanel() {
             <BidManagement />
           ) : activeSection === 'requests' ? (
             <RequestManagement />
+          ) : activeSection === 'messaging' ? (
+            <WhatsAppMessaging />
           ) : activeSection === 'products' ? (
             <ProductManagement />
           ) : activeSection === 'interests' ? (

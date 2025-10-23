@@ -10,13 +10,18 @@ const IS_DEVELOPMENT = import.meta.env.DEV;
 const DISABLE_WS_IN_DEV = import.meta.env.VITE_WS_DISABLE_IN_DEV === 'true';
 
 function getWsUrl(): string {
+  // Option 1: Use environment variable (recommended)
   let url = import.meta.env.VITE_WS_URL;
-
+  
+  // Option 2: If no env var, construct from API base URL
   if (!url) {
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    return `${protocol}//${window.location.host}`;
+    const apiBase = import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com';
+    const protocol = apiBase.startsWith('https') ? 'wss:' : 'ws:';
+    const host = apiBase.replace(/^https?:\/\//, '');
+    url = `${protocol}//${host}/ws`; // Add /ws endpoint
   }
 
+  // Ensure proper protocol
   if (url.startsWith("http://")) {
     url = url.replace("http://", "ws://");
   }
@@ -24,6 +29,12 @@ function getWsUrl(): string {
     url = url.replace("https://", "wss://");
   }
 
+  // Ensure it has the /ws path
+  if (!url.includes('/ws')) {
+    url = `${url}/ws`;
+  }
+
+  console.log('WebSocket URL:', url);
   return url;
 }
 

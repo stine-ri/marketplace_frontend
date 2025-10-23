@@ -50,41 +50,48 @@ const RatingModal = ({
   const [selectedRating, setSelectedRating] = useState<number>(0);
   const [comment, setComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-
+  const { token } = useAuth();
   if (!isOpen) return null;
 
   const handleSubmit = async () => {
-    if (selectedRating === 0) {
-      toast.warning("Please select a rating");
-      return;
+  if (selectedRating === 0) {
+    toast.warning("Please select a rating");
+    return;
+  }
+
+  setIsSubmitting(true);
+  try {
+    const response = await axios.post(`${baseURL}/api/reviews`, {
+      providerId,
+      rating: Math.round(selectedRating), // Ensure integer
+      comment: comment.trim() || undefined
+    }, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    onSuccess(response.data);
+    onClose();
+    setSelectedRating(0);
+    setComment('');
+    toast.success('Rating submitted successfully!');
+  } catch (error: any) {
+    console.error('Rating submission error:', error);
+    
+    // Enhanced error handling
+    if (error.response?.status === 409) {
+      toast.error('You have already reviewed this provider. You can update your existing review.');
+    } else if (error.response?.data?.error) {
+      toast.error(`Failed to submit rating: ${error.response.data.error}`);
+    } else {
+      toast.error('Failed to submit rating. Please try again.');
     }
-
-    setIsSubmitting(true);
-    try {
-      const { token } = useAuth();
-      
-      const response = await axios.post(`${baseURL}/api/reviews`, {
-        providerId,
-        rating: selectedRating,
-        comment: comment.trim() || undefined
-      }, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
-
-      onSuccess(response.data);
-      onClose();
-      setSelectedRating(0);
-      setComment('');
-    } catch (error) {
-      console.error('Rating submission error:', error);
-      toast.error('Failed to submit rating');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
+  } finally {
+    setIsSubmitting(false);
+  }
+};
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl">
