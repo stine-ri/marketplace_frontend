@@ -172,7 +172,7 @@ export function ClientDashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showNewRequestModal, setShowNewRequestModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<'active' | 'completed'>('active');
+  const [activeTab, setActiveTab] = useState<"active" | "completed" | "archived">("active");
   const [showNotifications, setShowNotifications] = useState(false);
   const [processingInterests, setProcessingInterests] = useState<Record<number, 'accept' | 'reject' | null>>({});
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -269,6 +269,8 @@ const fetchRequests = useCallback(async () => {
     });
 
     if (response.data) {
+      console.log('Raw response from backend:', response.data);
+      
       const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://mkt-backend-sz2s.onrender.com';
       
       // Helper function to normalize URLs
@@ -300,9 +302,11 @@ const fetchRequests = useCallback(async () => {
             .filter((url): url is string => url !== null);
         }
 
-        return {
+        const normalizedRequest = {
           ...request,
-          images: processedImages, // Add the processed images array
+          images: processedImages,
+          // Make sure isArchived is properly set
+          isArchived: request.isArchived || !!request.archivedAt,
           // DON'T process location here - keep it exactly as received
           interests: (request.interests || []).map(interest => ({
             ...interest,
@@ -320,17 +324,10 @@ const fetchRequests = useCallback(async () => {
             } : null
           }))
         };
-      });
 
-      // Debug: Log the first request to see if images are included
-      if (normalizedRequests.length > 0) {
-        console.log('First request with images:', {
-          id: normalizedRequests[0].id,
-          title: normalizedRequests[0].productName || normalizedRequests[0].serviceName,
-          imageCount: normalizedRequests[0].images?.length || 0,
-          images: normalizedRequests[0].images
-        });
-      }
+        console.log('Normalized request:', normalizedRequest.id, 'isArchived:', normalizedRequest.isArchived);
+        return normalizedRequest;
+      });
 
       setRequests(normalizedRequests);
     }
@@ -405,7 +402,79 @@ useEffect(() => {
   }
 }, [activeMainTab, location.pathname]);
 
-  const handleRefresh = () => {
+// Archive request function
+const archiveRequest = async (requestId: number) => {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    const response = await api.patch(`/api/client/requests/${requestId}/archive`);
+    
+    if (response.data.success) {
+      toast.success('Request archived successfully');
+      // Refresh requests
+      await fetchRequests();
+    }
+  } catch (error) {
+    console.error('Error archiving request:', error);
+    toast.error('Failed to archive request');
+  }
+};
+
+// Unarchive request function
+const unarchiveRequest = async (requestId: number) => {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    const response = await api.patch(`/api/client/requests/${requestId}/unarchive`);
+    
+    if (response.data.success) {
+      toast.success('Request unarchived successfully');
+      await fetchRequests();
+    }
+  } catch (error) {
+    console.error('Error unarchiving request:', error);
+    toast.error('Failed to unarchive request');
+  }
+};
+
+// Delete request function
+const deleteRequest = async (requestId: number) => {
+  if (!confirm('Are you sure you want to delete this request? This action cannot be undone.')) {
+    return;
+  }
+
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    const response = await api.delete(`/api/client/requests/${requestId}`);
+    
+    if (response.data.success) {
+      toast.success('Request deleted successfully');
+      await fetchRequests();
+    }
+  } catch (error: any) {
+    console.error('Error deleting request:', error);
+    toast.error(error.response?.data?.error || 'Failed to delete request');
+  }
+};
+
+
+//expiration status function:
+const getExpirationStatus = (request: Request) => {
+  if (request.isArchived) return 'archived';
+  if (request.isExpired) return 'expired';
+  if (request.expiresAt) {
+    const expiresInDays = Math.ceil((new Date(request.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    if (expiresInDays <= 0) return 'expired';
+    if (expiresInDays <= 2) return 'expiring-soon';
+  }
+  return 'active';
+};
+
+const handleRefresh = () => {
     setRefreshing(true);
     fetchRequests();
   };
@@ -506,7 +575,6 @@ const createNewRequest = async (requestData: FormData | any) => {
    
       
       // CRITICAL: Validate and clean the JSON payload
-    // CRITICAL: Validate and clean the JSON payload
 const cleanPayload: Record<string, any> = {
   productName: requestData.productName?.trim() || null,
   description: requestData.description?.trim() || null,
@@ -658,25 +726,28 @@ function validateAndParseNumber(value: any): number | null {
     return null;
   }
   
-  // Handle string representations
+  // Handle string representations - FIXED VERSION
   if (typeof value === 'string') {
-    // Remove any whitespace or special characters
-    const cleanedValue = value.trim().replace(/[^\d.-]/g, '');
+    // Trim and check if it's a valid number string
+    const trimmed = value.trim();
     
-    // Check if it's just a minus sign
-    if (cleanedValue === '-' || cleanedValue === '.') {
+    // If it's empty after trimming, return null
+    if (trimmed === '') return null;
+    
+    // Check if it's just a minus sign or decimal point
+    if (trimmed === '-' || trimmed === '.' || trimmed === '-.') {
       console.warn('Invalid number string:', value);
       return null;
     }
     
-    // Parse the cleaned value
-    const num = Number(cleanedValue);
+    // Use more precise parsing
+    const num = parseFloat(trimmed);
     if (isNaN(num) || !isFinite(num)) {
-      console.warn(`Could not parse as number: ${value} -> ${num}`);
+      console.warn(`Could not parse as number: "${value}" -> ${num}`);
       return null;
     }
     
-    console.log('String number validation successful:', value, '->', num);
+    console.log('String number validation successful:', `"${value}"` , '->', num);
     return num;
   }
   
@@ -735,12 +806,26 @@ function validateAndStringifyLocation(location: any): string | null {
 }
 
 
+// filteredRequests 
+const filteredRequests = requests.filter(request => {
+  // Skip archived requests in main views unless specifically viewing archived
+  if (request.isArchived && activeTab !== 'archived') {
+    return false;
+  }
 
- const filteredRequests = requests.filter(request =>
-  activeTab === 'active'
-    ? request.status === 'open' || request.status === 'pending'
-    : request.status === 'closed' || request.status === 'accepted' || request.status === 'completed' // Add 'completed'
-);
+  if (activeTab === 'active') {
+    return (request.status === 'open' || request.status === 'pending') && 
+           !request.isArchived && 
+           !request.isExpired;
+  } else if (activeTab === 'completed') {
+    return (request.status === 'closed' || request.status === 'accepted' || request.status === 'completed') &&
+           !request.isArchived;
+  } else if (activeTab === 'archived') {
+    return request.isArchived; // Show all archived requests
+  }
+  
+  return true;
+});
 
   const handleAcceptInterest = async (requestId: number, interestId: number) => {
     try {
@@ -1211,9 +1296,9 @@ const fetchProducts = useCallback(async () => {
   }, [fetchUserTestimonials]);
 
   // Function to check if user can leave a review
- const canLeaveReview = (request: any) => {
+const canLeaveReview = (request: any) => {
   return (
-    (request.status === 'closed' || request.status === 'completed') && 
+    request.status === 'closed' &&  
     !userTestimonials.some(t => t.requestId === request.id)
   );
 };
@@ -1724,38 +1809,52 @@ return (
           /* Requests View - Enhanced responsive layout */
           <>
             {/* Tabs - Improved mobile design */}
-            <div className="bg-white rounded-lg shadow-sm mb-4 sm:mb-6">
-              <div className="border-b border-gray-200">
-                <nav className="flex">
-                  <button
-                    onClick={() => setActiveTab('active')}
-                    className={`flex-1 py-4 px-1 text-center border-b-2 font-medium text-sm sm:text-base transition-colors ${
-                      activeTab === 'active' 
-                        ? 'border-indigo-500 text-indigo-600' 
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
-                  >
-                    <span className="block sm:inline">Active</span>
-                    <span className="block sm:inline sm:ml-1 text-xs sm:text-sm">
-                      ({requests.filter(r => r.status === 'open' || r.status === 'pending').length})
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('completed')}
-                    className={`flex-1 py-4 px-1 text-center border-b-2 font-medium text-sm sm:text-base transition-colors ${
-                      activeTab === 'completed' 
-                        ? 'border-indigo-500 text-indigo-600' 
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
-                  >
-                    <span className="block sm:inline">Completed</span>
-                    <span className="block sm:inline sm:ml-1 text-xs sm:text-sm">
-                      ({requests.filter(r => r.status === 'closed' || r.status === 'accepted').length})
-                    </span>
-                  </button>
-                </nav>
-              </div>
-            </div>
+<div className="bg-white rounded-lg shadow-sm mb-4 sm:mb-6">
+  <div className="border-b border-gray-200">
+    <nav className="flex">
+      <button
+        onClick={() => setActiveTab('active')}
+        className={`flex-1 py-4 px-1 text-center border-b-2 font-medium text-sm sm:text-base transition-colors ${
+          activeTab === 'active' 
+            ? 'border-indigo-500 text-indigo-600' 
+            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+        }`}
+      >
+        <span className="block sm:inline">Active</span>
+        <span className="block sm:inline sm:ml-1 text-xs sm:text-sm">
+          ({requests.filter(r => (r.status === 'open' || r.status === 'pending') && !r.isArchived && !r.isExpired).length})
+        </span>
+      </button>
+      <button
+        onClick={() => setActiveTab('completed')}
+        className={`flex-1 py-4 px-1 text-center border-b-2 font-medium text-sm sm:text-base transition-colors ${
+          activeTab === 'completed' 
+            ? 'border-indigo-500 text-indigo-600' 
+            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+        }`}
+      >
+        <span className="block sm:inline">Completed</span>
+        <span className="block sm:inline sm:ml-1 text-xs sm:text-sm">
+              ({requests.filter(r => r.status === 'closed' && !r.isArchived).length}) 
+        </span>
+      </button>
+      {/* ADD THE ARCHIVE TAB PROPERLY */}
+      <button
+        onClick={() => setActiveTab('archived')}
+        className={`flex-1 py-4 px-1 text-center border-b-2 font-medium text-sm sm:text-base transition-colors ${
+          activeTab === 'archived' 
+            ? 'border-indigo-500 text-indigo-600' 
+            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+        }`}
+      >
+        <span className="block sm:inline">Archived</span>
+        <span className="block sm:inline sm:ml-1 text-xs sm:text-sm">
+          ({requests.filter(r => r.isArchived).length})
+        </span>
+      </button>
+    </nav>
+  </div>
+</div>
 
             {/* Loading State */}
             {loading ? (
@@ -1768,87 +1867,98 @@ return (
             ) : (
               <>
                 {/* Empty State - Enhanced mobile layout */}
-                {filteredRequests.length === 0 ? (
-                  <div className="text-center py-12 sm:py-16 bg-white rounded-lg shadow-sm">
-                    <svg
-                      className="mx-auto h-12 w-12 sm:h-16 sm:w-16 text-gray-400"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      aria-hidden="true"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                      />
-                    </svg>
-                    <h3 className="mt-4 text-lg sm:text-xl font-medium text-gray-900">
-                      No {activeTab === 'active' ? 'active' : 'completed'} requests
-                    </h3>
-                    <p className="mt-2 text-sm sm:text-base text-gray-500 max-w-sm mx-auto">
-                      {activeTab === 'active' 
-                        ? 'Get started by creating a new service request to connect with providers.'
-                        : 'Your completed requests will appear here once services are fulfilled.'}
-                    </p>
-                    {activeTab === 'active' && (
-                      <div className="mt-8">
-                        <button
-                          onClick={() => setShowNewRequestModal(true)}
-                          className="inline-flex items-center px-6 py-3 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
-                        >
-                          <PlusIcon className="-ml-1 mr-2 h-5 w-5" />
-                          Create Your First Request
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  /* Requests List - Enhanced spacing */
-                  <div className="space-y-4 sm:space-y-6">
-                    {filteredRequests.map((request, index) => (
-                      <div key={request.id || `request-${index}`}>
-                        <ClientRequestCard
-                          request={request}
-                          bidsCount={request.bids?.length?.toString() || '0'}
-                          bids={request.bids || []}
-                          interests={request.interests || []} 
-                          status={request.status || 'open'}
-                          onAcceptBid={handleAcceptBid}
-                          onRejectBid={handleRejectBid}
-                          onAcceptInterest={handleAcceptInterest}
-                          onRejectInterest={handleRejectInterest}
-                        />
-                        
-                        {/* Review section for completed requests */}
-                        {canLeaveReview(request) && (
-                          <div className="mt-4 pt-4 border-t border-gray-200">
-                            <button
-                              onClick={() => handleLeaveReview(request)}
-                              className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-indigo-600 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
-                            >
-                              <Star className="h-4 w-4 mr-1" />
-                              Leave a Review
-                            </button>
-                          </div>
-                        )}
-                        
-                        {/* Show review status if already submitted */}
-                        {userTestimonials.find(t => t.requestId === request.id) && (
-                          <div className="mt-4 pt-4 border-t border-gray-200">
-                            <div className="flex items-center text-sm text-green-600">
-                              <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                              </svg>
-                              Review submitted - {userTestimonials.find(t => t.requestId === request.id)?.status}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
+                {/* Empty State - Enhanced mobile layout */}
+{filteredRequests.length === 0 ? (
+  <div className="text-center py-12 sm:py-16 bg-white rounded-lg shadow-sm">
+    <svg
+      className="mx-auto h-12 w-12 sm:h-16 sm:w-16 text-gray-400"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      aria-hidden="true"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+      />
+    </svg>
+    <h3 className="mt-4 text-lg sm:text-xl font-medium text-gray-900">
+      {activeTab === 'active' 
+        ? 'No active requests' 
+        : activeTab === 'completed' 
+        ? 'No completed requests'
+        : 'No archived requests'}
+    </h3>
+    <p className="mt-2 text-sm sm:text-base text-gray-500 max-w-sm mx-auto">
+      {activeTab === 'active' 
+        ? 'Get started by creating a new service request to connect with providers.'
+        : activeTab === 'completed'
+        ? 'Your completed requests will appear here once services are fulfilled.'
+        : 'Your archived requests will appear here.'}
+    </p>
+    {activeTab === 'active' && (
+      <div className="mt-8">
+        <button
+          onClick={() => setShowNewRequestModal(true)}
+          className="inline-flex items-center px-6 py-3 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+        >
+          <PlusIcon className="-ml-1 mr-2 h-5 w-5" />
+          Create Your First Request
+        </button>
+      </div>
+    )}
+  </div>
+) : (
+  /* Requests List - Enhanced spacing */
+  <div className="space-y-4 sm:space-y-6">
+    {filteredRequests.map((request, index) => (
+      <div key={request.id || `request-${index}`}>
+        <ClientRequestCard
+          request={request}
+          bidsCount={request.bids?.length?.toString() || '0'}
+          bids={request.bids || []}
+          interests={request.interests || []} 
+          status={request.status || 'open'}
+          onAcceptBid={handleAcceptBid}
+          onRejectBid={handleRejectBid}
+          onAcceptInterest={handleAcceptInterest}
+          onRejectInterest={handleRejectInterest}
+          onArchiveRequest={archiveRequest}
+          onUnarchiveRequest={unarchiveRequest}
+          onDeleteRequest={deleteRequest}
+          getExpirationStatus={getExpirationStatus}
+        />
+        
+        {/* Review section for completed requests */}
+        {canLeaveReview(request) && (
+          <div className="mt-4 pt-4 border-t border-gray-200">
+            <button
+              onClick={() => handleLeaveReview(request)}
+              className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-indigo-600 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+            >
+              <Star className="h-4 w-4 mr-1" />
+              Leave a Review
+            </button>
+          </div>
+        )}
+        
+        {/* Show review status if already submitted */}
+        {userTestimonials.find(t => t.requestId === request.id) && (
+          <div className="mt-4 pt-4 border-t border-gray-200">
+            <div className="flex items-center text-sm text-green-600">
+              <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+              Review submitted - {userTestimonials.find(t => t.requestId === request.id)?.status}
+            </div>
+          </div>
+        )}
+      </div>
+    ))}
+  </div>
+)}
               </>
             )}
           </>

@@ -75,9 +75,14 @@ export interface Request {
   specialRequirements?: string;
   notes?: string;
   collegeFilterId?: number;
-  status: 'open' | 'closed' | 'pending' | 'accepted'|'completed';
+  status: 'open' | 'closed' | 'pending' | 'accepted'|'completed'|'archived'| 'expired';
   createdAt: string;
   updated_at:string;
+  expiresAt?: string | null;
+  archivedAt?: string | null;
+  archivedByClient?: boolean;
+  isExpired?: boolean;
+  isArchived?: boolean;
   interests?: Interest[]; 
   bids?: Bid[];
   images?: string[] | Array<{ url: string; publicId?: string }>;

@@ -384,23 +384,23 @@ function formatDate(dateString: string | null | undefined): string {
     const date = new Date(dateString);
     
     if (isNaN(date.getTime())) {
+      console.warn('Invalid date in formatDate:', dateString);
       return 'Invalid date';
     }
     
+    // Use Kenya timezone but don't convert the actual time
     return date.toLocaleDateString('en-KE', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
-      minute: '2-digit',
-      timeZone: 'Africa/Nairobi'
+      minute: '2-digit'
     });
   } catch (error) {
     console.error('Error formatting date:', dateString, error);
     return 'Date format error';
   }
 }
-
 function formatRelativeTime(dateString: string): string {
   if (!dateString) return 'Just now';
   
@@ -408,23 +408,37 @@ function formatRelativeTime(dateString: string): string {
     const date = new Date(dateString);
     const now = new Date();
     
-    const kenyaDate = new Date(date.toLocaleString('en-US', { timeZone: 'Africa/Nairobi' }));
-    const kenyaNow = new Date(now.toLocaleString('en-US', { timeZone: 'Africa/Nairobi' }));
+    // Validate the date
+    if (isNaN(date.getTime())) {
+      console.warn('Invalid date string:', dateString);
+      return 'Date unavailable';
+    }
     
-    const diffInMs = kenyaNow.getTime() - kenyaDate.getTime();
-    const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
-    const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60));
-    const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
+    // Calculate difference in milliseconds
+    const diffInMs = now.getTime() - date.getTime();
+    const diffInSeconds = Math.floor(diffInMs / 1000);
+    const diffInMinutes = Math.floor(diffInSeconds / 60);
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    const diffInDays = Math.floor(diffInHours / 24);
     
-    if (diffInMinutes < 1) return 'Just now';
+    // Return relative time
+    if (diffInSeconds < 60) return 'Just now';
     if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
     if (diffInHours < 24) return `${diffInHours}h ago`;
     if (diffInDays < 7) return `${diffInDays}d ago`;
     
+    // For older dates, show actual date
     return formatDate(dateString);
   } catch (error) {
+    console.error('Error formatting relative time:', error, dateString);
     return formatDate(dateString);
   }
+}
+
+// Check if a request's deadline has passed
+function isRequestExpired(deadline: string | undefined): boolean {
+  if (!deadline) return false;
+  return new Date(deadline) < new Date();
 }
 
 export function ProviderDashboard() {
@@ -567,9 +581,8 @@ export function ProviderDashboard() {
     });
   }, []);
 
+  
   // Fetch available requests with error handling
-// Replace your fetchAvailableRequests function with this fixed version:
-
 const fetchAvailableRequests = useCallback(async () => {
   try {
     setRequestsError(null);
@@ -631,6 +644,19 @@ const fetchAvailableRequests = useCallback(async () => {
         ? `service-${request.id}` 
         : `regular-${request.id}`;
       
+      // CRITICAL: Preserve original date fields
+      const createdAt = request.createdAt || request.created_at || request.date_created;
+      const updatedAt = request.updatedAt || request.updated_at;
+      const deadline = request.deadline || request.expiry_date;
+      
+      console.log(`Request ${request.id} dates:`, {
+        createdAt,
+        updatedAt,
+        deadline,
+        originalCreatedAt: request.createdAt,
+        originalCreated_at: request.created_at
+      });
+      
       return {
         ...request,
         _uniqueKey: uniqueKey,
@@ -645,22 +671,46 @@ const fetchAvailableRequests = useCallback(async () => {
           name: request.user_full_name,
           email: request.user_email,
           phone: request.user_phone
-        } : null)
+        } : null),
+        // PRESERVE ORIGINAL DATES
+        createdAt: createdAt || new Date().toISOString(),
+        updatedAt: updatedAt || new Date().toISOString(),
+        deadline: deadline || undefined
       };
     });
 
-    // Remove duplicates
+    // Remove duplicates and filter expired service list requests
     const seen = new Set();
     const uniqueRequests = requestsWithDefaults.filter((req: any) => {
+      // Check for duplicates
       if (seen.has(req.id)) {
         console.warn(`Removing duplicate request with ID ${req.id}`);
         return false;
       }
       seen.add(req.id);
+      
+      // Filter out expired service list requests
+      if (req.fromServiceList && isRequestExpired(req.deadline)) {
+        console.log(`Filtering out expired service list request ${req.id}`);
+        return false;
+      }
+      
       return true;
     });
     
     console.log('✅ Final request count:', uniqueRequests.length);
+    
+    // Debug: Log dates for first few requests
+    uniqueRequests.slice(0, 3).forEach((req: any, index: number) => {
+      console.log(`Request ${index + 1} date debug:`, {
+        id: req.id,
+        title: req.serviceName,
+        createdAt: req.createdAt,
+        formatted: formatRelativeTime(req.createdAt),
+        actualDate: new Date(req.createdAt).toString()
+      });
+    });
+    
     setAvailableRequests(uniqueRequests);
     
   } catch (error) {
@@ -1375,6 +1425,8 @@ const handleExpressInterest = async (requestId: number) => {
   }) => {
     if (!request) return null;
 
+
+
     return (
       <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-start justify-center p-4">
         <div className="relative top-4 sm:top-20 mx-auto p-4 sm:p-5 border w-full sm:w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
@@ -1453,7 +1505,31 @@ const handleExpressInterest = async (requestId: number) => {
       </div>
     );
   };
+    // Contact button component for expired or service list requests
+const ContactClientButton = ({ client }: { client: ClientRequest['client'] }) => {
+  if (!client) return null;
 
+  const handleContact = () => {
+    if (client.phone) {
+      // Open phone dialer
+      window.location.href = `tel:${client.phone}`;
+    } else if (client.email) {
+      // Open email client
+      window.location.href = `mailto:${client.email}`;
+    }
+  };
+
+  return (
+    <button
+      onClick={handleContact}
+      className="flex items-center justify-center px-3 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition-colors"
+      title={`Contact via ${client.phone ? 'phone' : 'email'}`}
+    >
+      <ChatBubbleLeftIcon className="h-4 w-4 mr-1" />
+      Contact Client
+    </button>
+  );
+};
 const renderRequestActions = (request: ClientRequest) => {
   if (!providerId) {
     console.warn('No providerId available');
@@ -1461,7 +1537,6 @@ const renderRequestActions = (request: ClientRequest) => {
   }
 
   const hasBid = hasAlreadyBid(request.id);
-  
   const hasInterest = 
     request.interests?.some(i => 
       Number(i.providerId) === Number(providerId)
@@ -1473,10 +1548,32 @@ const renderRequestActions = (request: ClientRequest) => {
   
   const allowBids = request.allowBids !== false;
   const allowInterests = request.allowInterests !== false;
+  const isExpired = isRequestExpired(request.deadline);
   
+  // For service list requests, show limited actions
+  if (request.fromServiceList) {
+    return (
+      <div className="flex flex-col gap-2 min-w-[120px]">
+        <button
+          onClick={() => {
+            setSelectedRequest(request);
+            setShowDetailsModal(true);
+          }}
+          className="flex items-center justify-center px-3 py-2 bg-gray-100 text-gray-700 rounded-md text-sm font-medium hover:bg-gray-200 transition-colors"
+        >
+          <EyeIcon className="h-4 w-4 mr-1" />
+          View Details
+        </button>
+        
+        <ContactClientButton client={request.client} />
+      </div>
+    );
+  }
+  
+  // For regular requests, show full bid/interest options (existing logic)
   return (
     <div className="flex flex-col gap-2 min-w-[120px]">
-      {allowBids && (
+      {allowBids && !isExpired && (
         <button
           onClick={() => handleBidOnRequest(request)}
           disabled={hasBid}
@@ -1491,7 +1588,7 @@ const renderRequestActions = (request: ClientRequest) => {
         </button>
       )}
       
-      {allowInterests && (
+      {allowInterests && !isExpired && (
         <button
           onClick={() => handleExpressInterest(request.id)}
           disabled={hasInterest}
@@ -1516,10 +1613,13 @@ const renderRequestActions = (request: ClientRequest) => {
         <EyeIcon className="h-4 w-4 mr-1" />
         View Details
       </button>
+      
+      {isExpired && (
+        <ContactClientButton client={request.client} />
+      )}
     </div>
   );
 };
-
 
   const getDisplayName = (party: User | ProviderProfile | undefined): string => {
   if (!party) return 'Unknown User';

@@ -140,7 +140,7 @@ const handleSubmit = async (e: React.FormEvent) => {
     console.log('Images selected:', images.length);
 
     // CRITICAL: Validate and clean form data BEFORE sending
-   // In your validation function, convert to cents/integers
+
 const validateNumber = (value: string, fieldName: string): number | null => {
   if (!value || value.trim() === '' || value === '-') {
     console.log(`${fieldName} is empty or invalid:`, value);
@@ -154,9 +154,9 @@ const validateNumber = (value: string, fieldName: string): number | null => {
   }
   
   // For desiredPrice, convert to integer (cents)
-  if (fieldName === 'desiredPrice') {
-    return Math.round(num * 100); // Convert to cents
-  }
+  // if (fieldName === 'desiredPrice') {
+  //   return Math.round(num * 100); // Convert to cents
+  // }
   
   return Math.round(num); // Convert other numbers to integers
 };

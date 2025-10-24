@@ -19,7 +19,7 @@ export interface Testimonial {
 const generateMockTestimonials = (): Testimonial[] => [
   {
     id: '1',
-    name: 'Sarah Johnson',
+    name: 'Sarah Wambui',
     role: 'Freelance Designer',
     content: 'This platform has completely transformed how I find clients. The interface is intuitive and the community is amazing!',
     rating: 5,
@@ -30,7 +30,7 @@ const generateMockTestimonials = (): Testimonial[] => [
   },
   {
     id: '2',
-    name: 'Mike Chen',
+    name: 'Mike Kimutai',
     role: 'Small Business Owner',
     content: 'As a client, I found exactly what I needed in hours instead of days. The quality of services exceeded my expectations.',
     rating: 5,
@@ -41,7 +41,7 @@ const generateMockTestimonials = (): Testimonial[] => [
   },
   {
     id: '3',
-    name: 'Emily Rodriguez',
+    name: 'Emily Moraa',
     role: 'Marketing Consultant',
     content: 'The platform made it so easy to showcase my skills and connect with clients who value quality work.',
     rating: 4,
@@ -52,7 +52,7 @@ const generateMockTestimonials = (): Testimonial[] => [
   },
   {
     id: '4',
-    name: 'David Thompson',
+    name: 'David Otieno',
     role: 'Startup Founder',
     content: 'We found incredible talent for our project. The review system helped us make informed decisions quickly.',
     rating: 5,
@@ -63,7 +63,7 @@ const generateMockTestimonials = (): Testimonial[] => [
   },
   {
     id: '5',
-    name: 'Lisa Wang',
+    name: 'Lisa Nyanduko',
     role: 'E-commerce Seller',
     content: 'Selling my digital products has never been easier. The platform handles everything from payments to delivery.',
     rating: 4,
@@ -74,7 +74,7 @@ const generateMockTestimonials = (): Testimonial[] => [
   },
   {
     id: '6',
-    name: 'Alex Kumar',
+    name: 'Alex Mwangi',
     role: 'Content Creator',
     content: 'Outstanding platform for creative professionals. The support team is responsive and the features keep getting better.',
     rating: 5,

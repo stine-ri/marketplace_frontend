@@ -154,7 +154,8 @@ export default function ServicesListComponent() {
           location: requestDetails.location,
           budget: requestDetails.budget,
           preferredDate: requestDetails.preferredDate,
-          contactMethod: requestDetails.contactMethod
+          contactMethod: requestDetails.contactMethod,
+           createdAt: new Date().toISOString() 
         }
       };
 

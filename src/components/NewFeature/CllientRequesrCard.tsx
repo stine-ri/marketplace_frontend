@@ -4,14 +4,14 @@ import api from '../../api/api';
 import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
 import { formatPrice } from '../../utilis/priceFormatter';
-// Import your enhanced location utilities
+import { toast } from 'react-toastify';
 import { getLocationDisplay, hasValidCoordinates, formatCoordinates } from '../../utilis/location';
 
 interface ClientRequestCardProps {
   request: ClientRequest;
   bidsCount: string;
   bids: Bid[];
-  status?: "pending" | "accepted" | "open" | "closed"|"completed";
+  status?: "pending" | "accepted" | "open" | "closed"|"completed"|"archived"|"expired";
   interests?: Interest[];
   allowBids?: boolean;
   allowInterests?: boolean;
@@ -19,6 +19,10 @@ interface ClientRequestCardProps {
   onRejectBid?: (requestId: number, bidId: number) => Promise<void>;
   onAcceptInterest?: (requestId: number, interestId: number) => void;
   onRejectInterest?: (requestId: number, interestId: number) => void;
+  onArchiveRequest?: (requestId: number) => Promise<void>;
+  onUnarchiveRequest?: (requestId: number) => Promise<void>;
+  onDeleteRequest?: (requestId: number) => Promise<void>;
+  getExpirationStatus?: (request: Request) => string;
 }
 
 export function ClientRequestCard({
@@ -32,6 +36,10 @@ export function ClientRequestCard({
   onRejectBid,
   onAcceptInterest,
   onRejectInterest,
+  onArchiveRequest,        
+  onUnarchiveRequest,      
+  onDeleteRequest,         
+  getExpirationStatus,     
 }: ClientRequestCardProps) {
   const [showBids, setShowBids] = useState(false);
   const [bids, setBids] = useState<Bid[]>([]);
@@ -291,7 +299,53 @@ export function ClientRequestCard({
         </div>
       </div>
 
-      {/* Rest of your component remains the same - bids and interests sections */}
+<div className="flex items-center gap-2 mt-2">
+  {/* Expiration indicator */}
+  {request.expiresAt && (
+    <span className={`text-xs px-2 py-1 rounded-full ${
+      getExpirationStatus?.(request) === 'expired' 
+        ? 'bg-red-100 text-red-800'
+        : getExpirationStatus?.(request) === 'expiring-soon'
+        ? 'bg-yellow-100 text-yellow-800'
+        : 'bg-green-100 text-green-800'
+    }`}>
+      {getExpirationStatus?.(request) === 'expired' 
+        ? 'Expired'
+        : getExpirationStatus?.(request) === 'expiring-soon'
+        ? `Expires in ${Math.ceil((new Date(request.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))} days`
+        : 'Active'
+      }
+    </span>
+  )}
+
+  {/* Archive/Unarchive buttons - USE THE PROP FUNCTIONS */}
+  {!request.isArchived && request.status === 'open' && (
+    <button
+      onClick={() => onArchiveRequest?.(request.id)}
+      className="text-xs px-2 py-1 bg-gray-500 text-white rounded hover:bg-gray-600"
+    >
+      Archive
+    </button>
+  )}
+  
+  {request.isArchived && (
+    <div className="flex gap-2">
+      <button
+        onClick={() => onUnarchiveRequest?.(request.id)}
+        className="text-xs px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
+      >
+        Unarchive
+      </button>
+      <button
+        onClick={() => onDeleteRequest?.(request.id)}
+        className="text-xs px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600"
+      >
+        Delete
+      </button>
+    </div>
+  )}
+</div>
+      {/* - bids and interests sections */}
       {showBids && (
         <div className="mt-4 pt-4 border-t">
           {loadingBids ? (
@@ -483,3 +537,4 @@ export function ClientRequestCard({
     </div>
   );
 }
+
