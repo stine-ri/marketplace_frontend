@@ -129,9 +129,9 @@ export function Navbar({ children }: NavbarProps) {
     }
   }, [isAuthDropdownOpen]);
 
-  return (
+return (
     <header className="bg-white shadow-sm sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-0 sm:py-0.5">
+      <div className="container mx-auto px-4 py-4 sm:py-5 lg:py-2"> {/* Increased mobile, reduced desktop */}
         <div className="flex items-center justify-between">
       
 
@@ -141,7 +141,7 @@ export function Navbar({ children }: NavbarProps) {
     <svg 
       viewBox="0 0 850 200" 
       xmlns="http://www.w3.org/2000/svg" 
-      className="h-8 w-auto sm:h-10 md:h-14 lg:h-16 xl:h-20 hover:opacity-80 transition-opacity"
+      className="h-10 w-auto sm:h-12 md:h-14 lg:h-12 xl:h-14 hover:opacity-80 transition-opacity" 
     >
       <defs>
         {/* Premium blue gradient */}
@@ -410,24 +410,24 @@ export function Navbar({ children }: NavbarProps) {
           </div>
 
           {/* Mobile/Tablet Action Buttons */}
-          <div className="flex lg:hidden items-center space-x-2">
+          <div className="flex lg:hidden items-center space-x-3">
             {/* Mobile Search */}
             <button 
               onClick={handleSearchToggle}
-              className="p-2 text-gray-600 hover:text-blue-600 hover:bg-gray-100 rounded-md transition-colors"
+              className="p-3 text-gray-600 hover:text-blue-600 hover:bg-gray-100 rounded-md transition-colors"
               aria-label="Search"
             >
-              <Search size={20} />
+              <Search size={22} />
             </button>
 
             {/* Mobile Dashboard Button - Only visible when logged in */}
             {user && (
               <button 
                 onClick={handleDashboardRedirect}
-                className="p-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                className="p-3 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
                 aria-label={getDashboardButtonText()}
               >
-                <LayoutDashboard size={20} />
+                <LayoutDashboard size={22} />
               </button>
             )}
 
@@ -440,7 +440,7 @@ export function Navbar({ children }: NavbarProps) {
 
             {/* Mobile Menu Button */}
             <button 
-              className="p-2 text-gray-600 hover:text-blue-600 hover:bg-gray-100 rounded-md transition-colors" 
+              className="p-3 text-gray-600 hover:text-blue-600 hover:bg-gray-100 rounded-md transition-colors" 
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               aria-label="Toggle navigation menu"
               aria-expanded={isMenuOpen}
@@ -452,7 +452,7 @@ export function Navbar({ children }: NavbarProps) {
 
         {/* Mobile Search Bar */}
         {isSearchOpen && (
-          <div className="lg:hidden mt-4 pb-2">
+          <div className="lg:hidden mt-4 pb-3">
             <form onSubmit={handleSearchSubmit}>
               <div className="relative">
                 <input
